@@ -516,17 +516,19 @@ abstract class BundleWearApk : DefaultTask() {
     }
 }
 
-if (providers.gradleProperty("bitchord.bundleWear").orNull != "false" && findProject(":wearos") != null) {
-    androidComponents.onVariants { variant ->
-        val flavor = variant.productFlavors.firstOrNull { it.first == "env" }?.second ?: return@onVariants
-        val type = variant.buildType ?: return@onVariants
-        // The benchmark build has no watch counterpart.
-        if (type != "debug" && type != "release") return@onVariants
-        val cap = variant.name.replaceFirstChar { it.uppercase() }
-        val bundle = tasks.register<BundleWearApk>("bundleWearApk$cap") {
-            dependsOn(":wearos:assemble$cap")
-            apks.from(rootProject.layout.projectDirectory.dir("wearos/build/outputs/apk/$flavor/$type"))
-        }
-        variant.sources.assets?.addGeneratedSourceDirectory(bundle, BundleWearApk::outputDir)
-    }
+if (false) { // Desactivado la vinculación automática del APK de Wear OS
+
+//if (providers.gradleProperty("bitchord.bundleWear").orNull != "false" && findProject(":wearos") != null) {
+//    androidComponents.onVariants { variant ->
+//        val flavor = variant.productFlavors.firstOrNull { it.first == "env" }?.second ?: return@onVariants
+//        val type = variant.buildType ?: return@onVariants
+//        // The benchmark build has no watch counterpart.
+//        if (type != "debug" && type != "release") return@onVariants
+//        val cap = variant.name.replaceFirstChar { it.uppercase() }
+//        val bundle = tasks.register<BundleWearApk>("bundleWearApk$cap") {
+//            dependsOn(":wearos:assemble$cap")
+//            apks.from(rootProject.layout.projectDirectory.dir("wearos/build/outputs/apk/$flavor/$type"))
+//        }
+//        variant.sources.assets?.addGeneratedSourceDirectory(bundle, BundleWearApk::outputDir)
+//    }
 }
