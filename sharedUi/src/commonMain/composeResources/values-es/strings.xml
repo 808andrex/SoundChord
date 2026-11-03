@@ -3,8 +3,8 @@
     <string name="analysis_complete">analizada</string>
     <string name="analysis_in_progress">analizando…</string>
     <string name="analysis_refining">analizada, ajustando…</string>
-    <string name="audio_output">Audio output</string>
-    <string name="audio_output_playing">Playing here</string>
+    <string name="audio_output">Salida de audio</string>
+    <string name="audio_output_playing">Reproduciendo aquí</string>
     <string name="audio_pipeline">Audio Pipeline</string>
     <string name="automix_analysis_status">Automix · canción actual: %1$s · siguiente: %2$s</string>
     <string name="automix_not_supported_video">Automix no es compatible con canciones en formato de vídeo</string>
@@ -16,10 +16,10 @@
     <string name="autoplay_queue_description">Música similar elegida para reproducirse a continuación</string>
     <string name="bit_depth">%1$d bits</string>
     <string name="cancel">Cancelar</string>
-    <string name="cast">Cast</string>
-    <string name="cast_casting">Casting</string>
-    <string name="cast_connecting">Connecting…</string>
-    <string name="cast_row_subtitle">Chromecast and Google Cast speakers</string>
+    <string name="cast">Enviar a</string>
+    <string name="cast_casting">Reproduciendo</string>
+    <string name="cast_connecting">Conectando…</string>
+    <string name="cast_row_subtitle">Chromecast y altavoces con Google Cast</string>
     <string name="channel_count">%1$d canales</string>
     <string name="choose_lyrics_provider">Elegir proveedor de letras</string>
     <string name="clear">Borrar</string>
@@ -29,7 +29,7 @@
     <string name="downgraded_from">↓ desde %1$s</string>
     <string name="drag_to_reorder">Arrastrar para reordenar</string>
     <string name="failed">Error</string>
-    <string name="hi_res_lossless">Audio sin pérdida de alta resolución</string>
+    <string name="hi_res_lossless">Hi-Res Lossless</string>
     <string name="high_quality">Alta calidad</string>
     <string name="high_quality_upgrading">Alta calidad, mejorando</string>
     <string name="increase_lyrics_offset">Increase lyrics offset</string>
@@ -46,7 +46,7 @@
     <string name="listen_together_open_count">Escuchando juntos · %1$d</string>
     <string name="listen_together_you">Tú</string>
     <string name="mixing">Mezclando</string>
-    <string name="lossless">Sin pérdida</string>
+    <string name="lossless">Lossless</string>
     <string name="lyrics_already_in_language">Esta letra ya está en %1$s</string>
     <string name="lyrics_already_romanized">Esta letra ya usa caracteres latinos</string>
     <string name="lyrics_by">Letra de %1$s</string>
@@ -79,9 +79,9 @@
         <item>La letra está casi lista</item>
     </string-array>
     <string name="lyrics_not_available">Letra no disponible</string>
-    <string name="lyrics_offset">Lyrics offset</string>
+    <string name="lyrics_offset">Desplazamiento de la letra</string>
     <string name="lyrics_offset_description">Positive values show lyrics later</string>
-    <string name="lyrics_offset_reset">Reset</string>
+    <string name="lyrics_offset_reset">Reiniciar</string>
     <string name="lyrics_provider_current">Proveedor actual</string>
     <string name="lyrics_provider_fetching">Obteniendo letra…</string>
     <string name="lyrics_provider_found">Letra encontrada · Toca para usarla</string>
@@ -93,7 +93,7 @@
     <string name="lyrics_share_pick_limit">La tarjeta está llena</string>
     <string name="lyrics_translated_to">Traducida al %1$s</string>
     <string name="lyrics_translation_unavailable">La traducción no está disponible ahora</string>
-    <string name="medium_quality">Medium Quality</string>
+    <string name="medium_quality">Calidad media</string>
     <string name="mono">Mono</string>
     <string name="more">Más</string>
     <string name="next_from">A continuación de: %1$s</string>
@@ -129,8 +129,8 @@
     <string name="wired_headphones">Wired headphones</string>
     <string name="usb_audio">USB audio</string>
     <string name="hdmi_output">HDMI</string>
-    <string name="personal_phone">%1$s’s Phone</string>
-    <string name="this_phone">This phone</string>
+    <string name="personal_phone">%1$s’s Teléfono</string>
+    <string name="this_phone">Este teléfono</string>
     <string name="albums">Álbumes</string>
     <string name="artists">Artistas</string>
     <string name="card_plays_format">%1$s reproducciones</string>
