@@ -40,4 +40,7 @@ if (androidSdk != null && file(androidSdk).isDirectory) {
 } else {
     logger.lifecycle("No Android SDK found — building the desktop targets only.")
 }
-include(":soundchord:features")
+// ---- SOUNDCHORD ----
+if (androidSdk != null && file(androidSdk).isDirectory) {
+    include(":soundchord:features")
+}
