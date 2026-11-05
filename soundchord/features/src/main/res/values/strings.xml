@@ -52,4 +52,8 @@
     <string name="station_empty_suggestions">No songs suggested for this station</string>
     <string name="station_retry">Retry</string>
     <string name="station_song_label">Song Radio</string>
+    <string name="live_radio">● LIVE</string>
+    <string name="radio_playback_source">Radio</string>
+    <string name="search_radio_placeholder">search_radio_placeholder</string>
+    <string name="radio_name">Radio</string>
 </resources>
