@@ -7,36 +7,36 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
-import java.util.Locale
-
-object RadioBrowserApi{
+object RadioBrowserApi {
     private const val BASE_URL = "https://de1.api.radio-browser.info/json"
 
     private val client = HttpClient(OkHttp) {
-        install(ContentNegotiation){
-            json(Json{
+        install(ContentNegotiation) {
+            json(Json {
                 ignoreUnknownKeys = true
                 isLenient = true
             })
         }
     }
 
-    suspend fun getTopStations(limit: Int = 30): List<RadioStation>{
-        return client.get("$BASE_URL/stations/topclick/$limit").body()
-    }
+    suspend fun getTopStations(limit: Int = 30): List<RadioStation> =
+        client.get("$BASE_URL/stations/topclick/$limit").body()
 
-    suspend fun getStationsByCountry(countryCode: String, limit: Int=30): List<RadioStation>{
-        return client.get("$BASE_URL/stations/bycountrycodeexact/$countryCode"){
-            parameter("limit",limit)
+    suspend fun getStationsByCountry(countryCode: String, limit: Int = 30): List<RadioStation> =
+        client.get("$BASE_URL/stations/bycountrycodeexact/$countryCode") {
+            parameter("limit", limit)
             parameter("order", "votes")
             parameter("reverse", true)
         }.body()
-    }
 
-    suspend fun searchStations(query: String, limit: Int = 30): List<RadioStation>{
-        return client.get("$BASE_URL/stations/byname/$query"){
-            parameter("limit", limit)
-        }.body()
-    }
+    suspend fun searchStations(
+        query: String,
+        countryCode: String? = null,
+        limit: Int = 30
+    ): List<RadioStation> = client.get("$BASE_URL/stations/search") {
+        parameter("name", query)
+        countryCode?.takeIf(String::isNotBlank)?.let { parameter("countrycode", it) }
+        parameter("limit", limit)
+    }.body()
 }
 

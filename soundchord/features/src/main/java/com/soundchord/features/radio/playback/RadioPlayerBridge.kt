@@ -16,6 +16,9 @@ fun RadioStation.toSong(context: Context): Song {
     val defaultArtist = country?.takeIf { it.isNotBlank() } ?: "Radio"
 
     return Song(
+        // Keep the resolved stream URL as the playable identity. PlayerConnection
+        // uses radioName as the explicit radio marker and routes this URL directly
+        // to ExoPlayer instead of treating it as a catalogue track.
         videoId = streamUrl,
         title = name,
         artist = defaultArtist,

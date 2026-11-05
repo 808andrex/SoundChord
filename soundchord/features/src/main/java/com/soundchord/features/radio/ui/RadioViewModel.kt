@@ -2,9 +2,13 @@ package com.soundchord.features.radio.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.soundchord.features.radio.data.RadioBrowserApi
+import com.soundchord.features.radio.data.RadioBrowserRepository
+import com.soundchord.features.radio.data.RadioRepository
 import com.soundchord.features.radio.data.RadioStation
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +22,9 @@ sealed interface RadioUiState {
     data class Error(val message: String) : RadioUiState
 }
 
-class RadioViewModel : ViewModel() {
+class RadioViewModel(
+    private val repository: RadioRepository = RadioBrowserRepository()
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow<RadioUiState>(RadioUiState.Loading)
     val uiState: StateFlow<RadioUiState> = _uiState.asStateFlow()
@@ -26,36 +32,26 @@ class RadioViewModel : ViewModel() {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    private val _countryCode = MutableStateFlow<String?>(null)
+    val countryCode: StateFlow<String?> = _countryCode.asStateFlow()
+
+    private var requestJob: Job? = null
+
     init {
-        // Carga inicial: Emisoras más populares
-        fetchTopStations()
-        observeSearchQuery()
+        observeFilters()
     }
 
     fun fetchTopStations() {
-        viewModelScope.launch {
-            _uiState.value = RadioUiState.Loading
-            runCatching {
-                RadioBrowserApi.getTopStations(limit = 40)
-            }.onSuccess { stations ->
-                _uiState.value = RadioUiState.Success(stations)
-            }.onFailure { error ->
-                _uiState.value = RadioUiState.Error(error.localizedMessage ?: "Error de conexión")
-            }
-        }
+        _searchQuery.value = ""
+        _countryCode.value = null
     }
 
     fun fetchStationsByCountry(countryCode: String) {
-        viewModelScope.launch {
-            _uiState.value = RadioUiState.Loading
-            runCatching {
-                RadioBrowserApi.getStationsByCountry(countryCode = countryCode, limit = 40)
-            }.onSuccess { stations ->
-                _uiState.value = RadioUiState.Success(stations)
-            }.onFailure { error ->
-                _uiState.value = RadioUiState.Error(error.localizedMessage ?: "Error al cargar país")
-            }
-        }
+        _countryCode.value = countryCode.trim().takeIf(String::isNotEmpty)
+    }
+
+    fun onCountryCodeChanged(countryCode: String?) {
+        _countryCode.value = countryCode?.trim()?.takeIf(String::isNotEmpty)
     }
 
     fun onSearchQueryChanged(query: String) {
@@ -63,25 +59,30 @@ class RadioViewModel : ViewModel() {
     }
 
     @OptIn(FlowPreview::class)
-    private fun observeSearchQuery() {
+    private fun observeFilters() {
         viewModelScope.launch {
-            _searchQuery
-                .debounce(350)
-                .distinctUntilChanged()
-                .collect { query ->
-                    if (query.isNotBlank()) {
-                        _uiState.value = RadioUiState.Loading
-                        runCatching {
-                            RadioBrowserApi.searchStations(query.trim(), limit = 40)
-                        }.onSuccess { stations ->
-                            _uiState.value = RadioUiState.Success(stations)
-                        }.onFailure { error ->
-                            _uiState.value = RadioUiState.Error(error.localizedMessage ?: "Error en la búsqueda")
-                        }
-                    } else if (_uiState.value !is RadioUiState.Success) {
-                        fetchTopStations()
-                    }
-                }
+            combine(
+                _searchQuery.debounce(350).distinctUntilChanged(),
+                _countryCode
+            ) { query, country -> query to country }
+                .collect { (query, country) -> loadStations(query, country) }
+        }
+    }
+
+    private fun loadStations(query: String, country: String?) {
+        requestJob?.cancel()
+        requestJob = viewModelScope.launch {
+            _uiState.value = RadioUiState.Loading
+            try {
+                val stations = repository.getStations(query, country, limit = 40)
+                _uiState.value = RadioUiState.Success(stations)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                _uiState.value = RadioUiState.Error(
+                    error.localizedMessage ?: "No se pudieron cargar las emisoras"
+                )
+            }
         }
     }
 }

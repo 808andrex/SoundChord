@@ -35,6 +35,12 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.9.3")
 
+    implementation("io.ktor:ktor-client-core:3.5.2")
+    implementation("io.ktor:ktor-client-okhttp:3.5.2")
+    implementation("io.ktor:ktor-client-content-negotiation:3.5.2")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.5.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+
     implementation("androidx.media3:media3-exoplayer:1.11.0")
     implementation("androidx.media3:media3-exoplayer-hls:1.11.0")
     implementation("androidx.media3:media3-session:1.11.0")
