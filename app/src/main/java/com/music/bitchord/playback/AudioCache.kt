@@ -1181,7 +1181,9 @@ object AudioCache {
     /**
      * Wraps [upstream] so everything played is written to disk on the way
      * through, and anything already there is served without a request.
-     * Local file and content URIs bypass disk caching to prevent redundant writes.
+     * Local file/content URIs bypass redundant writes. Radio Browser items do
+     * not reach this factory: PlaybackService routes them through its direct
+     * network MediaSource before AudioCache is involved.
      */
     fun playbackFactory(upstream: DataSource.Factory): DataSource.Factory = DataSource.Factory {
         val cacheDs = cacheFactory(upstream).createDataSource()

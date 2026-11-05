@@ -18,6 +18,7 @@ import androidx.core.net.toUri
 import androidx.core.os.bundleOf
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
@@ -645,6 +646,11 @@ private fun Song.pickedMixQuery(configId: String): String {
 }
 
 fun Song.toMediaItem(): MediaItem {
+    // Radio Browser stations carry a resolved URL in videoId and a non-null
+    // radioName. Preserve the URL as mediaId, but send it straight to ExoPlayer
+    // so it never enters the YouTube/source resolver or the song cache.
+    val isLiveRadio = !radioName.isNullOrBlank()
+    val isRadioHls = isLiveRadio && videoId.substringBefore('?').endsWith(".m3u8", ignoreCase = true)
     val sourceTrack = SourceRegistry.parseTrackKey(videoId)
     // A row from search or a playlist carries no file of its own, but the track
     // may still be on disk from a download — see [Downloads.saved].
@@ -670,9 +676,12 @@ fun Song.toMediaItem(): MediaItem {
     // [MediaItem.toSong], so an item waiting in the live queue can carry a URI
     // that has become stale since it was created. Checking only the lookup
     // leaves that path unguarded.
-    val offlineUri = localUri?.takeUnless(Downloads::isMissingLocalFile)
-        ?: Downloads.verifiedSavedUri(videoId)
-    val uriString = offlineUri ?: when {
+    val offlineUri = if (isLiveRadio) {
+        null
+    } else {
+        localUri?.takeUnless(Downloads::isMissingLocalFile) ?: Downloads.verifiedSavedUri(videoId)
+    }
+    val uriString = if (isLiveRadio) videoId else offlineUri ?: when {
         videoId.startsWith("content://") || videoId.startsWith("file://") -> videoId
         // Title, artist and runtime ride along in the URI because they are what
         // a cross-source match is made on, and the resolver runs on ExoPlayer's
@@ -699,6 +708,20 @@ fun Song.toMediaItem(): MediaItem {
     return MediaItem.Builder()
         .setMediaId(videoId)
         .setUri(resolvePlaybackUri(uriString, localPath))
+        .apply {
+            if (isLiveRadio) {
+                // Live streams have no finite timeline and should not expose
+                // seek speeds; the direct URI above also keeps them out of the
+                // ordinary on-demand resolver/cache path.
+                setLiveConfiguration(
+                    MediaItem.LiveConfiguration.Builder()
+                        .setMinPlaybackSpeed(1.0f)
+                        .setMaxPlaybackSpeed(1.0f)
+                        .build(),
+                )
+                if (isRadioHls) setMimeType(MimeTypes.APPLICATION_M3U8)
+            }
+        }
     .setMediaMetadata(
         MediaMetadata.Builder()
             .setTitle(title)

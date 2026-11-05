@@ -42,8 +42,10 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.LoadControl
 import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.PlayerId
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioRendererEventListener
 import androidx.media3.exoplayer.audio.AudioSink
@@ -52,6 +54,10 @@ import androidx.media3.exoplayer.audio.SilenceSkippingAudioProcessor
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.TrackGroupArray
+import androidx.media3.exoplayer.trackselection.ExoTrackSelection
+import androidx.media3.exoplayer.upstream.Allocator
+import androidx.media3.exoplayer.upstream.DefaultAllocator
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
@@ -642,7 +648,7 @@ class PlaybackService : MediaLibraryService() {
     private val trackAnalyzer = com.music.bitchord.playback.smart.TrackAnalyzer(this, AudioCache)
 
     /** Shared with the crossfade's tail player, so both read the same disk cache. */
-    private var mediaSourceFactory: DefaultMediaSourceFactory? = null
+    private var mediaSourceFactory: androidx.media3.exoplayer.source.MediaSource.Factory? = null
 
     /** Last sampled position of the playing track, in seconds. */
     private var lastPositionSeconds = 0L
@@ -1744,13 +1750,35 @@ class PlaybackService : MediaLibraryService() {
             DefaultDataSource.Factory(this, resolvingFactory),
         )
         AudioCache.setUpstream(defaultDataSourceFactory)
-        // DsdExtractorsFactory: the stock extractors plus DSF/DFF, which Media3
-        // cannot open at all. A DSD file leaves the extractor as float PCM.
-        mediaSourceFactory = DefaultMediaSourceFactory(
+        // Radio goes around AudioCache entirely: live responses are open-ended,
+        // and HLS playlists/segments must remain network-backed as they roll.
+        val radioHttpFactory = OkHttpDataSource.Factory(Http.client)
+        val directRadioFactory = DefaultDataSource.Factory(this, radioHttpFactory)
+        val regularMediaSourceFactory = DefaultMediaSourceFactory(
             AudioCache.playbackFactory(defaultDataSourceFactory),
             DsdExtractorsFactory(),
-        )
-            .setLoadErrorHandlingPolicy(PermanentAwareLoadErrorPolicy())
+        ).setLoadErrorHandlingPolicy(PermanentAwareLoadErrorPolicy())
+        val directRadioMediaSourceFactory = DefaultMediaSourceFactory(
+            directRadioFactory,
+            DsdExtractorsFactory(),
+        ).setLoadErrorHandlingPolicy(PermanentAwareLoadErrorPolicy())
+        // DsdExtractorsFactory: the stock extractors plus DSF/DFF, which Media3
+        // cannot open at all. A DSD file leaves the extractor as float PCM.
+        mediaSourceFactory = object : androidx.media3.exoplayer.source.MediaSource.Factory by regularMediaSourceFactory {
+            override fun createMediaSource(mediaItem: MediaItem): androidx.media3.exoplayer.source.MediaSource {
+                val radio = !mediaItem.mediaMetadata.extras
+                    ?.getString("bitchord.radioName")
+                    .isNullOrBlank()
+                if (radio && mediaItem.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8) {
+                    // Force Media3's HLS source for Radio Browser .m3u8 URLs.
+                    return androidx.media3.exoplayer.hls.HlsMediaSource.Factory(radioHttpFactory)
+                        .setLoadErrorHandlingPolicy(PermanentAwareLoadErrorPolicy())
+                        .createMediaSource(mediaItem)
+                }
+                return (if (radio) directRadioMediaSourceFactory else regularMediaSourceFactory)
+                    .createMediaSource(mediaItem)
+            }
+        }
         // The watch, when it is the speaker, reads tracks through this same chain.
         WearBridge.attachStreams(AudioCache.playbackFactory(defaultDataSourceFactory))
 
@@ -2012,6 +2040,9 @@ class PlaybackService : MediaLibraryService() {
     private suspend fun loopMixLyrics(item: MediaItem, durationMs: Long): List<LyricLine>? {
         if (!AppSettings.syncedLyrics.value) return null
         val song = item.toSong()
+        // Live radio has no finite track lyric timeline and must never enter
+        // the catalogue lyrics lookup used by loop-mix analysis.
+        if (!song.radioName.isNullOrBlank()) return null
         return kotlinx.coroutines.withTimeoutOrNull(LOOP_MIX_LYRICS_TIMEOUT_MS) {
             song.localUri?.let { EmbeddedLyrics.forUri(this@PlaybackService, it) }
                 ?: LyricsRepository.lyrics(
@@ -3451,7 +3482,10 @@ class PlaybackService : MediaLibraryService() {
     ): ExoPlayer = ExoPlayer.Builder(this)
         .setRenderersFactory(silenceSkippingRenderers(spatial, equalizer, filter, loudness))
         .setMediaSourceFactory(requireNotNull(mediaSourceFactory))
-        .setLoadControl(farBufferingLoadControl())
+        // Use a smaller, radio-specific streaming buffer when the current
+        // MediaItem carries the marker set by RadioPlayerBridge. Songs retain
+        // the existing far-buffering policy unchanged.
+        .setLoadControl(mediaAwareLoadControl())
         .setAudioAttributes(AUDIO_ATTRIBUTES, /* handleAudioFocus = */ ownsSession)
         .setHandleAudioBecomingNoisy(ownsSession)
         // Back restarts the track once you're this far into it; only a
@@ -6580,6 +6614,69 @@ class PlaybackService : MediaLibraryService() {
         .setBackBuffer(/* backBufferDurationMs = */ BACK_BUFFER_MS, /* retainBackBufferFromKeyframe = */ true)
         .build()
 
+    /** Selects live-radio buffering by MediaItem metadata, without retaining player references. */
+    private fun mediaAwareLoadControl(): LoadControl {
+        val allocator = DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE)
+        val regular = farBufferingLoadControl()
+        val radio = DefaultLoadControl.Builder()
+            .setAllocator(allocator)
+            .setBufferDurationsMsForStreaming(
+                RADIO_MIN_BUFFER_MS,
+                RADIO_MAX_BUFFER_MS,
+                RADIO_START_BUFFER_MS,
+                RADIO_RESUME_BUFFER_MS,
+            )
+            .setTargetBufferBytes(RADIO_BUFFER_BYTES)
+            .setPrioritizeTimeOverSizeThresholdsForStreaming(true)
+            .build()
+
+        fun selected(parameters: LoadControl.Parameters): LoadControl {
+            val periodIndex = parameters.timeline.getIndexOfPeriod(parameters.mediaPeriodId.periodUid)
+            if (periodIndex == C.INDEX_UNSET) return regular
+            val period = parameters.timeline.getPeriod(periodIndex, Timeline.Period())
+            val window = parameters.timeline.getWindow(period.windowIndex, Timeline.Window())
+            val extras = window.mediaItem.mediaMetadata.extras
+            return if (!extras?.getString("bitchord.radioName").isNullOrBlank()) radio else regular
+        }
+
+        return object : LoadControl {
+            override fun onPrepared(playerId: PlayerId) {
+                regular.onPrepared(playerId)
+                radio.onPrepared(playerId)
+            }
+
+            override fun onTracksSelected(
+                parameters: LoadControl.Parameters,
+                trackGroups: TrackGroupArray,
+                trackSelections: Array<ExoTrackSelection?>,
+            ) = selected(parameters).onTracksSelected(parameters, trackGroups, trackSelections)
+
+            override fun onStopped(playerId: PlayerId) {
+                regular.onStopped(playerId)
+                radio.onStopped(playerId)
+            }
+
+            override fun onReleased(playerId: PlayerId) {
+                regular.onReleased(playerId)
+                radio.onReleased(playerId)
+            }
+
+            override fun getAllocator(playerId: PlayerId): Allocator = regular.getAllocator(playerId)
+
+            override fun getBackBufferDurationUs(playerId: PlayerId): Long =
+                regular.getBackBufferDurationUs(playerId)
+
+            override fun retainBackBufferFromKeyframe(playerId: PlayerId): Boolean =
+                regular.retainBackBufferFromKeyframe(playerId)
+
+            override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean =
+                selected(parameters).shouldContinueLoading(parameters)
+
+            override fun shouldStartPlayback(parameters: LoadControl.Parameters): Boolean =
+                selected(parameters).shouldStartPlayback(parameters)
+        }
+    }
+
     /**
      * Renderers whose audio sink only skips silence worth skipping.
      *
@@ -9346,6 +9443,14 @@ class PlaybackService : MediaLibraryService() {
 
         /** Past any song, so the byte ceiling is what stops loading. */
         const val FAR_BUFFER_MS = 15 * 60 * 1000
+
+        // Radio-specific rolling buffer. The larger maximum absorbs short
+        // network jitter; the explicit byte target caps memory on long streams.
+        const val RADIO_MIN_BUFFER_MS = 30_000
+        const val RADIO_MAX_BUFFER_MS = 50_000
+        const val RADIO_START_BUFFER_MS = 12_000
+        const val RADIO_RESUME_BUFFER_MS = 12_000
+        const val RADIO_BUFFER_BYTES = 8 * 1024 * 1024
 
         /** ~6 minutes at 160kbps: a whole track, for all but the longest. */
         const val FAR_BUFFER_BYTES = 8 * 1024 * 1024

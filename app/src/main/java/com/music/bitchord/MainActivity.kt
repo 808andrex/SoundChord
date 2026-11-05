@@ -1162,7 +1162,9 @@ private fun BitChordApp(
         player.song?.videoId, player.durationMs, syncedLyricsEnabled, lyricsSources,
         lyricsSourceOrder, prioritizeSyllableSync,
     ) {
-        player.song?.let {
+        player.song?.takeUnless { !it.radioName.isNullOrBlank() }?.let {
+            // Direct radio streams have no track lyrics; skip catalogue lookup
+            // so the lyrics UI does not remain in a perpetual loading state.
             viewModel.loadLyrics(
                 it.videoId,
                 it.title,
@@ -2448,6 +2450,8 @@ private fun BitChordApp(
         linksLoading = false
         if (!playerShowing) return@LaunchedEffect
         val current = player.song ?: return@LaunchedEffect
+        // Radio streams have no YouTube catalogue entry to scrape for links.
+        if (!current.radioName.isNullOrBlank()) return@LaunchedEffect
         if (current.albumId != null && current.artistId != null) return@LaunchedEffect
         linksLoading = true
         links = YtMusicRepository.trackLinks(current.videoId).getOrNull()
@@ -4240,7 +4244,7 @@ private fun BitChordApp(
             // way to get there. Ask as the menu opens, the way the player
             // backfills its own track — the player's copy is already kept in
             // sync above, so it is left alone here.
-            val needsLinks = !fromPlayer && heldSong.localUri == null &&
+            val needsLinks = !fromPlayer && heldSong.radioName.isNullOrBlank() && heldSong.localUri == null &&
                 heldSong.videoId.isNotBlank() &&
                 (heldSong.albumId == null || heldSong.artistId == null)
             var menuLinks by remember(heldSong.videoId) { mutableStateOf<Song?>(null) }
@@ -4303,7 +4307,7 @@ private fun BitChordApp(
             // Offered for the playing track wherever its menu is opened,
             // whether or not the other version has been found yet: the
             // switch looks it up, and says so when there isn't one.
-            val onToggleVersion: (() -> Unit)? = if (
+            val onToggleVersion: (() -> Unit)? = if (song.radioName.isNullOrBlank() &&
                 controller?.currentMediaItem?.mediaId == song.videoId
             ) {
                 toggle@{
@@ -4507,7 +4511,7 @@ private fun BitChordApp(
                 // idea of the song from the first second, and a wrong
                 // match sounds like a wrong match whether or not anything
                 // announced itself. See [Song.hasYouTubeOriginal].
-                onRollbackToOriginal = if (fromPlayer &&
+                onRollbackToOriginal = if (fromPlayer && song.radioName.isNullOrBlank() &&
                     song.hasYouTubeOriginal() &&
                     // Nothing to revert *from*: the listener is hearing a
                     // file they saved, not a stream anything chose.
@@ -4538,7 +4542,7 @@ private fun BitChordApp(
                 // due to look at it again — [QualityUpgrade.refuseUpgrades]
                 // takes a broken track off the automatic path for the rest
                 // of the session, and `askByHand` is what clears that.
-                onUpgradeQuality = if (fromPlayer &&
+                onUpgradeQuality = if (fromPlayer && song.radioName.isNullOrBlank() &&
                     (
                         song.videoId in pinnedToOriginal ||
                             playingYouTubesOwn(song.videoId, controller)
@@ -4556,7 +4560,7 @@ private fun BitChordApp(
                 } else {
                     null
                 },
-                upgradeQualityInProgress = fromPlayer && song.videoId in qualityUpgradesInFlight,
+                upgradeQualityInProgress = fromPlayer && song.radioName.isNullOrBlank() && song.videoId in qualityUpgradesInFlight,
                 onToggleAudioVersion = onToggleVersion,
                 isAudioVersion = menuIsAudioVersion,
                 audioVersionMissing = song.videoId in missingVersions,
