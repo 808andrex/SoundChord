@@ -368,6 +368,8 @@ import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import java.util.Locale
+import com.soundchord.features.icons.SoundChordIcons
+import com.soundchord.features.radio.ui.RadioScreen
 
 /** A full first screen of a native YouTube Music radio before AutoPlay tops it up. */
 /** How much of an artist page's header scrolls away before the top fade begins. */
@@ -1185,9 +1187,11 @@ private fun BitChordApp(
     val libraryShowAllGridState = rememberLazyGridState()
     val moodsGridState = rememberLazyGridState()
     val searchListState = rememberLazyListState()
+    val radioListState = rememberLazyListState()
     val currentListState = when (selectedTab) {
         TAB_HOME -> homeListState
         TAB_EXPLORE -> if (selectedMoodGenre == null) exploreListState else moodGenreListState
+        TAB_RADIO -> radioListState
         TAB_LIBRARY -> libraryListState
         else -> searchListState
     }
@@ -1303,10 +1307,12 @@ private fun BitChordApp(
     val queueLabel = stringResource(R.string.queue)
     val sharedLinkLabel = stringResource(R.string.shared_link)
     val openedFileLabel = stringResource(R.string.opened_file)
-    val tabs = remember(homeLabel, exploreLabel, libraryLabel, searchLabel) {
+    val radioLabel = stringResource(com.soundchord.features.R.string.radio_name)
+    val tabs = remember(homeLabel, exploreLabel, radioLabel, libraryLabel, searchLabel) {
         listOf(
             BottomTab(homeLabel, BitChordIcons.Home),
             BottomTab(exploreLabel, BitChordIcons.TabExplore),
+            BottomTab(radioLabel, SoundChordIcons.TabRadio),
             BottomTab(libraryLabel, BitChordIcons.TabLibrary),
             BottomTab(searchLabel, BitChordIcons.TabSearch),
         )
@@ -3425,6 +3431,11 @@ private fun BitChordApp(
                                 onRefresh = { viewModel.refresh(MainViewModel.Feed.EXPLORE) },
                                 pullState = explorePull,
                                 contentPadding = listPadding,
+                            )
+                            TAB_RADIO -> RadioScreen(
+                                onPlayStation = { song ->
+                                    playRadio(song, QueueSource(radioLabel, PlaybackSourceType.QUEUE))
+                                }
                             )
                             TAB_SEARCH -> SearchScreen(
                                 query = query,
@@ -6165,5 +6176,6 @@ private object PlayerSheetShape : Shape {
 
 private const val TAB_HOME = 0
 private const val TAB_EXPLORE = 1
-private const val TAB_LIBRARY = 2
-private const val TAB_SEARCH = 3
+private const val TAB_RADIO = 2
+private const val TAB_LIBRARY = 3
+private const val TAB_SEARCH = 4
