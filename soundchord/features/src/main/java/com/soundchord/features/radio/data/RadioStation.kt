@@ -13,6 +13,7 @@ data class RadioStation(
     @SerialName("tags") val tags: String? = null,
     @SerialName("country") val country: String? = null,
     @SerialName("countrycode") val countryCode: String? = null,
+    @SerialName("language") val language: String? = null,
     @SerialName("codec") val codec: String? = null,
     @SerialName("bitrate") val bitrate: Int = 0,
     @SerialName("votes") val votes: Int = 0

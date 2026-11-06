@@ -7,6 +7,7 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
+
 object RadioBrowserApi {
     private const val BASE_URL = "https://de1.api.radio-browser.info/json"
 
@@ -32,11 +33,22 @@ object RadioBrowserApi {
     suspend fun searchStations(
         query: String,
         countryCode: String? = null,
+        genre: String? = null,
+        language: String? = null,
         limit: Int = 30
     ): List<RadioStation> = client.get("$BASE_URL/stations/search") {
         parameter("name", query)
         countryCode?.takeIf(String::isNotBlank)?.let { parameter("countrycode", it) }
+        genre?.takeIf(String::isNotBlank)?.let { parameter("tag", it) }
+        language?.takeIf(String::isNotBlank)?.let { parameter("language", it) }
         parameter("limit", limit)
     }.body()
+
+    suspend fun getPopularTags(limit: Int = 30): List<RadioTag> =
+        client.get("$BASE_URL/tags") {
+            parameter("order", "stationcount")
+            parameter("reverse", true)
+            parameter("limit", limit)
+        }.body()
 }
 
