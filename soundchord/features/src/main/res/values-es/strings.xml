@@ -13,6 +13,8 @@
     <string name="radio_enable_location">Activar ubicación</string>
     <string name="radio_genres">Géneros</string>
     <string name="radio_stations_for">Emisoras de %1$s</string>
+    <string name="radio_search_hint">Busca emisoras por nombre, país o género</string>
+    <string name="radio_search_empty">No se encontraron emisoras</string>
     <string name="radio_countries">Países</string>
     <string name="station_custom_label">Estación personalizada</string>
     <string name="station_title_format">Estación de %1$s</string>

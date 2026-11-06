@@ -18,12 +18,14 @@ import androidx.core.net.toUri
 import androidx.core.os.bundleOf
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Metadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
+import androidx.media3.extractor.metadata.icy.IcyInfo
 import com.music.bitchord.data.model.ArtistRef
 import com.music.bitchord.data.model.NOTIFICATION_ART_PX
 import com.music.bitchord.data.model.PlaybackSourceType
@@ -73,6 +75,8 @@ data class PlayerState(
     val hasNext: Boolean = false,
     /** True while the current item is the replacement installed by a quality upgrade. */
     val isQualityUpgraded: Boolean = false,
+    /** Current ICY song metadata for the radio stream, when the station sends it. */
+    val radioTrackTitle: String? = null,
 )
 
 /** Binds to [PlaybackService] for the lifetime of the composition. */
@@ -325,6 +329,8 @@ fun rememberPlayerState(controller: MediaController?): PlayerState {
         // thousand songs out of the session for every track it loaded, on the
         // main thread, for as long as the queue kept playing.
         var queueChanged = false
+        var currentMediaId: String? = null
+        var radioTrackTitle: String? = null
 
         fun sync(
             error: String? = null,
@@ -332,6 +338,10 @@ fun rememberPlayerState(controller: MediaController?): PlayerState {
             refreshCurrentQueueItem: Boolean = false,
         ) {
             val item = player.currentMediaItem
+            if (item?.mediaId != currentMediaId) {
+                currentMediaId = item?.mediaId
+                radioTrackTitle = null
+            }
             if (rebuildQueue) {
                 queueSnapshot = (0 until player.mediaItemCount)
                     .map { player.getMediaItemAt(it).toSong() }
@@ -357,10 +367,23 @@ fun rememberPlayerState(controller: MediaController?): PlayerState {
                 hasNext = player.hasNextMediaItem(),
                 isQualityUpgraded = item?.mediaMetadata?.extras
                     ?.getBoolean(EXTRA_QUALITY_UPGRADED) == true,
+                radioTrackTitle = radioTrackTitle.takeIf {
+                    !item?.mediaMetadata?.extras?.getString(EXTRA_RADIO_NAME).isNullOrBlank()
+                },
             )
         }
 
         val listener = object : Player.Listener {
+            override fun onMetadata(metadata: Metadata) {
+                if (player.currentMediaItem?.mediaMetadata?.extras?.getString(EXTRA_RADIO_NAME).isNullOrBlank()) return
+                val title = (0 until metadata.length())
+                    .asSequence()
+                    .mapNotNull { (metadata.get(it) as? IcyInfo)?.title?.trim()?.takeIf(String::isNotEmpty) }
+                    .firstOrNull()
+                if (title != null) radioTrackTitle = title
+                sync(error = state.error)
+            }
+
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
                 // The count guard is belt and braces: a playlist change is the
                 // only reason the queue can be a different length, so if it is,

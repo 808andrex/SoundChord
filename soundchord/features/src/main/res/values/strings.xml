@@ -13,6 +13,8 @@
     <string name="radio_enable_location">Turn on location</string>
     <string name="radio_genres">Genres</string>
     <string name="radio_stations_for">Stations for %1$s</string>
+    <string name="radio_search_hint">Search radio stations by name, country or genre</string>
+    <string name="radio_search_empty">No stations found</string>
     <string name="radio_countries">Countries</string>
     <string name="station_custom_label">Custom Station</string>
     <string name="station_title_format">Station for %1$s</string>

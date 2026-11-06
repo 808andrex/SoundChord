@@ -179,6 +179,7 @@ fun SongActionsMenu(
      * as before — present when the id is there, absent when it never was.
      */
     resolvingLinks: Boolean = false,
+    compactPlayerMenu: Boolean = false,
 ) {
     var showingSongInfo by remember(song.videoId) { mutableStateOf(false) }
     var pickingSleepTimer by remember { mutableStateOf(false) }
@@ -406,6 +407,27 @@ fun SongActionsMenu(
             // the picker in place.
             if (pickingSleepTimer) {
                 SleepTimerPicker(palette = palette, onBack = { pickingSleepTimer = false })
+            } else if (compactPlayerMenu) {
+                onShare?.let {
+                    ActionRow(SfIcons.Share, stringResource(R.string.share), accent = palette.accent, onClick = it)
+                    if (showSleepTimer || onCopyLog != null) IosMenuSeparator()
+                }
+                if (showSleepTimer) {
+                    ActionRow(
+                        icon = SfIcons.SleepTimer,
+                        label = stringResource(R.string.sleep_timer),
+                        value = sleepTimerStatus(),
+                        accent = palette.accent,
+                    ) { pickingSleepTimer = true }
+                    IosMenuSeparator()
+                }
+                ActionRow(SfIcons.Info, stringResource(R.string.song_info), accent = palette.accent) {
+                    showingSongInfo = true
+                }
+                onCopyLog?.let {
+                    IosMenuSeparator()
+                    ActionRow(SfIcons.Bug, stringResource(R.string.copy_log), accent = palette.accent, onClick = it)
+                }
             } else {
                 rows()
             }

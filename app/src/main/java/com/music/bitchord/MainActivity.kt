@@ -1192,10 +1192,11 @@ private fun BitChordApp(
     val lyricsSourceOrder by AppSettings.lyricsSourceOrder.collectAsStateWithLifecycle()
     val prioritizeSyllableSync by AppSettings.prioritizeSyllableSync.collectAsStateWithLifecycle()
     LaunchedEffect(
-        player.song?.videoId, player.durationMs, syncedLyricsEnabled, lyricsSources,
+        player.song?.videoId, player.song?.radioName, player.song?.playbackSourceId,
+        player.durationMs, syncedLyricsEnabled, lyricsSources,
         lyricsSourceOrder, prioritizeSyllableSync,
     ) {
-        player.song?.takeUnless { !it.radioName.isNullOrBlank() }?.let {
+        player.song?.takeUnless { !it.radioName.isNullOrBlank() || it.playbackSourceId?.startsWith("radio:") == true }?.let {
             // Direct radio streams have no track lyrics; skip catalogue lookup
             // so the lyrics UI does not remain in a perpetual loading state.
             viewModel.loadLyrics(
@@ -1211,7 +1212,9 @@ private fun BitChordApp(
                 it.albumName,
                 it.localUri,
             )
-        }
+        } ?: if (player.song?.playbackSourceId?.startsWith("radio:") == true || !player.song?.radioName.isNullOrBlank()) {
+            viewModel.clearLyrics()
+        } else Unit
     }
 
     val homeListState = rememberLazyListState()
@@ -2540,6 +2543,7 @@ private fun BitChordApp(
             }
         NowPlayingScreen(
             song = displayedSong,
+            radioTrackTitle = player.radioTrackTitle,
             playedBy = playedBy,
             accountName = account?.name,
             windowWidth = windowWidth,
@@ -3618,6 +3622,7 @@ private fun BitChordApp(
                                         options = listOf(
                                             stringResource(R.string.search_source_youtube),
                                             stringResource(R.string.library),
+                                            stringResource(com.soundchord.features.R.string.radio_name),
                                             stringResource(R.string.search_source_addons),
                                         ),
                                         selectedIndex = searchSource.ordinal,
@@ -3625,6 +3630,14 @@ private fun BitChordApp(
                                     )
                                 },
                                 searchingLibrary = searchSource == SearchSource.LIBRARY,
+                                searchingRadio = searchSource == SearchSource.RADIO,
+                                radioContent = if (searchSource == SearchSource.RADIO) {
+                                    {
+                                        RadioScreen(searchQuery = query, onPlayStation = { song ->
+                                            playRadio(song, QueueSource(radioLabel, PlaybackSourceType.QUEUE, id = song.playbackSourceId))
+                                        })
+                                    }
+                                } else null,
                                 libraryResults = libraryResults,
                                 searchingAddons = searchSource == SearchSource.ADDONS,
                                 addonResults = addonResults,
@@ -4303,7 +4316,11 @@ private fun BitChordApp(
             val share: () -> Unit = {
                 val sendIntent = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, "https://music.youtube.com/watch?v=${song.videoId}")
+                    putExtra(
+                        Intent.EXTRA_TEXT,
+                        if (!song.radioName.isNullOrBlank()) "${song.radioName}\n${song.videoId}"
+                        else "https://music.youtube.com/watch?v=${song.videoId}",
+                    )
                 }
                 context.startActivity(Intent.createChooser(sendIntent, song.title))
                 songActions = null
@@ -4542,6 +4559,7 @@ private fun BitChordApp(
                 // The player backfills its own track; any other row is
                 // looked up as the menu opens — see `needsLinks` above.
                 resolvingLinks = if (fromPlayer) linksLoading else needsLinks && menuLinksLoading,
+                compactPlayerMenu = fromPlayer,
                 showSleepTimer = fromPlayer,
                 // Offered for every playing track with a YouTube upload
                 // behind it, not only for one an upgrade visibly swapped:
@@ -4793,6 +4811,7 @@ private fun BitChordApp(
                         anchor = songMenuAnchor,
                         onDismiss = { songActions = null },
                         backdrop = if (playerLiveCanvas) livePlayerBackdrop else playerBackdrop,
+                        centerOnAnchor = true,
                     ) { song ->
                         songMenuBody(song)
                     }

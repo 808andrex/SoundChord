@@ -116,7 +116,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /** What the Search tab searches: YouTube Music, or the Local Music folder on this device. */
-enum class SearchSource { YOUTUBE, LIBRARY, ADDONS }
+enum class SearchSource { YOUTUBE, LIBRARY, RADIO, ADDONS }
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -338,6 +338,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private val _lyricsChecked = MutableStateFlow(false)
     val lyricsChecked: StateFlow<Boolean> = _lyricsChecked.asStateFlow()
+
+    /** Radio streams have no catalogue lyrics; clear the previous track immediately. */
+    fun clearLyrics() {
+        lyricsJob?.cancel()
+        manualLyricsJobs.values.forEach(Job::cancel)
+        manualLyricsJobs.clear()
+        currentLyricsRequest = null
+        lyricsFor = null
+        _lyrics.value = null
+        _lyricsSource.value = null
+        _lyricsChecked.value = true
+        _lyricsProviderStates.value = LyricsSource.entries.associateWith { LyricsProviderState.NOT_FETCHED }
+    }
 
     private var lyricsJob: Job? = null
     private val manualLyricsJobs = mutableMapOf<LyricsSource, Job>()
@@ -2148,7 +2161,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun submitSearch() {
         val q = _query.value.trim()
-        if (q.isEmpty() || _searchSource.value == SearchSource.LIBRARY) return
+        if (q.isEmpty() || _searchSource.value == SearchSource.LIBRARY || _searchSource.value == SearchSource.RADIO) return
         searchSubmitted = true
         _suggestions.value = emptyList()
         _typeaheadResults.value = emptyList()
@@ -2210,6 +2223,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _searchScrollReset.value += 1
         when (source) {
             SearchSource.LIBRARY -> loadLibrarySongs()
+            SearchSource.RADIO -> Unit // SearchScreen hands this query to RadioScreen/RadioRepository.
             SearchSource.YOUTUBE -> submitSearch()
             SearchSource.ADDONS -> if (_query.value.isNotBlank()) submitSearch()
         }

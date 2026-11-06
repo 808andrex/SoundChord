@@ -415,6 +415,7 @@ fun <T : Any> IosMenuPopover(
     onDismiss: () -> Unit,
     backdrop: Backdrop? = null,
     hazeState: HazeState? = null,
+    centerOnAnchor: Boolean = false,
     content: @Composable (T) -> Unit,
 ) {
     var last by remember { mutableStateOf<Pair<T, Rect?>?>(null) }
@@ -556,13 +557,18 @@ fun <T : Any> IosMenuPopover(
             .coerceIn(margin, (width - margin - panel.width).coerceAtLeast(margin))
         val lowest = (bottom - panel.height).coerceAtLeast(top)
         val hangsDown = anchorBounds != null && anchorBounds.center.y < height / 2f
-        val panelY = if (hangsDown) anchorBounds.top.roundToInt().coerceIn(top, lowest) else lowest
+        val panelY = when {
+            centerOnAnchor && anchorBounds != null ->
+                (anchorBounds.center.y - panel.height / 2f).roundToInt().coerceIn(top, lowest)
+            hangsDown -> anchorBounds!!.top.roundToInt().coerceIn(top, lowest)
+            else -> lowest
+        }
 
         val growth: GraphicsLayerScope.() -> Unit = {
             val p = progress.value
             alpha = (p * 2.5f).coerceIn(0f, 1f)
             if (!reduceMotion) {
-                transformOrigin = TransformOrigin(1f, if (hangsDown) 0f else 1f)
+                transformOrigin = TransformOrigin(1f, if (centerOnAnchor) 0.5f else if (hangsDown) 0f else 1f)
                 val scale = lerp(0.3f, 1f, p)
                 scaleX = scale
                 scaleY = scale

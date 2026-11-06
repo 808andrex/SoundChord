@@ -1,6 +1,8 @@
 package com.soundchord.features.radio.ui
 
 import android.content.Context
+import android.location.Geocoder
+import android.location.LocationManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -12,15 +14,18 @@ import com.soundchord.features.radio.data.RadioTag
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 sealed interface RadioUiState {
@@ -28,6 +33,8 @@ sealed interface RadioUiState {
     data class Success(val stations: List<RadioStation>) : RadioUiState
     data class Error(val message: String) : RadioUiState
 }
+
+enum class NearbyStationsState { PermissionRequired, LocationUnavailable, Loading, Ready, Error }
 
 class RadioViewModel(
     private val repository: RadioRepository = RadioBrowserRepository()
@@ -54,21 +61,29 @@ class RadioViewModel(
     private val _popularGenres = MutableStateFlow<List<RadioTag>>(emptyList())
     val popularGenres: StateFlow<List<RadioTag>> = _popularGenres.asStateFlow()
 
-    val favoriteStations: StateFlow<List<RadioStation>> = repository.favoriteStations
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    private val _favoriteStations = MutableStateFlow<List<RadioStation>>(emptyList())
+    val favoriteStations: StateFlow<List<RadioStation>> = _favoriteStations.asStateFlow()
+    val favoriteStationUuids = favoriteStations.map { stations -> stations.mapTo(hashSetOf()) { it.uuid } }
 
     private val _currentlyPlayingStation = MutableStateFlow<RadioStation?>(null)
     val currentlyPlayingStation: StateFlow<RadioStation?> = _currentlyPlayingStation.asStateFlow()
 
     private val _nearbyStations = MutableStateFlow<List<RadioStation>>(emptyList())
     val nearbyStations: StateFlow<List<RadioStation>> = _nearbyStations.asStateFlow()
+    private val _nearbyStationsState = MutableStateFlow(NearbyStationsState.PermissionRequired)
+    val nearbyStationsState: StateFlow<NearbyStationsState> = _nearbyStationsState.asStateFlow()
 
     private var requestJob: Job? = null
+    private val favoriteMutation = Mutex()
 
     init {
+        viewModelScope.launch {
+            repository.favoriteStations.collect { stations ->
+                favoriteMutation.withLock { _favoriteStations.value = stations }
+            }
+        }
         observeFilters()
         loadPopularGenres()
-        loadNearbyStations()
     }
 
     fun fetchTopStations() {
@@ -106,12 +121,25 @@ class RadioViewModel(
     }
 
     fun isFavorite(stationUuid: String): Boolean =
-        favoriteStations.value.any { it.uuid == stationUuid }
+        _favoriteStations.value.any { it.uuid == stationUuid }
 
     fun toggleFavorite(station: RadioStation) {
         viewModelScope.launch {
-            if (isFavorite(station.uuid)) repository.removeFavorite(station.uuid)
-            else repository.addFavorite(station)
+            favoriteMutation.withLock {
+                val previous = _favoriteStations.value
+                val wasFavorite = previous.any { it.uuid == station.uuid }
+                _favoriteStations.value = if (wasFavorite) {
+                    previous.filterNot { it.uuid == station.uuid }
+                } else {
+                    previous.filterNot { it.uuid == station.uuid } + station
+                }
+                runCatching {
+                    if (wasFavorite) repository.removeFavorite(station.uuid)
+                    else repository.addFavorite(station)
+                }.onFailure {
+                    _favoriteStations.value = previous
+                }
+            }
         }
     }
 
@@ -126,11 +154,39 @@ class RadioViewModel(
         }
     }
 
-    private fun loadNearbyStations() {
+    fun onNearbyPermissionDenied() {
+        _nearbyStationsState.value = NearbyStationsState.PermissionRequired
+    }
+
+    fun loadNearbyStations(context: Context) {
         viewModelScope.launch {
-            val countryCode = Locale.getDefault().country.takeIf(String::isNotBlank)
-            runCatching { repository.getStations("", countryCode, null, null, limit = 20) }
-                .onSuccess { _nearbyStations.value = it }
+            _nearbyStationsState.value = NearbyStationsState.Loading
+            runCatching {
+                val countryCode = withContext(Dispatchers.IO) {
+                    val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                    val location = listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
+                        .firstNotNullOfOrNull { provider ->
+                            runCatching {
+                                if (manager.isProviderEnabled(provider)) manager.getLastKnownLocation(provider) else null
+                            }.getOrNull()
+                        } ?: return@withContext null
+                    if (!Geocoder.isPresent()) return@withContext null
+                    @Suppress("DEPRECATION")
+                    Geocoder(context, Locale.getDefault())
+                        .getFromLocation(location.latitude, location.longitude, 1)
+                        ?.firstOrNull()?.countryCode
+                }?.takeIf(String::isNotBlank) ?: return@runCatching null
+                repository.getStations("", countryCode, null, null, limit = 20)
+            }.onSuccess { stations ->
+                if (stations == null) {
+                    _nearbyStationsState.value = NearbyStationsState.LocationUnavailable
+                } else {
+                    _nearbyStations.value = stations
+                    _nearbyStationsState.value = NearbyStationsState.Ready
+                }
+            }.onFailure {
+                _nearbyStationsState.value = NearbyStationsState.Error
+            }
         }
     }
 
