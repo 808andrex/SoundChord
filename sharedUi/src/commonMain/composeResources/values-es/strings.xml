@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="audio_quality_dialog_title">Calidad de audio</string>
+    <string name="audio_quality_dialog_unknown">Los detalles del formato de audio no están disponibles.</string>
+    <string name="audio_quality_dialog_accept">Aceptar</string>
     <string name="analysis_complete">analizada</string>
     <string name="analysis_in_progress">analizando…</string>
     <string name="analysis_refining">analizada, ajustando…</string>

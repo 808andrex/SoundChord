@@ -1840,20 +1840,43 @@ class PlaybackService : MediaLibraryService() {
         // After the player exists and before the session is built: the
         // session's wrapper reports the user's actions to it.
         partySync = PartySync(scope) { player }.also { it.start() }
+        ListenTogether.setRemoteControlCallback { enabled ->
+            if (ListenTogether.state.value.inParty) partySync?.setRemoteControl(enabled)
+        }
         // AutoPlay has one shared supplier in a party. The host supplies it
         // while connected; if they disappear, the lowest stable connected member
         // ID takes over. That election is deterministic on every phone, so two
         // listeners never append different recommendations at once.
         scope.launch {
             ListenTogether.state
-                .map { state -> Triple(state.code, state.playback.autoplayEnabled, autoplaySupplierId(state)) }
+                .map { state ->
+                    Triple(
+                        state.code,
+                        state.playback.autoplayEnabled,
+                        Triple(
+                            autoplaySupplierId(state),
+                            state.playback.track?.videoId,
+                            state.playback.track?.videoId?.let { videoId ->
+                                partyQueueIndexOf(state.queue, state.playback, videoId) >= 0
+                            } == true,
+                        ),
+                    )
+                }
                 .distinctUntilChanged()
-                .collectLatest { (code, enabled, supplierId) ->
+                .collectLatest { (code, enabled, roleAndTrack) ->
+                    val (supplierId, partyTrackId, hasSeedInPartyQueue) = roleAndTrack
                     if (code != null && enabled && supplierId == ListenTogether.state.value.you?.memberId) {
-                        autoplayLoadJob?.cancel()
-                        autoplayLoadJob = null
-                        autoplaySeed = null
-                        loadAutoplayForCurrentTrack()
+                        // Don't start AutoPlay against a party that has not yet
+                        // received the host's current track and ordered queue.
+                        // These key fields retry after both controls have landed.
+                        if (partyTrackId != null && hasSeedInPartyQueue &&
+                            partyTrackId == player?.currentMediaItem?.mediaId
+                        ) {
+                            autoplayLoadJob?.cancel()
+                            autoplayLoadJob = null
+                            autoplaySeed = null
+                            loadAutoplayForCurrentTrack()
+                        }
                     }
                 }
         }
@@ -3161,6 +3184,9 @@ class PlaybackService : MediaLibraryService() {
             return
         }
         val current = exoPlayer.currentMediaItem?.toSong() ?: return
+        if (party.inParty && partyQueueIndexOf(party.queue, party.playback, current.videoId) < 0) {
+            return
+        }
         if (AppSettings.dontRepeatSuggestions.value) sessionSongHistory += current
         // In a party the server's queue is the one being topped up, and this
         // player's copy of it lags behind by however long reconcile is held off
@@ -7719,6 +7745,7 @@ class PlaybackService : MediaLibraryService() {
         audioManager?.unregisterAudioDeviceCallback(outputDeviceCallback)
         partySync?.stop()
         partySync = null
+        ListenTogether.setRemoteControlCallback(null)
         player?.let {
             saveQueueSnapshot(it)
             savePlaybackState(it)

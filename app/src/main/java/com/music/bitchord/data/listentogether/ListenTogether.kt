@@ -172,6 +172,8 @@ object ListenTogether {
         val maxMembers: Int = 5,
         /** @see controlsLocked */
         val hostOnlyControl: Boolean = false,
+        /** Mute this device's player while staying connected to party controls. */
+        val remoteControl: Boolean = false,
         val playback: PartyPlayback = PartyPlayback(),
         /**
          * Held separately from [playback] because it arrives separately: the
@@ -654,6 +656,7 @@ object ListenTogether {
 
     private lateinit var prefs: SharedPreferences
     private var token: String? = null
+    @Volatile private var remoteControlCallback: ((Boolean) -> Unit)? = null
 
     @Volatile
     private var session: DefaultClientWebSocketSession? = null
@@ -661,6 +664,8 @@ object ListenTogether {
 
     fun init(context: Context) {
         prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val remoteControl = prefs.getBoolean(KEY_REMOTE_CONTROL, false)
+        _state.update { it.copy(remoteControl = remoteControl) }
         val rawSaved = prefs.getString(KEY_SERVER, null)?.trim().orEmpty()
         val normalizedSaved = when (val res = parseAndNormalizeServerUrl(rawSaved)) {
             is ServerUrlValidationResult.Valid -> res.normalizedUrl
@@ -837,6 +842,7 @@ object ListenTogether {
                 you = membership.you,
                 members = membership.party.members,
                 maxMembers = membership.party.maxMembers,
+                remoteControl = prefs.getBoolean(KEY_REMOTE_CONTROL, false),
                 playback = membership.party.playback,
                 queue = membership.party.queue,
                 connection = Connection.CONNECTING,
@@ -894,6 +900,7 @@ object ListenTogether {
                 you = membership.you,
                 members = membership.party.members,
                 maxMembers = membership.party.maxMembers,
+                remoteControl = prefs.getBoolean(KEY_REMOTE_CONTROL, false),
                 playback = membership.party.playback,
                 queue = membership.party.queue,
                 connection = Connection.CONNECTING,
@@ -1030,6 +1037,7 @@ object ListenTogether {
                     you = membership.you,
                     members = membership.party.members,
                     maxMembers = membership.party.maxMembers,
+                    remoteControl = prefs.getBoolean(KEY_REMOTE_CONTROL, false),
                     playback = membership.party.playback,
                     queue = membership.party.queue,
                     connection = Connection.CONNECTING,
@@ -1118,6 +1126,28 @@ object ListenTogether {
     /** Host only, and refused by the server from anybody else. @see State.controlsLocked */
     fun setHostOnlyControl(enabled: Boolean) =
         control("setHostOnlyControl") { put("enabled", enabled) }
+
+    /** Persist the local output role and notify PlaybackService to mute this phone. */
+    fun setRemoteControl(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_REMOTE_CONTROL, enabled).apply()
+        _state.update { it.copy(remoteControl = enabled) }
+        if (_state.value.inParty) {
+            remoteControlCallback?.invoke(enabled)
+            control("setDeviceRole") {
+                put("device_type", "phone")
+                put("audio_mode", if (enabled) "remote" else "local")
+                put("mute_local", enabled)
+            }
+        }
+    }
+
+    /** PlaybackService owns the player and applies this local-only mute. */
+    fun setRemoteControlCallback(callback: ((Boolean) -> Unit)?) {
+        remoteControlCallback = callback
+        if (callback != null && _state.value.inParty) callback(_state.value.remoteControl)
+    }
+
+    fun isRemoteControlEnabled(): Boolean = _state.value.remoteControl
 
     private fun control(action: String, body: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit) {
         val frame = buildJsonObject {
@@ -1707,6 +1737,7 @@ object ListenTogether {
     private const val KEY_DEVICE = "device_id"
     private const val KEY_NICKNAME = "party_nickname"
     private const val KEY_KICKED = "party_kicked_until"
+    private const val KEY_REMOTE_CONTROL = "party_remote_control"
 
     /** How long a removal keeps this device out of that party. */
     private const val KICK_BLOCK_MS = 24L * 60 * 60 * 1000

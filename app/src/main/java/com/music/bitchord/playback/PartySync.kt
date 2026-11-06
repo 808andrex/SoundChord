@@ -189,6 +189,15 @@ class PartySync(
     private var driftCooldownUntilMs = 0L
 
     private var lastPartyCode: String? = null
+    private val localAudioRole = PartyLocalAudioRole()
+    private var roleMuteOverride: Boolean? = null
+    private var roleWasSetByUser = false
+
+    fun setRemoteControl(enabled: Boolean) {
+        roleWasSetByUser = true
+        roleMuteOverride = enabled
+        localAudioRole.setUserMute(player(), enabled)
+    }
 
     fun start() {
         jobs += scope.launch {
@@ -196,9 +205,16 @@ class PartySync(
                 // A new state, or leaving/joining. Not every field: this exists
                 // to react promptly to a control, and the round-trip counter
                 // changing is not one.
-                .map { ReconcileKey(it.playback.seq, it.queue.seq, it.code, it.clockSynced) }
+                .map { ReconcileKey(it.playback.seq, it.queue.seq, it.code, it.clockSynced, it.remoteControl) }
                 .distinctUntilChanged()
                 .collect { key ->
+                    val roleState = ListenTogether.state.value
+                    val localHint = if (roleWasSetByUser) roleMuteOverride else roleState.remoteControl
+                    if (roleState.inParty) {
+                        localAudioRole.apply(player(), localHint)
+                    } else {
+                        localAudioRole.restore(player())
+                    }
                     if (key.code != lastPartyCode) {
                         val wasInParty = lastPartyCode != null
                         val nowInParty = key.code != null
@@ -472,6 +488,9 @@ class PartySync(
     private fun reconcile() {
         val party = ListenTogether.state.value
         if (!party.inParty) {
+            localAudioRole.restore(player())
+            roleMuteOverride = null
+            roleWasSetByUser = false
             loadingVideoId = null
             focusLost = false
             rejoining = false
@@ -486,6 +505,7 @@ class PartySync(
             lastIsPlaying = false
             return
         }
+        localAudioRole.apply(player(), roleMuteOverride ?: party.remoteControl)
         // Before any of the early returns below, so a local pause cannot
         // outlive the thing it was held against.
         clearLocalPauseIfFreed(party)
@@ -760,15 +780,10 @@ class PartySync(
             .map { exo.getMediaItemAt(it) }
             .filterNot { it.mediaId.startsWith("content://") || it.mediaId.startsWith("file://") }
 
-        val rawTrackIndex = rawLocalItems.indexOfFirst { it.mediaId == track.videoId }
-        val localItems = if (rawTrackIndex >= 0) {
-            val pastAndCurrent = rawLocalItems.subList(0, rawTrackIndex + 1)
-            val upcoming = rawLocalItems.subList(rawTrackIndex + 1, rawLocalItems.size)
-                .filter { it.queueTier != QueueTier.CONTEXT }
-            pastAndCurrent + upcoming
-        } else {
-            rawLocalItems.filter { it.queueTier != QueueTier.CONTEXT }
-        }
+        // CONTEXT is the user's ordered album/playlist queue (including its
+        // bounded window), not disposable AutoPlay. Keep it in the party queue
+        // so a new session continues the same listening order on every device.
+        val localItems = rawLocalItems
 
         val localIds = localItems.map { it.mediaId }
         val trackIndex = localIds.indexOf(track.videoId)
@@ -890,15 +905,8 @@ class PartySync(
         val song = exo.currentMediaItem?.toSong() ?: return
         if (song.isDeviceFile()) return
         Log.i(TAG, "seeding the new party with what this device is already playing")
-        val currentIndex = exo.currentMediaItemIndex
-        if (currentIndex >= 0 && currentIndex + 1 < exo.mediaItemCount) {
-            val toKeep = (currentIndex + 1 until exo.mediaItemCount)
-                .map { exo.getMediaItemAt(it) }
-                .filter { it.queueTier != QueueTier.CONTEXT }
-            if (toKeep.size != exo.mediaItemCount - (currentIndex + 1)) {
-                exo.replaceMediaItems(currentIndex + 1, exo.mediaItemCount, toKeep)
-            }
-        }
+        // Seed from the actual player queue as-is. Removing CONTEXT items here
+        // used to discard the album/playlist tail before [publish] could send it.
         publish()
     }
 
@@ -1000,6 +1008,7 @@ class PartySync(
         val queueSeq: Long,
         val code: String?,
         val clockSynced: Boolean,
+        val remoteControl: Boolean,
     )
 
     private companion object {

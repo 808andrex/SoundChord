@@ -832,6 +832,7 @@ fun NowPlayingScreen(
     var showCast by remember { mutableStateOf(false) }
     var showAudioOutput by remember { mutableStateOf(false) }
     var showVideoQuality by remember { mutableStateOf(false) }
+    var showAudioQualityInfo by remember { mutableStateOf(false) }
     var showLyricsProviders by remember { mutableStateOf(false) }
     // Gated on the Bluetooth permission the first time — see [rememberOutputPicker].
     val openAudioOutput = rememberOutputPicker { showAudioOutput = true }
@@ -1045,7 +1046,7 @@ fun NowPlayingScreen(
     val currentLyricsOffsetOpen by rememberUpdatedState(lyricsOffsetOpen)
     val overlayOpen = remember {
         derivedStateOf {
-            currentMenuOpen() || showAudioPipeline || showCast || showAudioOutput || showVideoQuality ||
+            currentMenuOpen() || showAudioPipeline || showCast || showAudioOutput || showVideoQuality || showAudioQualityInfo ||
                 showLyricsProviders || showListenTogetherMembers || lyricsShare != null || currentLyricsOffsetOpen
         }
     }
@@ -1109,6 +1110,7 @@ fun NowPlayingScreen(
     PlayerBackHandler(enabled = showAudioOutput) { showAudioOutput = false }
 
     PlayerBackHandler(enabled = showVideoQuality) { showVideoQuality = false }
+    PlayerBackHandler(enabled = showAudioQualityInfo) { showAudioQualityInfo = false }
 
     PlayerBackHandler(enabled = showLyricsProviders) { showLyricsProviders = false }
 
@@ -1615,6 +1617,12 @@ fun NowPlayingScreen(
                 onDismiss = { showVideoQuality = false },
             )
         }
+        if (showAudioQualityInfo) {
+            AudioQualityInfoDialog(
+                hazeState = playerHaze,
+                onDismiss = { showAudioQualityInfo = false },
+            )
+        }
         if (showAudioOutput) {
             AudioOutputSheet(
                 hazeState = playerHaze,
@@ -1921,6 +1929,7 @@ fun NowPlayingScreen(
                             PlaybackQualityLabel(
                                 song = song,
                                 isLoading = isLoading,
+                                onClick = { showAudioQualityInfo = true },
                                 modifier = Modifier
                                     .align(Alignment.Center)
                                     .padding(horizontal = 8.dp),
@@ -2144,6 +2153,7 @@ fun NowPlayingScreen(
                                     PlaybackQualityLabel(
                                         song = song,
                                         isLoading = isLoading,
+                                        onClick = { showAudioQualityInfo = true },
                                         modifier = Modifier
                                             .align(Alignment.Center)
                                             .padding(horizontal = 8.dp),
@@ -3955,6 +3965,7 @@ fun NowPlayingScreen(
                         PlaybackQualityLabel(
                             song = song,
                             isLoading = isLoading,
+                            onClick = { showAudioQualityInfo = true },
                             modifier = Modifier
                                 .align(Alignment.Center)
                                 .padding(horizontal = 8.dp),

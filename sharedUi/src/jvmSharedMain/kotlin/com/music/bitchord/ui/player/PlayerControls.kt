@@ -33,6 +33,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -49,6 +50,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -68,8 +70,11 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Watch
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -111,6 +116,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.music.bitchord.ui.components.MENU_FROST_ALPHA
+import com.music.bitchord.ui.components.MenuFrostDark
+import com.music.bitchord.ui.components.liveMenuFrost
+import dev.chrisbanes.haze.HazeState
 import com.music.bitchord.ui.components.LINE_FADE
 import com.music.bitchord.ui.graphics.fadingEdges
 import com.music.bitchord.ui.haptics.Haptic
@@ -334,6 +343,7 @@ internal fun PlaybackQualityLabel(
     song: Song,
     isLoading: Boolean,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     if (song.isLiveRadioStream || song.playbackSourceId?.startsWith("radio:") == true) {
         Text(
@@ -371,6 +381,7 @@ internal fun PlaybackQualityLabel(
         losslessRequested = effectiveQuality == AudioQuality.LOSSLESS,
         nerdStats = nerdStats,
         modifier = modifier,
+        onClick = onClick,
     )
 }
 
@@ -1679,6 +1690,7 @@ private fun LosslessOrStats(
     losslessRequested: Boolean,
     nerdStats: NerdStats.Snapshot?,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     when {
         // Still resolving — either the player itself is buffering, or a
@@ -1711,6 +1723,7 @@ private fun LosslessOrStats(
             pulsing = true,
             animated = false,
             modifier = modifier,
+            onClick = onClick,
         )
         nerdStats?.isLossless == true -> LosslessLabel(
             // Same line Tidal, Qobuz and Apple Music draw it at — see
@@ -1722,12 +1735,14 @@ private fun LosslessOrStats(
             // rather than a label, which only one of these two is.
             animated = true,
             modifier = modifier,
+            onClick = onClick,
         )
         nerdStats?.isDolbyAtmos == true -> LosslessLabel(
             text = "Dolby Atmos",
             animated = true,
             iconPainter = painterResource(Res.drawable.ic_dolby_atmos),
             modifier = modifier,
+            onClick = onClick,
         )
         // Lossy, but the good end of lossy — a module's 320kbps tier, which
         // for a great many tracks is the best copy that exists anywhere the
@@ -1739,6 +1754,7 @@ private fun LosslessOrStats(
             // A Material glyph's own size is 24dp; the badge's are drawn small.
             iconSize = 13.dp,
             modifier = modifier,
+            onClick = onClick,
         )
         // Below that, no badge: "Medium Quality" and "Data Saver" are gone.
         // The space under the bar is kept for what is worth announcing.
@@ -1757,6 +1773,7 @@ private fun LosslessLabel(
     pulsing: Boolean = false,
     /** Unspecified draws [iconPainter] at its own size. */
     iconSize: Dp = Dp.Unspecified,
+    onClick: (() -> Unit)? = null,
 ) {
     // Only while asked for, and not at all under "Reduce animation": the
     // label then just holds still, which says "waiting" well enough.
@@ -1779,7 +1796,13 @@ private fun LosslessLabel(
         // label — no recomposition, no relayout. ModulateAlpha fades each draw
         // call in place rather than through an offscreen buffer: the glyph and
         // the word never overlap, so there is nothing a buffer would fix.
-        modifier = modifier.graphicsLayer {
+        modifier = modifier.then(
+            if (onClick == null) Modifier else Modifier.clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = onClick,
+            ),
+        ).graphicsLayer {
             alpha = pulse?.value ?: 1f
             compositingStrategy = CompositingStrategy.ModulateAlpha
         },
@@ -1809,6 +1832,89 @@ private fun LosslessLabel(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+    }
+}
+
+/** The audio format over the same frosted surface used by the player action menu. */
+@Composable
+internal fun AudioQualityInfoDialog(hazeState: HazeState, onDismiss: () -> Unit) {
+    val stats by NerdStats.current.collectAsStateWithLifecycle()
+    val reduceDynamicBlur by PlayerSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+    val frost = LocalPlayerFrost.current
+    val panelShape = RoundedCornerShape(30.dp)
+    val qualityName = when {
+        stats?.let { it.isLossless && it.isHiRes } == true -> stringResource(Res.string.hi_res_lossless)
+        stats?.isLossless == true -> stringResource(Res.string.lossless)
+        stats?.isDolbyAtmos == true -> "Dolby Atmos"
+        stats?.isHiQuality == true -> stringResource(Res.string.high_quality)
+        stats?.bitrateKbps != null -> "${stats?.bitrateKbps} kbps"
+        else -> stringResource(Res.string.audio_quality_dialog_title)
+    }
+    val formatDetails = stats?.describe() ?: stringResource(Res.string.audio_quality_dialog_unknown)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.52f))
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = onDismiss,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 28.dp)
+                .clip(panelShape)
+                .then(
+                    when {
+                        reduceDynamicBlur -> Modifier.background(MenuFrostDark)
+                        frost != null -> with(frost) {
+                            Modifier.frostPanel(
+                                panelShape,
+                                MenuFrostDark.copy(alpha = MENU_FROST_ALPHA),
+                            )
+                        }
+                        else -> Modifier.liveMenuFrost(hazeState, MenuFrostDark)
+                    },
+                )
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = {},
+                ),
+            shape = panelShape,
+            color = Color.Transparent,
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
+            tonalElevation = 8.dp,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    painterResource(Res.drawable.ic_lossless),
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.size(width = 96.dp, height = 52.dp),
+                )
+                Spacer(Modifier.height(20.dp))
+                Text(qualityName, style = MaterialTheme.typography.titleLarge, color = Color.White, modifier = Modifier.fillMaxWidth())
+                Text(formatDetails, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.62f), modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(24.dp))
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                    ),
+                ) {
+                    Text(stringResource(Res.string.audio_quality_dialog_accept))
+                }
+            }
         }
     }
 }
@@ -1892,7 +1998,7 @@ private fun ShimmerText(
  * about the copy being played.
  */
 @Composable
-private fun NerdStats.Snapshot.describe(): String? {
+internal fun NerdStats.Snapshot.describe(): String? {
     val parts = buildList {
         codecLabel(mimeType)?.let(::add)
         bitDepth?.let { add(stringResource(Res.string.bit_depth, it)) }

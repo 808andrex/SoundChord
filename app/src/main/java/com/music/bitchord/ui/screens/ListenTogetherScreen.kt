@@ -94,6 +94,8 @@ import com.music.bitchord.data.listentogether.PartyActivity
 import com.music.bitchord.data.listentogether.PartyMember
 import com.music.bitchord.data.listentogether.ServerConnectionState
 import com.music.bitchord.data.listentogether.ServerUrlError
+import com.soundchord.features.listentogether.RemoteAudioModeCard
+import com.soundchord.features.listentogether.RemoteAudioModeController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -147,6 +149,9 @@ fun ListenTogetherScreen(
     val scope = rememberCoroutineScope()
 
     val state by ListenTogether.state.collectAsStateWithLifecycle()
+    val remoteAudioModeController = remember {
+        RemoteAudioModeController(ListenTogether::setRemoteControl)
+    }
     val customServer by ListenTogether.customServerUrl.collectAsStateWithLifecycle()
     val connectionState by ListenTogether.serverConnectionState.collectAsStateWithLifecycle()
     val activity by ListenTogether.activity.collectAsStateWithLifecycle()
@@ -506,6 +511,7 @@ fun ListenTogetherScreen(
         } else {
             InAParty(
                 state = state,
+                onRemoteAudioModeChange = remoteAudioModeController::setEnabled,
                 onCopy = { clipboard.setText(AnnotatedString(state.code.orEmpty())) },
                 onShare = { sheet = PartySheet.Invite },
                 onShareLink = shareInvite,
@@ -833,6 +839,7 @@ private fun CodeCell(
 @Composable
 private fun InAParty(
     state: ListenTogether.State,
+    onRemoteAudioModeChange: (Boolean) -> Unit,
     onCopy: () -> Unit,
     onShare: () -> Unit,
     onShareLink: () -> Unit,
@@ -872,6 +879,12 @@ private fun InAParty(
     }
 
     NowPlayingInTheParty(state)
+
+    RemoteAudioModeCard(
+        enabled = state.remoteControl,
+        onEnabledChange = onRemoteAudioModeChange,
+        modifier = Modifier.padding(horizontal = ROW_INSET, vertical = 12.dp),
+    )
 
     SettingsGroup(
         header = stringResource(
