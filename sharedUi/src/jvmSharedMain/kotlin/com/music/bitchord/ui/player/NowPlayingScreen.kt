@@ -681,6 +681,7 @@ private fun SlidingPlayerDeck(
 @OptIn(ExperimentalHazeApi::class, ExperimentalHazeMaterialsApi::class)
 fun NowPlayingScreen(
     song: Song,
+    radioTrackTitle: String? = null,
     /** Who selected this track in the active Listen Together session. */
     playedBy: String? = null,
     isPlaying: Boolean,
@@ -798,6 +799,7 @@ fun NowPlayingScreen(
 ) {
     val density = LocalDensity.current
     val haptics = rememberHaptics()
+    val radioPlaying = !song.radioName.isNullOrBlank() || song.playbackSourceId?.startsWith("radio:") == true
 
     // Remote tracks whose art lives inside the file resolve it here, once —
     // every surface below reads the same value rather than each triggering
@@ -963,6 +965,12 @@ fun NowPlayingScreen(
     val panelScrolling = lyricsScrolling || queueScrolling
     var lyricsControlsOpen by remember {
         mutableStateOf(restoredPlayerScreen == LastPlayerScreen.LYRICS)
+    }
+    LaunchedEffect(song.videoId, song.radioName, song.playbackSourceId) {
+        if (radioPlaying) {
+            lyricsOpen = false
+            lyricsControlsOpen = false
+        }
     }
     var queueControlsOpen by remember { mutableStateOf(true) }
     // Shared with Spotify's title placement below. The deck and credits must
@@ -1568,6 +1576,7 @@ fun NowPlayingScreen(
     // besides the sleeve.
     val playerActions: @Composable () -> Unit = {
         PlayerActionRow(
+            radioPlaying = radioPlaying,
             lyricsOpen = lyricsOpen,
             queueOpen = queueOpen,
             shuffleEnabled = shuffleEnabled,
@@ -1928,6 +1937,7 @@ fun NowPlayingScreen(
                             onPlayPause = onPlayPause,
                             onNext = onNext,
                             compact = true,
+                            radioPlaying = radioPlaying,
                         )
                     },
                 )
@@ -2151,6 +2161,7 @@ fun NowPlayingScreen(
                                     onPlayPause = onPlayPause,
                                     onNext = onNext,
                                     compact = compact,
+                                    radioPlaying = radioPlaying,
                                 )
                             },
                             volume = if (hideVolumeBar) {
@@ -3562,7 +3573,7 @@ fun NowPlayingScreen(
                                 // snapping while the rest of the switch moves around
                                 // it.
                                 Crossfade(
-                                    targetState = song.title to song.artist,
+                                    targetState = song.title to (radioTrackTitle ?: song.artist),
                                     animationSpec = tween(durationMillis = 300),
                                     label = "playerCredits",
                                 ) {
@@ -3589,9 +3600,10 @@ fun NowPlayingScreen(
                                             modifier = Modifier.opensPage(song.albumId, onOpenAlbum),
                                         )
                                         ArtistCreditsMarquee(
-                                            text = song.artist,
-                                            credits = remember(song.artist, song.artists, song.artistId) {
-                                                artistCredits(song.artist, song.artists, song.artistId)
+                                            text = radioTrackTitle ?: song.artist,
+                                            credits = remember(song.artist, song.artists, song.artistId, radioTrackTitle) {
+                                                if (radioTrackTitle != null) emptyList()
+                                                else artistCredits(song.artist, song.artists, song.artistId)
                                             },
                                             style = MaterialTheme.typography.titleLarge.copy(
                                                 fontWeight = FontWeight.W500,
@@ -3965,6 +3977,7 @@ fun NowPlayingScreen(
                         onPrevious = onPrevious,
                         onPlayPause = onPlayPause,
                         onNext = onNext,
+                        radioPlaying = radioPlaying,
                     )
 
                     // Keep the volume slot's full footprint when its contents are

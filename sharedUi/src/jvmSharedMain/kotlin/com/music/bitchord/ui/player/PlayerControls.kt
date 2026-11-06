@@ -335,6 +335,10 @@ internal fun PlaybackQualityLabel(
     isLoading: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    if (!song.radioName.isNullOrBlank() || song.playbackSourceId?.startsWith("radio:") == true) {
+        Text(song.sourceQuality.orEmpty(), modifier = modifier, color = Color(0xFFFF5252), style = MaterialTheme.typography.labelMedium)
+        return
+    }
     val wifiQuality by PlayerSettings.audioQualityWifi.collectAsStateWithLifecycle()
     val cellularQuality by PlayerSettings.audioQualityCellular.collectAsStateWithLifecycle()
     val metered by PlayerSettings.meteredConnection.collectAsStateWithLifecycle()
@@ -474,6 +478,7 @@ internal fun TransportRow(
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     compact: Boolean = false,
+    radioPlaying: Boolean = false,
 ) {
     val playSize = if (compact) 58.dp else 74.dp
     val playTouch = if (compact) 76.dp else 92.dp
@@ -485,7 +490,7 @@ internal fun TransportRow(
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TransportGlyph(
+        if (!radioPlaying) TransportGlyph(
             icon = Res.drawable.ic_player_previous,
             contentDescription = stringResource(Res.string.widget_previous),
             size = skipSize,
@@ -515,7 +520,7 @@ internal fun TransportRow(
                 haptic = if (isPlaying) Haptic.Pause else Haptic.Resume,
             )
         }
-        TransportGlyph(
+        if (!radioPlaying) TransportGlyph(
             icon = Res.drawable.ic_player_next,
             contentDescription = stringResource(Res.string.widget_next),
             size = skipSize,
@@ -580,6 +585,7 @@ internal fun VolumeRow(
  */
 @Composable
 internal fun PlayerActionRow(
+    radioPlaying: Boolean,
     lyricsOpen: Boolean,
     queueOpen: Boolean,
     shuffleEnabled: Boolean,
@@ -633,6 +639,7 @@ internal fun PlayerActionRow(
                     // opening either closes the other; lit to say which is up.
                     onClick = onToggleLyrics,
                     highlighted = lyricsOpen,
+                    enabled = !radioPlaying,
                 )
             }
             AnimatedContent(
@@ -1240,6 +1247,7 @@ private fun BottomGlyph(
      * ask for a window.
      */
     tapWindowMs: Long = 0L,
+    enabled: Boolean = true,
 ) {
     val haptics = rememberHaptics()
     // Read only from the click handler, never during composition, so writing it
@@ -1275,6 +1283,7 @@ private fun BottomGlyph(
                 },
             )
             .clickable(
+                enabled = enabled,
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
             ) {
@@ -1288,7 +1297,11 @@ private fun BottomGlyph(
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
-        val tint = LocalPlayerTint.current.copy(alpha = if (highlighted) 1f else 0.75f)
+        val tint = LocalPlayerTint.current.copy(alpha = when {
+            !enabled -> 0.35f
+            highlighted -> 1f
+            else -> 0.75f
+        })
         if (icon != null) {
             Icon(
                 imageVector = icon,

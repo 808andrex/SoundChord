@@ -145,6 +145,9 @@ fun SearchScreen(
     searchingLibrary: Boolean = false,
     /** Whether the page is showing the enabled addons' combined results; see [addonResults]. */
     searchingAddons: Boolean = false,
+    /** Radio discovery is hosted by the modular radio feature. */
+    searchingRadio: Boolean = false,
+    radioContent: (@Composable () -> Unit)? = null,
     /** The Addons source's tracks for the submitted query; null until one is submitted. */
     addonResults: UiState<List<Song>>? = null,
     /**
@@ -192,14 +195,14 @@ fun SearchScreen(
     // MainViewModel.suggestions. Nothing below it is worth showing while it is
     // up: the results are for whatever was searched before this edit began,
     // and so are the filter tabs above them.
-    val suggesting = suggestions.isNotEmpty() && !searchingLibrary && !searchingAddons
+    val suggesting = suggestions.isNotEmpty() && !searchingLibrary && !searchingAddons && !searchingRadio
     // Live media results arrive from the parallel typeahead pipeline; show
     // them only while the user is still typing (suggestions visible), so they
     // appear as a dropdown beneath the text completions rather than floating
     // after the search has committed.
     val showTypeahead = typeaheadResults.isNotEmpty() && suggesting
-    LaunchedEffect(listState, results, loadingMore, searchingLibrary, searchingAddons) {
-        if (results !is UiState.Success || searchingLibrary || searchingAddons) return@LaunchedEffect
+    LaunchedEffect(listState, results, loadingMore, searchingLibrary, searchingAddons, searchingRadio) {
+        if (results !is UiState.Success || searchingLibrary || searchingAddons || searchingRadio) return@LaunchedEffect
         snapshotFlow {
             val layout = listState.layoutInfo
             (layout.visibleItemsInfo.lastOrNull()?.index ?: -1) to layout.totalItemsCount
@@ -248,7 +251,7 @@ fun SearchScreen(
             // They are YouTube's categories, so the Library source has none.
             // The same selector as the sources above it and a folder's tabs, so
             // the app has one look for "pick one of these".
-            if (results != null && !suggesting && !searchingLibrary && !searchingAddons) {
+            if (results != null && !suggesting && !searchingLibrary && !searchingAddons && !searchingRadio) {
                 PillSegmentedControl(
                     options = SearchFilter.entries.map { it.label },
                     selectedIndex = filter.ordinal,
@@ -264,6 +267,7 @@ fun SearchScreen(
             contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
         ) {
             when {
+                searchingRadio -> item(key = "radio-search") { radioContent?.invoke() }
                 searchingLibrary || searchingAddons -> librarySearchResults(
                     query = query.trim(),
                     results = if (searchingAddons) addonResults else libraryResults,
