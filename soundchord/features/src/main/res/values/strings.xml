@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="explore_title">Explore</string>
+    <string name="explore_featured">FEATURED</string>
+    <string name="explore_moods_genres">Moods and genres</string>
+    <string name="explore_music_videos">Music videos</string>
+    <string name="explore_trending">Trending</string>
+    <string name="explore_remixes">Versions and remixes</string>
+    <string name="explore_quick_selections">Quick picks</string>
+    <string name="explore_from_library">From your library</string>
+    <string name="explore_community">From the community</string>
+    <string name="explore_new_discoveries">New discoveries and old favorites</string>
+    <string name="explore_daily_discovery">Your daily discovery</string>
+    <string name="explore_good_morning">Good morning!</string>
+    <string name="explore_videos_for_you">Music videos for you</string>
+    <string name="explore_see_more">See more</string>
+    <string name="explore_retry">Retry</string>
+    <string name="explore_empty_moods">No moods or genres are available right now.</string>
     <string name="radio_title">Radio</string>
     <string name="radio_favourites">My favorite stations</string>
     <string name="radio_show_all">Show all</string>
