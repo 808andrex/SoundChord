@@ -246,13 +246,13 @@ private fun PersonalStationHero(seed: Song, onPlay: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(132.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF292A2D)),
+            Modifier.size(112.dp).clip(RoundedCornerShape(18.dp)).background(Color(0xFF292A2D)),
             contentAlignment = Alignment.Center,
         ) {
             seed.thumbnailUrl?.let { AsyncImage(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
                 ?: Icon(Icons.Rounded.MusicNote, null, tint = Color.White.copy(alpha = .6f))
         }
-        Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             Text(
                 stringResource(R.string.station_song_label).uppercase(),
                 color = Color.White.copy(alpha = .8f),
@@ -263,12 +263,18 @@ private fun PersonalStationHero(seed: Song, onPlay: () -> Unit) {
             Text(
                 seed.title,
                 color = Color.White,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(seed.artist, color = Color.White.copy(alpha = .72f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(
+                seed.artist,
+                color = Color.White.copy(alpha = .72f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
         IconButton(onClick = onPlay, modifier = Modifier.size(52.dp)) {
             Icon(Icons.Rounded.PlayArrow, stringResource(R.string.play), tint = Color.White, modifier = Modifier.size(38.dp))

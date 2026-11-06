@@ -267,6 +267,11 @@ fun MoodGenreSection(
 
 @Composable
 private fun MoodGenreCard(mood: MoodGenre, onClick: () -> Unit) {
+    val vividAccents = listOf(
+        Color(0xFFFF3D81), Color(0xFF7C4DFF), Color(0xFF00B8D9),
+        Color(0xFFFF8A00), Color(0xFF00A86B), Color(0xFF365DFF),
+    )
+    val accent = vividAccents[(mood.title.hashCode().and(Int.MAX_VALUE)) % vividAccents.size]
     Box(
         Modifier.width(240.dp).height(170.dp)
             .clip(RoundedCornerShape(22.dp))
@@ -281,6 +286,15 @@ private fun MoodGenreCard(mood: MoodGenre, onClick: () -> Unit) {
                 modifier = Modifier.fillMaxSize(),
             )
         }
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    0f to accent.copy(alpha = .22f),
+                    .55f to accent.copy(alpha = .08f),
+                    1f to Color.Transparent,
+                ),
+            ),
+        )
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(0f to Color.Transparent, .48f to Color.Black.copy(alpha = .12f), 1f to Color.Black.copy(alpha = .78f)),

@@ -68,31 +68,46 @@ import com.soundchord.features.R
 import com.soundchord.features.radio.data.RadioStation
 import com.soundchord.features.radio.playback.toSong
 
-private data class CountryOption(val code: String, val label: Int)
-private data class GenreOption(val tag: String, val label: Int)
+private data class CountryOption(val code: String, val label: Int, val colors: List<Color>)
+private data class GenreOption(val tag: String, val label: Int, val colors: List<Color>)
+private data class CategoryOption(val label: Int, val colors: List<Color>)
 
 private val radioGenres = listOf(
-    GenreOption("pop", R.string.radio_genre_pop), GenreOption("rock", R.string.radio_genre_rock),
-    GenreOption("jazz", R.string.radio_genre_jazz), GenreOption("classical", R.string.radio_genre_classical),
-    GenreOption("electronic", R.string.radio_genre_electronic), GenreOption("hip hop", R.string.radio_genre_hip_hop),
-    GenreOption("lofi", R.string.radio_genre_lofi), GenreOption("news", R.string.radio_genre_news),
-    GenreOption("talk", R.string.radio_genre_talk), GenreOption("ambient", R.string.radio_genre_ambient),
-    GenreOption("country", R.string.radio_genre_country), GenreOption("bollywood", R.string.radio_genre_bollywood),
-    GenreOption("chillout", R.string.radio_genre_chillout), GenreOption("dance", R.string.radio_genre_dance),
-    GenreOption("80s", R.string.radio_genre_80s), GenreOption("90s", R.string.radio_genre_90s),
+    GenreOption("pop", R.string.radio_genre_pop, listOf(Color(0xFFFF4D7D), Color(0xFFB90055))),
+    GenreOption("rock", R.string.radio_genre_rock, listOf(Color(0xFFFF6B35), Color(0xFF9E251E))),
+    GenreOption("jazz", R.string.radio_genre_jazz, listOf(Color(0xFF9B59FF), Color(0xFF4B2AA8))),
+    GenreOption("classical", R.string.radio_genre_classical, listOf(Color(0xFF418BFF), Color(0xFF263D9B))),
+    GenreOption("electronic", R.string.radio_genre_electronic, listOf(Color(0xFFEF3DDB), Color(0xFF7028D9))),
+    GenreOption("hip hop", R.string.radio_genre_hip_hop, listOf(Color(0xFFFFB52E), Color(0xFFC33A16))),
+    GenreOption("lofi", R.string.radio_genre_lofi, listOf(Color(0xFF26C6C8), Color(0xFF176B9A))),
+    GenreOption("news", R.string.radio_genre_news, listOf(Color(0xFF398BFF), Color(0xFF154A9B))),
+    GenreOption("talk", R.string.radio_genre_talk, listOf(Color(0xFFFF884D), Color(0xFFB83D51))),
+    GenreOption("ambient", R.string.radio_genre_ambient, listOf(Color(0xFF32D6B0), Color(0xFF197E86))),
+    GenreOption("country", R.string.radio_genre_country, listOf(Color(0xFF7FBD38), Color(0xFF286B37))),
+    GenreOption("bollywood", R.string.radio_genre_bollywood, listOf(Color(0xFFFF9F1C), Color(0xFFD62F6B))),
+    GenreOption("chillout", R.string.radio_genre_chillout, listOf(Color(0xFF36C7E8), Color(0xFF275FAE))),
+    GenreOption("dance", R.string.radio_genre_dance, listOf(Color(0xFFFF3C91), Color(0xFF762BCE))),
+    GenreOption("80s", R.string.radio_genre_80s, listOf(Color(0xFF19C5E8), Color(0xFFB535D1))),
+    GenreOption("90s", R.string.radio_genre_90s, listOf(Color(0xFF387BFF), Color(0xFF19A9B7))),
 )
 
 private val radioCountries = listOf(
-    CountryOption("AR", R.string.radio_country_ar), CountryOption("BR", R.string.radio_country_br),
-    CountryOption("CO", R.string.radio_country_co), CountryOption("EC", R.string.radio_country_ec),
-    CountryOption("FR", R.string.radio_country_fr), CountryOption("DE", R.string.radio_country_de),
-    CountryOption("IN", R.string.radio_country_in), CountryOption("IT", R.string.radio_country_it),
-    CountryOption("JP", R.string.radio_country_jp), CountryOption("MX", R.string.radio_country_mx),
-    CountryOption("ES", R.string.radio_country_es), CountryOption("GB", R.string.radio_country_gb),
-    CountryOption("US", R.string.radio_country_us),
+    CountryOption("AR", R.string.radio_country_ar, listOf(Color(0xFF62C9FF), Color(0xFF2387D2))),
+    CountryOption("BR", R.string.radio_country_br, listOf(Color(0xFF18B957), Color(0xFF08763D))),
+    CountryOption("CO", R.string.radio_country_co, listOf(Color(0xFFFFD329), Color(0xFF2457C5))),
+    CountryOption("EC", R.string.radio_country_ec, listOf(Color(0xFFFFD329), Color(0xFF2457C5))),
+    CountryOption("FR", R.string.radio_country_fr, listOf(Color(0xFF2863D8), Color(0xFFD6384B))),
+    CountryOption("DE", R.string.radio_country_de, listOf(Color(0xFFD73535), Color(0xFFD9A323))),
+    CountryOption("IN", R.string.radio_country_in, listOf(Color(0xFFFF962E), Color(0xFF18864A))),
+    CountryOption("IT", R.string.radio_country_it, listOf(Color(0xFF1CA66A), Color(0xFFD94245))),
+    CountryOption("JP", R.string.radio_country_jp, listOf(Color(0xFFE98591), Color(0xFFC3263D))),
+    CountryOption("MX", R.string.radio_country_mx, listOf(Color(0xFF159A5B), Color(0xFFD83C45))),
+    CountryOption("ES", R.string.radio_country_es, listOf(Color(0xFFE34035), Color(0xFFE7B52D))),
+    CountryOption("GB", R.string.radio_country_gb, listOf(Color(0xFF2552A5), Color(0xFFD83D4B))),
+    CountryOption("US", R.string.radio_country_us, listOf(Color(0xFF2855A6), Color(0xFFD83B4A))),
 )
 
-private val cardGradients = listOf(
+private val favoriteStationGradients = listOf(
     listOf(Color(0xFF79566F), Color(0xFF493E53)), listOf(Color(0xFF48586D), Color(0xFF303B4A)),
     listOf(Color(0xFF71684F), Color(0xFF494538)), listOf(Color(0xFF397074), Color(0xFF294B50)),
     listOf(Color(0xFF596957), Color(0xFF3B493C)), listOf(Color(0xFF755B70), Color(0xFF4D3D4D)),
@@ -316,12 +331,12 @@ fun RadioScreen(
             val availableTags = genres.map { it.name.lowercase().replace('-', ' ').trim() }.toSet()
             val displayedGenres = radioGenres.filter { it.tag in availableTags }.ifEmpty { radioGenres }
             items(displayedGenres.chunked(2), key = { row -> "genre_${row.firstOrNull()?.tag.orEmpty()}" }) { row ->
-                CategoryGridRow(row.map { it.label }) { index -> vm.onGenreChanged(row[index].tag) }
+                CategoryGridRow(row.map { CategoryOption(it.label, it.colors) }) { index -> vm.onGenreChanged(row[index].tag) }
             }
 
             item(key = "countries_title") { SectionTitle(stringResource(R.string.radio_countries)) }
             items(radioCountries.chunked(2), key = { row -> "country_${row.first().code}" }) { row ->
-                CategoryGridRow(row.map { it.label }) { index -> vm.onCountryCodeChanged(row[index].code) }
+                CategoryGridRow(row.map { CategoryOption(it.label, it.colors) }) { index -> vm.onCountryCodeChanged(row[index].code) }
             }
         }
     }
@@ -364,7 +379,7 @@ private fun SectionTitle(title: String, prominent: Boolean = false, modifier: Mo
 
 @Composable
 private fun FavoriteStationCard(station: RadioStation, isFavorite: Boolean, onFavorite: () -> Unit, onPlay: () -> Unit) {
-    val gradient = cardGradients[(station.uuid.hashCode().and(Int.MAX_VALUE)) % cardGradients.size]
+    val gradient = favoriteStationGradients[(station.uuid.hashCode().and(Int.MAX_VALUE)) % favoriteStationGradients.size]
     var artworkFailed by remember(station.uuid) { mutableStateOf(false) }
     Column(Modifier.width(250.dp)) {
         Card(
@@ -407,24 +422,23 @@ private fun FavoriteStationCard(station: RadioStation, isFavorite: Boolean, onFa
 }
 
 @Composable
-private fun CategoryGridRow(labels: List<Int>, onClick: (Int) -> Unit) {
+private fun CategoryGridRow(categories: List<CategoryOption>, onClick: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        labels.forEachIndexed { index, labelResource ->
-            val title = stringResource(labelResource)
-            val colors = cardGradients[(title.hashCode().and(Int.MAX_VALUE)) % cardGradients.size]
+        categories.forEachIndexed { index, category ->
+            val title = stringResource(category.label)
             Card(
                 modifier = Modifier.weight(1f).height(148.dp).clickable { onClick(index) },
                 shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             ) {
                 Column(
-                    Modifier.fillMaxSize().background(Brush.linearGradient(colors)).padding(16.dp),
+                    Modifier.fillMaxSize().background(Brush.linearGradient(category.colors)).padding(16.dp),
                     verticalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(stringResource(R.string.radio_stations_for, title), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = .86f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            if (labels.size == 1 && index == 0) Spacer(Modifier.weight(1f))
+            if (categories.size == 1 && index == 0) Spacer(Modifier.weight(1f))
         }
     }
 }

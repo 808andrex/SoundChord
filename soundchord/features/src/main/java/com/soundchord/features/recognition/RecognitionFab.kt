@@ -38,7 +38,7 @@ fun RecognitionFab(visible: Boolean, onClick: () -> Unit, modifier: Modifier = M
     ) {
         Box(
             modifier = Modifier
-                .size(60.dp)
+                .size(47.dp)
                 .shadow(10.dp, CircleShape)
                 .clip(CircleShape)
                 .background(

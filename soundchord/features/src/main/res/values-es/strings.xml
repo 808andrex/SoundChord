@@ -105,4 +105,7 @@
     <string name="recognition_listen_again">Volver a escuchar</string>
     <string name="recognition_play_soundchord">Reproducir en SoundChord</string>
     <string name="recognition_album_art_description">Portada del álbum de %1$s</string>
+    <string name="party_remote_audio_title">Modo Control Remoto</string>
+    <string name="party_remote_audio_subtitle">Silenciar el audio local sin perder el control de la sesión.</string>
+    <string name="audio_quality_accept">Aceptar</string>
 </resources>

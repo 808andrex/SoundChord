@@ -105,4 +105,7 @@
     <string name="recognition_listen_again">Listen again</string>
     <string name="recognition_play_soundchord">Play in SoundChord</string>
     <string name="recognition_album_art_description">Album artwork for %1$s</string>
+    <string name="party_remote_audio_title">Remote Control Mode</string>
+    <string name="party_remote_audio_subtitle">Mute audio on this device while keeping control of the party.</string>
+    <string name="audio_quality_accept">Accept</string>
 </resources>
