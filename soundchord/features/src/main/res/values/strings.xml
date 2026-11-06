@@ -16,7 +16,7 @@
     <string name="radio_search_hint">Search radio stations by name, country or genre</string>
     <string name="radio_search_empty">No stations found</string>
     <string name="radio_countries">Countries</string>
-    <string name="station_custom_label">Custom Station</string>
+    <string name="station_custom_label">PERSONALIZED STATION</string>
     <string name="station_title_format">Station for %1$s</string>
     <string name="radio_country_ec">Ecuador</string>
     <string name="radio_country_us">United States</string>
@@ -61,6 +61,7 @@
     <string name="station_up_next">Up Next</string>
     <string name="station_empty_suggestions">No songs suggested for this station</string>
     <string name="station_retry">Retry</string>
+    <string name="station_load_error">Could not load this station.</string>
     <string name="station_song_label">Song Radio</string>
     <string name="live_radio">● LIVE</string>
     <string name="radio_playback_source">Radio</string>

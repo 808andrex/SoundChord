@@ -16,9 +16,8 @@ fun RadioStation.toSong(context: Context): Song {
     val defaultArtist = country?.takeIf { it.isNotBlank() } ?: "Radio"
 
     return Song(
-        // Keep the resolved stream URL as the playable identity. PlayerConnection
-        // uses radioName as the explicit radio marker and routes this URL directly
-        // to ExoPlayer instead of treating it as a catalogue track.
+        // Keep the resolved stream URL as the playable identity and mark it
+        // explicitly as a live stream; song-based radio uses normal YouTube IDs.
         videoId = streamUrl,
         title = name,
         artist = defaultArtist,
@@ -33,6 +32,7 @@ fun RadioStation.toSong(context: Context): Song {
         playbackSourceType = PlaybackSourceType.EXPLORE,
         // Persist station identity separately from the playable URL. MainActivity
         // uses this marker to route the player star to the shared Radio DataStore.
-        playbackSourceId = "radio:$uuid"
+        playbackSourceId = "radio:$uuid",
+        isLiveRadioStream = true,
     )
 }

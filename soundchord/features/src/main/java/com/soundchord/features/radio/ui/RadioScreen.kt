@@ -101,14 +101,20 @@ private val cardGradients = listOf(
 @Composable
 fun RadioScreen(
     onPlayStation: (Song) -> Unit,
+    currentSong: Song? = null,
+    onStartStation: (Song) -> Unit = onPlayStation,
     viewModel: RadioViewModel? = null,
+    stationsViewModel: PersonalStationsViewModel? = null,
     searchQuery: String? = null,
 ) {
     val context = LocalContext.current
     val vm = viewModel ?: composeViewModel(factory = remember(context) { RadioViewModel.Factory(context) })
+    val stationsVm = stationsViewModel ?: composeViewModel<PersonalStationsViewModel>()
     val state by vm.uiState.collectAsState()
     val favorites by vm.favoriteStations.collectAsState()
     val favoriteUuids by vm.favoriteStationUuids.collectAsState(initial = emptySet())
+    val recentStations by stationsVm.recentStations.collectAsState()
+    val stationQueue by stationsVm.stationQueue.collectAsState()
     val genres by vm.popularGenres.collectAsState()
     val playing by vm.currentlyPlayingStation.collectAsState()
     val nearby by vm.nearbyStations.collectAsState()
@@ -116,6 +122,10 @@ fun RadioScreen(
     val country by vm.countryCode.collectAsState()
     val genre by vm.genre.collectAsState()
     LaunchedEffect(searchQuery) { if (searchQuery != null) vm.onSearchQueryChanged(searchQuery) }
+    LaunchedEffect(currentSong?.videoId) {
+        stationsVm.includeCurrentSong(currentSong)
+        stationsVm.loadRecentStations()
+    }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -132,6 +142,7 @@ fun RadioScreen(
         }
     }
     var showAllFavorites by remember { mutableStateOf(false) }
+    var selectedStationSeed by remember { mutableStateOf<Song?>(null) }
 
     val detailTitle = when {
         genre != null -> localizedGenre(genre!!)
@@ -139,13 +150,27 @@ fun RadioScreen(
         else -> null
     }
     val detailStateActive = detailTitle != null
-    BackHandler(enabled = showAllFavorites || detailStateActive) {
-        if (showAllFavorites) {
+    BackHandler(enabled = selectedStationSeed != null || showAllFavorites || detailStateActive) {
+        if (selectedStationSeed != null) {
+            selectedStationSeed = null
+        } else if (showAllFavorites) {
             showAllFavorites = false
         } else {
             vm.onGenreChanged(null)
             vm.onCountryCodeChanged(null)
         }
+    }
+
+    selectedStationSeed?.let { seed ->
+        PersonalStationDetailScreen(
+            seed = seed,
+            queueState = stationQueue,
+            onBack = { selectedStationSeed = null },
+            onPlay = { onStartStation(seed) },
+            onPlayQueueSong = onPlayStation,
+            onRetry = { stationsVm.loadStation(seed, force = true) },
+        )
+        return
     }
 
     LazyColumn(
@@ -235,6 +260,18 @@ fun RadioScreen(
                         }
                     }
                 }
+            }
+
+            item(key = "personal_stations") {
+                PersonalStationsSection(
+                    state = recentStations,
+                    onOpen = { seed ->
+                        selectedStationSeed = seed
+                        stationsVm.loadStation(seed)
+                    },
+                    onPlay = onStartStation,
+                    onRetry = { stationsVm.loadRecentStations(force = true) },
+                )
             }
 
             item(key = "nearby_title") { SectionTitle(stringResource(R.string.radio_nearby)) }
