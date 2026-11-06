@@ -1766,9 +1766,9 @@ class PlaybackService : MediaLibraryService() {
         // cannot open at all. A DSD file leaves the extractor as float PCM.
         mediaSourceFactory = object : androidx.media3.exoplayer.source.MediaSource.Factory by regularMediaSourceFactory {
             override fun createMediaSource(mediaItem: MediaItem): androidx.media3.exoplayer.source.MediaSource {
-                val radio = !mediaItem.mediaMetadata.extras
-                    ?.getString("bitchord.radioName")
-                    .isNullOrBlank()
+                val extras = mediaItem.mediaMetadata.extras
+                val radio = extras?.getBoolean("bitchord.isLiveRadioStream") == true ||
+                    extras?.getString("bitchord.playbackSourceId")?.startsWith("radio:") == true
                 if (radio && mediaItem.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8) {
                     // Force Media3's HLS source for Radio Browser .m3u8 URLs.
                     return androidx.media3.exoplayer.hls.HlsMediaSource.Factory(radioHttpFactory)
@@ -2042,7 +2042,7 @@ class PlaybackService : MediaLibraryService() {
         val song = item.toSong()
         // Live radio has no finite track lyric timeline and must never enter
         // the catalogue lyrics lookup used by loop-mix analysis.
-        if (!song.radioName.isNullOrBlank()) return null
+        if (song.isLiveRadioStream || song.playbackSourceId?.startsWith("radio:") == true) return null
         return kotlinx.coroutines.withTimeoutOrNull(LOOP_MIX_LYRICS_TIMEOUT_MS) {
             song.localUri?.let { EmbeddedLyrics.forUri(this@PlaybackService, it) }
                 ?: LyricsRepository.lyrics(
@@ -2169,7 +2169,7 @@ class PlaybackService : MediaLibraryService() {
 
         stationActionJob?.cancel()
         stationActionJob = scope.launch {
-            val radioSeed = seed.copy(radioName = seed.title)
+            val radioSeed = seed.copy(radioName = seed.title, isLiveRadioStream = false)
             val related = loadAutoplayTracks(
                 existing = listOf(radioSeed),
                 seedSong = radioSeed,
@@ -6636,7 +6636,9 @@ class PlaybackService : MediaLibraryService() {
             val period = parameters.timeline.getPeriod(periodIndex, Timeline.Period())
             val window = parameters.timeline.getWindow(period.windowIndex, Timeline.Window())
             val extras = window.mediaItem.mediaMetadata.extras
-            return if (!extras?.getString("bitchord.radioName").isNullOrBlank()) radio else regular
+            val isLiveRadio = extras?.getBoolean("bitchord.isLiveRadioStream") == true ||
+                extras?.getString("bitchord.playbackSourceId")?.startsWith("radio:") == true
+            return if (isLiveRadio) radio else regular
         }
 
         return object : LoadControl {

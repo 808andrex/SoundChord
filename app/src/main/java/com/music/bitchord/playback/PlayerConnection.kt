@@ -232,6 +232,7 @@ fun Song.toSongBundle(): Bundle = bundleOf(
     "setVideoId" to setVideoId,
     "fromAutoplay" to fromAutoplay,
     "radioName" to radioName,
+    "isLiveRadioStream" to isLiveRadioStream,
     "localUri" to localUri,
     "downloadFormat" to downloadFormat,
     "localPath" to localPath,
@@ -267,6 +268,7 @@ fun songFromBundle(b: Bundle): Song {
         isVideoOrigin = b.getBoolean("isVideoOrigin"),
         setVideoId = b.getString("setVideoId"),
         radioName = b.getString("radioName"),
+        isLiveRadioStream = b.getBoolean("isLiveRadioStream"),
         localUri = b.getString("localUri"),
         downloadFormat = b.getString("downloadFormat"),
         localPath = b.getString("localPath"),
@@ -368,14 +370,14 @@ fun rememberPlayerState(controller: MediaController?): PlayerState {
                 isQualityUpgraded = item?.mediaMetadata?.extras
                     ?.getBoolean(EXTRA_QUALITY_UPGRADED) == true,
                 radioTrackTitle = radioTrackTitle.takeIf {
-                    !item?.mediaMetadata?.extras?.getString(EXTRA_RADIO_NAME).isNullOrBlank()
+                    item?.mediaMetadata?.extras?.getBoolean(EXTRA_IS_LIVE_RADIO_STREAM) == true
                 },
             )
         }
 
         val listener = object : Player.Listener {
             override fun onMetadata(metadata: Metadata) {
-                if (player.currentMediaItem?.mediaMetadata?.extras?.getString(EXTRA_RADIO_NAME).isNullOrBlank()) return
+                if (player.currentMediaItem?.mediaMetadata?.extras?.getBoolean(EXTRA_IS_LIVE_RADIO_STREAM) != true) return
                 val title = (0 until metadata.length())
                     .asSequence()
                     .mapNotNull { (metadata.get(it) as? IcyInfo)?.title?.trim()?.takeIf(String::isNotEmpty) }
@@ -484,6 +486,8 @@ fun MediaItem.toSong() = Song(
     queueTier = this.queueTier,
     queueEntryId = this.queueEntryId,
     radioName = mediaMetadata.extras?.getString(EXTRA_RADIO_NAME),
+    isLiveRadioStream = mediaMetadata.extras?.getBoolean(EXTRA_IS_LIVE_RADIO_STREAM) == true ||
+        mediaMetadata.extras?.getString(EXTRA_PLAYBACK_SOURCE_ID)?.startsWith("radio:") == true,
     playbackSource = mediaMetadata.extras?.getString(EXTRA_PLAYBACK_SOURCE),
     playbackSourceType = mediaMetadata.extras?.getString(EXTRA_PLAYBACK_SOURCE_TYPE)
         ?.let { runCatching { PlaybackSourceType.valueOf(it) }.getOrNull() },
@@ -545,6 +549,7 @@ private const val EXTRA_FROM_AUTOPLAY = "bitchord.fromAutoplay"
 
 /** @see Song.radioName */
 private const val EXTRA_RADIO_NAME = "bitchord.radioName"
+private const val EXTRA_IS_LIVE_RADIO_STREAM = "bitchord.isLiveRadioStream"
 
 /** @see Song.playbackSource */
 private const val EXTRA_PLAYBACK_SOURCE = "bitchord.playbackSource"
@@ -669,10 +674,10 @@ private fun Song.pickedMixQuery(configId: String): String {
 }
 
 fun Song.toMediaItem(): MediaItem {
-    // Radio Browser stations carry a resolved URL in videoId and a non-null
-    // radioName. Preserve the URL as mediaId, but send it straight to ExoPlayer
-    // so it never enters the YouTube/source resolver or the song cache.
-    val isLiveRadio = !radioName.isNullOrBlank()
+    // Radio Browser stations carry a resolved URL and an explicit live marker.
+    // Song-based radio may have a radioName too, but remains a normal YouTube
+    // catalogue queue and must go through the watch resolver.
+    val isLiveRadio = isLiveRadioStream || playbackSourceId?.startsWith("radio:") == true
     val isRadioHls = isLiveRadio && videoId.substringBefore('?').endsWith(".m3u8", ignoreCase = true)
     val sourceTrack = SourceRegistry.parseTrackKey(videoId)
     // A row from search or a playlist carries no file of its own, but the track
@@ -788,7 +793,7 @@ fun Song.toMediaItem(): MediaItem {
                 if (queueTier != QueueTier.CONTEXT || queueEntryId != null || fromAutoplay ||
                     offlineUri != null || durationText != null ||
                     artistId != null || albumId != null || setVideoId != null ||
-                    isExplicit != null || isVideo || isVideoOrigin || radioName != null ||
+                    isExplicit != null || isVideo || isVideoOrigin || radioName != null || isLiveRadio ||
                     sourceQuality != null ||
                     playbackSource != null || playbackSourceType != null || playbackSourceId != null
                 ) {
@@ -798,6 +803,7 @@ fun Song.toMediaItem(): MediaItem {
                             EXTRA_QUEUE_ENTRY_ID to queueEntryId,
                             EXTRA_FROM_AUTOPLAY to fromAutoplay,
                             EXTRA_RADIO_NAME to radioName,
+                            EXTRA_IS_LIVE_RADIO_STREAM to isLiveRadio,
                             EXTRA_PLAYBACK_SOURCE to playbackSource,
                             EXTRA_PLAYBACK_SOURCE_TYPE to playbackSourceType?.name,
                             EXTRA_PLAYBACK_SOURCE_ID to playbackSourceId,

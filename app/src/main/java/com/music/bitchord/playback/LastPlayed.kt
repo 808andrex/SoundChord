@@ -148,6 +148,7 @@ object LastPlayed {
         val source: String? = null,
         val sourceType: String? = null,
         val sourceId: String? = null,
+        val isLiveRadioStream: Boolean = false,
     ) {
         fun toSong(): Song {
             val resolvedTier = when (tier) {
@@ -173,6 +174,7 @@ object LastPlayed {
                     runCatching { com.music.bitchord.data.model.PlaybackSourceType.valueOf(it) }.getOrNull()
                 },
                 playbackSourceId = sourceId,
+                isLiveRadioStream = isLiveRadioStream || sourceId?.startsWith("radio:") == true,
                 localUri = local,
                 localPath = path,
             )
@@ -197,6 +199,7 @@ object LastPlayed {
                 source = song.playbackSource,
                 sourceType = song.playbackSourceType?.name,
                 sourceId = song.playbackSourceId,
+                isLiveRadioStream = song.isLiveRadioStream,
             )
         }
     }

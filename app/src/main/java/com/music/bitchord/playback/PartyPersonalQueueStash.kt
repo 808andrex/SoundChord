@@ -132,6 +132,7 @@ object PartyPersonalQueueStash {
         val source: String? = null,
         val sourceType: String? = null,
         val sourceId: String? = null,
+        val isLiveRadioStream: Boolean = false,
     ) {
         fun toSong(): Song {
             val resolvedTier = tier?.let { runCatching { com.music.bitchord.data.model.QueueTier.valueOf(it) }.getOrNull() }
@@ -153,6 +154,7 @@ object PartyPersonalQueueStash {
                     runCatching { com.music.bitchord.data.model.PlaybackSourceType.valueOf(it) }.getOrNull()
                 },
                 playbackSourceId = sourceId,
+                isLiveRadioStream = isLiveRadioStream || sourceId?.startsWith("radio:") == true,
                 localUri = local,
                 localPath = path,
             )
@@ -177,6 +179,7 @@ object PartyPersonalQueueStash {
                 source = song.playbackSource,
                 sourceType = song.playbackSourceType?.name,
                 sourceId = song.playbackSourceId,
+                isLiveRadioStream = song.isLiveRadioStream,
             )
         }
     }

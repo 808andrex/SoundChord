@@ -462,6 +462,7 @@ object BoundedContextPersistence {
         val playbackSource: String? = null,
         val playbackSourceType: String? = null,
         val playbackSourceId: String? = null,
+        val isLiveRadioStream: Boolean = false,
     ) {
         fun toSong(): Song? {
             if (videoId.isBlank()) return null
@@ -496,6 +497,7 @@ object BoundedContextPersistence {
                 playbackSource = playbackSource,
                 playbackSourceType = sourceType,
                 playbackSourceId = playbackSourceId,
+                isLiveRadioStream = isLiveRadioStream || playbackSourceId?.startsWith("radio:") == true,
             )
         }
 
@@ -526,6 +528,7 @@ object BoundedContextPersistence {
                 playbackSource = song.playbackSource,
                 playbackSourceType = song.playbackSourceType?.name,
                 playbackSourceId = song.playbackSourceId,
+                isLiveRadioStream = song.isLiveRadioStream,
             )
         }
     }

@@ -782,7 +782,7 @@ private fun BitChordApp(
     var playRequestGeneration by remember { mutableIntStateOf(0) }
     // Starting radio from the item already playing must not replace that media
     // item just to add UI metadata. This temporary label covers that seed; all
-    // following radio items carry radioName in their MediaItem extras.
+    // following song-radio items carry their seed label in MediaItem extras.
     var activeRadioSeed by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     // The modal player owns light status glyphs and its own contrast scrim.
@@ -1193,10 +1193,11 @@ private fun BitChordApp(
     val prioritizeSyllableSync by AppSettings.prioritizeSyllableSync.collectAsStateWithLifecycle()
     LaunchedEffect(
         player.song?.videoId, player.song?.radioName, player.song?.playbackSourceId,
+        player.song?.isLiveRadioStream,
         player.durationMs, syncedLyricsEnabled, lyricsSources,
         lyricsSourceOrder, prioritizeSyllableSync,
     ) {
-        player.song?.takeUnless { !it.radioName.isNullOrBlank() || it.playbackSourceId?.startsWith("radio:") == true }?.let {
+        player.song?.takeUnless { it.isLiveRadioStream || it.playbackSourceId?.startsWith("radio:") == true }?.let {
             // Direct radio streams have no track lyrics; skip catalogue lookup
             // so the lyrics UI does not remain in a perpetual loading state.
             viewModel.loadLyrics(
@@ -1212,7 +1213,7 @@ private fun BitChordApp(
                 it.albumName,
                 it.localUri,
             )
-        } ?: if (player.song?.playbackSourceId?.startsWith("radio:") == true || !player.song?.radioName.isNullOrBlank()) {
+        } ?: if (player.song?.isLiveRadioStream == true || player.song?.playbackSourceId?.startsWith("radio:") == true) {
             viewModel.clearLyrics()
         } else Unit
     }
@@ -1676,6 +1677,7 @@ private fun BitChordApp(
                     playbackSource = song.title,
                     playbackSourceType = PlaybackSourceType.SHARED_LINK,
                     playbackSourceId = song.videoId,
+                    isLiveRadioStream = false,
                 )
                 val related = loadAutoplayTracks(
                     existing = listOf(seed),
@@ -2487,7 +2489,7 @@ private fun BitChordApp(
         if (!playerShowing) return@LaunchedEffect
         val current = player.song ?: return@LaunchedEffect
         // Radio streams have no YouTube catalogue entry to scrape for links.
-        if (!current.radioName.isNullOrBlank()) return@LaunchedEffect
+        if (current.isLiveRadioStream || current.playbackSourceId?.startsWith("radio:") == true) return@LaunchedEffect
         if (current.albumId != null && current.artistId != null) return@LaunchedEffect
         linksLoading = true
         links = YtMusicRepository.trackLinks(current.videoId).getOrNull()
@@ -3474,6 +3476,7 @@ private fun BitChordApp(
                                 contentPadding = listPadding,
                             )
                             TAB_RADIO -> RadioScreen(
+                                currentSong = player.song,
                                 onPlayStation = { song ->
                                     // QueueTimeline copies QueueSource.id over the Song field.
                                     // Preserve Radio's identity so the player star can persist it.
@@ -3481,7 +3484,8 @@ private fun BitChordApp(
                                         song,
                                         QueueSource(radioLabel, PlaybackSourceType.QUEUE, id = song.playbackSourceId),
                                     )
-                                }
+                                },
+                                onStartStation = startRadio,
                             )
                             TAB_SEARCH -> SearchScreen(
                                 query = query,
@@ -4295,7 +4299,7 @@ private fun BitChordApp(
             // way to get there. Ask as the menu opens, the way the player
             // backfills its own track — the player's copy is already kept in
             // sync above, so it is left alone here.
-            val needsLinks = !fromPlayer && heldSong.radioName.isNullOrBlank() && heldSong.localUri == null &&
+            val needsLinks = !fromPlayer && !heldSong.isLiveRadioStream && heldSong.playbackSourceId?.startsWith("radio:") != true && heldSong.localUri == null &&
                 heldSong.videoId.isNotBlank() &&
                 (heldSong.albumId == null || heldSong.artistId == null)
             var menuLinks by remember(heldSong.videoId) { mutableStateOf<Song?>(null) }
@@ -4362,7 +4366,7 @@ private fun BitChordApp(
             // Offered for the playing track wherever its menu is opened,
             // whether or not the other version has been found yet: the
             // switch looks it up, and says so when there isn't one.
-            val onToggleVersion: (() -> Unit)? = if (song.radioName.isNullOrBlank() &&
+            val onToggleVersion: (() -> Unit)? = if (!song.isLiveRadioStream && song.playbackSourceId?.startsWith("radio:") != true &&
                 controller?.currentMediaItem?.mediaId == song.videoId
             ) {
                 toggle@{
@@ -4559,7 +4563,7 @@ private fun BitChordApp(
                 // The player backfills its own track; any other row is
                 // looked up as the menu opens — see `needsLinks` above.
                 resolvingLinks = if (fromPlayer) linksLoading else needsLinks && menuLinksLoading,
-                compactPlayerMenu = fromPlayer,
+                compactPlayerMenu = fromPlayer && song.playbackSourceId?.startsWith("radio:") == true,
                 showSleepTimer = fromPlayer,
                 // Offered for every playing track with a YouTube upload
                 // behind it, not only for one an upgrade visibly swapped:
@@ -4567,7 +4571,7 @@ private fun BitChordApp(
                 // idea of the song from the first second, and a wrong
                 // match sounds like a wrong match whether or not anything
                 // announced itself. See [Song.hasYouTubeOriginal].
-                onRollbackToOriginal = if (fromPlayer && song.radioName.isNullOrBlank() &&
+                onRollbackToOriginal = if (fromPlayer && !song.isLiveRadioStream && song.playbackSourceId?.startsWith("radio:") != true &&
                     song.hasYouTubeOriginal() &&
                     // Nothing to revert *from*: the listener is hearing a
                     // file they saved, not a stream anything chose.
@@ -4598,7 +4602,7 @@ private fun BitChordApp(
                 // due to look at it again — [QualityUpgrade.refuseUpgrades]
                 // takes a broken track off the automatic path for the rest
                 // of the session, and `askByHand` is what clears that.
-                onUpgradeQuality = if (fromPlayer && song.radioName.isNullOrBlank() &&
+                onUpgradeQuality = if (fromPlayer && !song.isLiveRadioStream && song.playbackSourceId?.startsWith("radio:") != true &&
                     (
                         song.videoId in pinnedToOriginal ||
                             playingYouTubesOwn(song.videoId, controller)
@@ -4616,7 +4620,7 @@ private fun BitChordApp(
                 } else {
                     null
                 },
-                upgradeQualityInProgress = fromPlayer && song.radioName.isNullOrBlank() && song.videoId in qualityUpgradesInFlight,
+                upgradeQualityInProgress = fromPlayer && !song.isLiveRadioStream && song.playbackSourceId?.startsWith("radio:") != true && song.videoId in qualityUpgradesInFlight,
                 onToggleAudioVersion = onToggleVersion,
                 isAudioVersion = menuIsAudioVersion,
                 audioVersionMissing = song.videoId in missingVersions,

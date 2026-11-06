@@ -114,6 +114,7 @@ suspend fun loadAutoplayTracks(
             playbackSource = seedSong.playbackSource,
             playbackSourceType = seedSong.playbackSourceType,
             playbackSourceId = seedSong.playbackSourceId,
+            isLiveRadioStream = seedSong.isLiveRadioStream,
         ).asQueueEntry(QueueTier.AUTOPLAY)
     })
 }
