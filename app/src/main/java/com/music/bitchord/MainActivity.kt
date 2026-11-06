@@ -329,7 +329,6 @@ import com.music.bitchord.ui.player.LocalPlayerDock
 import com.music.bitchord.ui.player.PlayerDock
 import com.music.bitchord.ui.screens.DetailScreen
 import com.music.bitchord.ui.screens.sortedForDetail
-import com.music.bitchord.ui.screens.ExploreScreen
 import com.music.bitchord.ui.screens.LocalFolder
 import com.music.bitchord.ui.screens.LocalFolderState
 import com.music.bitchord.ui.screens.LocalFolderTab
@@ -347,6 +346,7 @@ import com.music.bitchord.ui.screens.LibraryGridPage
 import com.music.bitchord.ui.screens.LibraryScreen
 import com.music.bitchord.ui.screens.MoodGenrePlaylistsScreen
 import com.music.bitchord.ui.screens.SearchScreen
+import com.soundchord.features.explore.ExploreScreen
 import com.music.bitchord.data.settings.SongSort
 import com.music.bitchord.ui.onboarding.OnboardingScreen
 import com.music.bitchord.ui.replay.ReplayScreen
@@ -3466,9 +3466,27 @@ private fun BitChordApp(
                                     contentPadding = listPadding,
                                 )
                             } ?: ExploreScreen(
-                                state = exploreState,
+                                moodState = exploreState,
+                                shelves = (homeState as? UiState.Success)?.data.orEmpty(),
                                 listState = exploreListState,
                                 onCategoryClick = viewModel::openMoodGenre,
+                                onShelfItemClick = { shelf, item ->
+                                    val song = shelfSong(item)
+                                    val browseId = item.browseId
+                                    when {
+                                        song != null -> playRadio(
+                                            song,
+                                            QueueSource(shelf.title, PlaybackSourceType.EXPLORE, shelf.moreBrowseId),
+                                        )
+                                        browseId != null -> viewModel.openDetail(
+                                            browseId = browseId,
+                                            title = item.title,
+                                            subtitle = item.subtitle,
+                                            thumbnailUrl = item.thumbnailUrl,
+                                        )
+                                    }
+                                },
+                                onShelfMore = { shelf -> navigator.push(AppRoute.LibraryShowAll(shelf)) },
                                 onRetry = viewModel::loadExplore,
                                 refreshing = MainViewModel.Feed.EXPLORE in refreshing,
                                 onRefresh = { viewModel.refresh(MainViewModel.Feed.EXPLORE) },
