@@ -799,7 +799,7 @@ fun NowPlayingScreen(
 ) {
     val density = LocalDensity.current
     val haptics = rememberHaptics()
-    val radioPlaying = !song.radioName.isNullOrBlank() || song.playbackSourceId?.startsWith("radio:") == true
+    val radioPlaying = song.isLiveRadioStream || song.playbackSourceId?.startsWith("radio:") == true
 
     // Remote tracks whose art lives inside the file resolve it here, once —
     // every surface below reads the same value rather than each triggering
@@ -966,7 +966,7 @@ fun NowPlayingScreen(
     var lyricsControlsOpen by remember {
         mutableStateOf(restoredPlayerScreen == LastPlayerScreen.LYRICS)
     }
-    LaunchedEffect(song.videoId, song.radioName, song.playbackSourceId) {
+    LaunchedEffect(song.videoId, song.radioName, song.playbackSourceId, song.isLiveRadioStream) {
         if (radioPlaying) {
             lyricsOpen = false
             lyricsControlsOpen = false

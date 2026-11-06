@@ -335,8 +335,14 @@ internal fun PlaybackQualityLabel(
     isLoading: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    if (!song.radioName.isNullOrBlank() || song.playbackSourceId?.startsWith("radio:") == true) {
-        Text(song.sourceQuality.orEmpty(), modifier = modifier, color = Color(0xFFFF5252), style = MaterialTheme.typography.labelMedium)
+    if (song.isLiveRadioStream || song.playbackSourceId?.startsWith("radio:") == true) {
+        Text(
+            song.sourceQuality?.takeIf(String::isNotBlank)
+                ?: song.durationText?.takeIf(String::isNotBlank).orEmpty(),
+            modifier = modifier,
+            color = Color(0xFFFF5252),
+            style = MaterialTheme.typography.labelMedium,
+        )
         return
     }
     val wifiQuality by PlayerSettings.audioQualityWifi.collectAsStateWithLifecycle()
