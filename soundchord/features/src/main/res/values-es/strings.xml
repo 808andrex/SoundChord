@@ -2,6 +2,7 @@
 <resources>
     <string name="radio_title">Radio</string>
     <string name="radio_favourites">Mis estaciones favoritas</string>
+    <string name="radio_show_all">Ver todo</string>
     <string name="radio_personal_stations">Estaciones</string>
     <string name="radio_personal_station_empty">Escucha algunas canciones para crear tus estaciones.</string>
     <string name="radio_nearby">Cerca de ti</string>
@@ -48,6 +49,13 @@
     <string name="radio_live">EN VIVO</string>
     <string name="radio_live_broadcast">Emisión en directo</string>
     <string name="radio_category_empty">No encontramos emisoras para esta categoría.</string>
+    <string name="radio_favorites_empty">Tus emisoras favoritas aparecerán aquí.</string>
+    <string name="radio_genres_empty">Los géneros populares no están disponibles ahora.</string>
+    <string name="radio_bitrate_format">%1$d kbps</string>
+    <string name="radio_now_playing">Reproduciendo ahora</string>
+    <string name="radio_back">Volver</string>
+    <string name="radio_add_favorite">Añadir a favoritos</string>
+    <string name="radio_remove_favorite">Quitar de favoritos</string>
     <string name="station_up_next">A continuación</string>
     <string name="station_empty_suggestions">>No hay canciones sugeridas para esta estación</string>
     <string name="station_retry">Reintentar</string>

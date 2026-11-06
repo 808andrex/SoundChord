@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="radio_title">Radio</string>
-    <string name="radio_favourites">My favorite seasons</string>
+    <string name="radio_favourites">My favorite stations</string>
+    <string name="radio_show_all">Show all</string>
     <string name="radio_personal_stations">Stations</string>
     <string name="radio_personal_station_empty">Listen to a few songs to create your stations.</string>
     <string name="radio_nearby">Nearby</string>
@@ -36,7 +37,7 @@
     <string name="radio_genre_electronic">Electronic</string>
     <string name="radio_genre_hip_hop">Hip Hop</string>
     <string name="radio_genre_lofi">Lo-fi</string>
-    <string name="radio_genre_news">New</string>
+    <string name="radio_genre_news">News</string>
     <string name="radio_genre_talk">Talk</string>
     <string name="radio_genre_ambient">Ambient</string>
     <string name="radio_genre_country">Country</string>
@@ -48,12 +49,19 @@
     <string name="radio_live">LIVE</string>
     <string name="radio_live_broadcast">Live radio</string>
     <string name="radio_category_empty">No stations found for this category.</string>
+    <string name="radio_favorites_empty">Your favorite stations will appear here.</string>
+    <string name="radio_genres_empty">Popular genres are unavailable right now.</string>
+    <string name="radio_bitrate_format">%1$d kbps</string>
+    <string name="radio_now_playing">Now playing</string>
+    <string name="radio_back">Back</string>
+    <string name="radio_add_favorite">Add to favorites</string>
+    <string name="radio_remove_favorite">Remove from favorites</string>
     <string name="station_up_next">Up Next</string>
     <string name="station_empty_suggestions">No songs suggested for this station</string>
     <string name="station_retry">Retry</string>
     <string name="station_song_label">Song Radio</string>
     <string name="live_radio">● LIVE</string>
     <string name="radio_playback_source">Radio</string>
-    <string name="search_radio_placeholder">search_radio_placeholder</string>
+    <string name="search_radio_placeholder">Search for radio stations by name or genre.</string>
     <string name="radio_name">Radio</string>
 </resources>
