@@ -67,6 +67,15 @@
 <a href="https://github.com/808andrex/SoundChord/releases" target="_blank" rel="noopener noreferrer"><img src="https://cdn.jsdelivr.net/gh/JMcrafter26/badges@main/src/assets/supported/android/cozy.svg" alt="Descargar SoundChord para Android" height="55"/></a>
 
 Obtén el APK oficial firmado desde la sección de [Releases de GitHub](https://github.com/808andrex/SoundChord/releases).
+### ⚠️ Nota sobre la instalación (Play Protect)
+
+Al instalar el APK por primera vez fuera de la tienda Google Play, es posible que el sistema Android o Google Play Protect muestren la pantalla de advertencia *"Se recomienda analizar la app"* o *"App de origen desconocido"*.
+
+**Para completar la instalación:**
+1. En el mensaje emergente de instalación, toca en la opción **Más detalles**.
+2. Selecciona **Instalar de todos modos** (o *Instalar sin analizar*).
+
+*SoundChord es 100% seguro, de código abierto y sin rastreadores comerciales.*
 
 </div>
 
