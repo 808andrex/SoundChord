@@ -34,6 +34,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
 
     implementation("io.ktor:ktor-client-core:3.5.2")
     implementation("io.ktor:ktor-client-okhttp:3.5.2")

@@ -124,6 +124,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.soundchord.features.radio.data.PreferencesRadioFavoritesStore
+import com.soundchord.features.radio.data.RadioStation
 import com.music.bitchord.auth.DiscordLoginScreen
 import com.music.bitchord.auth.SpotifyLoginScreen
 import com.music.bitchord.auth.WebSessionMode
@@ -949,6 +951,11 @@ private fun BitChordApp(
     // it, and reset with the page so a filter never follows you to the next one.
     var detailSearching by rememberSaveable(topDetail?.browseId) { mutableStateOf(false) }
     val likeStatuses by viewModel.likeStatuses.collectAsStateWithLifecycle()
+    // Keep the player's star and RadioScreen's carousel/rows on the same live
+    // DataStore flow. Only items carrying the explicit radio:<uuid> marker use it.
+    val radioFavoritesStore = remember(context) { PreferencesRadioFavoritesStore(context) }
+    val radioFavorites by radioFavoritesStore.stations.collectAsStateWithLifecycle(initialValue = emptyList())
+    val radioFavoriteScope = rememberCoroutineScope()
     // A device file's heart is the device's Liked playlist, not a YouTube
     // rating: the file has no identity there to rate. One rule for every
     // surface that draws a heart — the player and the track menu alike.
@@ -957,13 +964,39 @@ private fun BitChordApp(
     val offlinePlaylistGroups = remember(offlinePlaylists) { offlinePlaylists.map { it.toGroup() } }
     val likeStatusOf: (Song) -> LikeStatus = { song ->
         val uri = song.localUri
+        val radioUuid = song.playbackSourceId
+            ?.takeIf { it.startsWith("radio:") }
+            ?.removePrefix("radio:")
         when {
+            !radioUuid.isNullOrBlank() -> if (radioFavorites.any { it.uuid == radioUuid }) LikeStatus.LIKE else LikeStatus.INDIFFERENT
             uri != null -> if (uri in offlineLiked) LikeStatus.LIKE else LikeStatus.INDIFFERENT
             else -> likeStatuses[song.videoId] ?: LikeStatus.INDIFFERENT
         }
     }
     val toggleLikeOf: (Song) -> Unit = { song ->
-        if (song.localUri != null) OfflinePlaylists.toggleLike(song) else viewModel.toggleLike(song.videoId)
+        val radioUuid = song.playbackSourceId
+            ?.takeIf { it.startsWith("radio:") }
+            ?.removePrefix("radio:")
+        when {
+            !radioUuid.isNullOrBlank() -> radioFavoriteScope.launch {
+                if (radioFavorites.any { it.uuid == radioUuid }) {
+                    radioFavoritesStore.remove(radioUuid)
+                } else {
+                    radioFavoritesStore.add(
+                        RadioStation(
+                            uuid = radioUuid,
+                            name = song.radioName ?: song.title,
+                            streamUrl = song.videoId,
+                            favicon = song.thumbnailUrl,
+                            country = song.artist.takeUnless { it.equals("Radio", ignoreCase = true) },
+                            codec = song.albumName?.takeUnless { it.equals("LIVE", ignoreCase = true) },
+                        ),
+                    )
+                }
+            }
+            song.localUri != null -> OfflinePlaylists.toggleLike(song)
+            else -> viewModel.toggleLike(song.videoId)
+        }
     }
     // Which tracks are being held on YouTube's own upload, so the player's menu
     // offers the way back out of a revert rather than the revert again.
@@ -3438,7 +3471,12 @@ private fun BitChordApp(
                             )
                             TAB_RADIO -> RadioScreen(
                                 onPlayStation = { song ->
-                                    playRadio(song, QueueSource(radioLabel, PlaybackSourceType.QUEUE))
+                                    // QueueTimeline copies QueueSource.id over the Song field.
+                                    // Preserve Radio's identity so the player star can persist it.
+                                    playRadio(
+                                        song,
+                                        QueueSource(radioLabel, PlaybackSourceType.QUEUE, id = song.playbackSourceId),
+                                    )
                                 }
                             )
                             TAB_SEARCH -> SearchScreen(

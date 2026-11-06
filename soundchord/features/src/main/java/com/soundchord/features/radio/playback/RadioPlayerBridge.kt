@@ -30,6 +30,9 @@ fun RadioStation.toSong(context: Context): Song {
         // el badge ("● EN VIVO" / "● LIVE") justo debajo de la barra de tiempo
         sourceQuality = liveBadgeText,
         playbackSource = radioSource,
-        playbackSourceType = PlaybackSourceType.EXPLORE
+        playbackSourceType = PlaybackSourceType.EXPLORE,
+        // Persist station identity separately from the playable URL. MainActivity
+        // uses this marker to route the player star to the shared Radio DataStore.
+        playbackSourceId = "radio:$uuid"
     )
 }
