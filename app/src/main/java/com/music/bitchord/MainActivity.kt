@@ -102,6 +102,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -372,6 +373,10 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 import com.soundchord.features.icons.SoundChordIcons
 import com.soundchord.features.radio.ui.RadioScreen
+import com.soundchord.features.recognition.RecognitionFab
+import com.soundchord.features.recognition.RecognitionScreen
+import com.soundchord.features.recognition.data.MusicRecognitionService
+import com.soundchord.features.recognition.model.RecognitionResult
 
 /** A full first screen of a native YouTube Music radio before AutoPlay tops it up. */
 /** How much of an artist page's header scrolls away before the top fade begins. */
@@ -547,6 +552,8 @@ private fun BitChordApp(
     // and the page is a sibling of the bar rather than a child.
     val navBarScroll = rememberFloatingTabBarScrollConnection()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var recognitionOpen by rememberSaveable { mutableStateOf(false) }
+    var recognitionFabVisible by rememberSaveable { mutableStateOf(true) }
     // Explore loads the first time it's shown, not at launch beside Home.
     LaunchedEffect(selectedTab) {
         if (selectedTab == TAB_EXPLORE) viewModel.onExploreShown()
@@ -1219,6 +1226,24 @@ private fun BitChordApp(
     }
 
     val homeListState = rememberLazyListState()
+    LaunchedEffect(homeListState, selectedTab, recognitionOpen) {
+        if (selectedTab != TAB_HOME || recognitionOpen) {
+            recognitionFabVisible = false
+            return@LaunchedEffect
+        }
+        var previousIndex = homeListState.firstVisibleItemIndex
+        var previousOffset = homeListState.firstVisibleItemScrollOffset
+        snapshotFlow { homeListState.firstVisibleItemIndex to homeListState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                val previous = previousIndex * 10_000 + previousOffset
+                val current = index * 10_000 + offset
+                val delta = current - previous
+                if (kotlin.math.abs(delta) > 6) recognitionFabVisible = delta < 0
+                if (index == 0 && offset == 0) recognitionFabVisible = true
+                previousIndex = index
+                previousOffset = offset
+            }
+    }
     val exploreListState = rememberLazyListState()
     val moodGenreListState = rememberLazyListState()
     val libraryListState = rememberLazyListState()
@@ -1649,6 +1674,30 @@ private fun BitChordApp(
             )
             c.playSongs(oneOffQueue, 0)
             // Start radio in the mini-player; the user opens the full view by tapping it.
+        }
+    }
+
+    val playRecognizedSong: (RecognitionResult) -> Unit = { result ->
+        navigator.clear()
+        recognitionOpen = false
+        val videoId = result.youtubeVideoId
+        if (!videoId.isNullOrBlank()) {
+            selectedTab = TAB_HOME
+            playRadio(
+                Song(
+                    videoId = videoId,
+                    title = result.title,
+                    artist = result.artist,
+                    thumbnailUrl = result.coverArtHqUrl ?: result.coverArtUrl,
+                    albumName = result.album,
+                ),
+                QueueSource(searchLabel, PlaybackSourceType.SEARCH),
+            )
+        } else {
+            selectedTab = TAB_SEARCH
+            viewModel.setSearchSource(SearchSource.YOUTUBE)
+            viewModel.onQueryChange(listOf(result.title, result.artist).filter(String::isNotBlank).joinToString(" "))
+            viewModel.submitSearch()
         }
     }
 
@@ -2826,6 +2875,10 @@ private fun BitChordApp(
         // and dialog further down registers its own handler as it opens, and
         // so outranks all of these while it is up.
         BackHandler(enabled = canGoBack, onBack = goBack)
+        BackHandler(enabled = recognitionOpen) {
+            recognitionOpen = false
+            MusicRecognitionService.reset()
+        }
         // Replay's stories and its share sheet are drawn over everything, and
         // unwind in the order they were opened. Only while there is a summary
         // to draw them from — otherwise back would spend a step closing
@@ -3374,6 +3427,10 @@ private fun BitChordApp(
                                     null
                                 },
                             )
+                        } else if (recognitionOpen) {
+                            RecognitionScreen(
+                                onPlayResult = playRecognizedSong,
+                            )
                         } else when ((destination as? AppDestination.Tab)?.index ?: selectedTab) {
                             TAB_HOME -> HomeScreen(
                                 state = homeState,
@@ -3818,7 +3875,9 @@ private fun BitChordApp(
                 }
 
                 FrostedTopBar(
-                    title = when (route) {
+                    title = if (recognitionOpen) {
+                        stringResource(com.soundchord.features.R.string.recognition_title)
+                    } else when (route) {
                         AppRoute.Spotify -> stringResource(R.string.spotify)
                         AppRoute.Downloads -> stringResource(R.string.downloads)
                         AppRoute.Discord -> "Discord"
@@ -3850,11 +3909,13 @@ private fun BitChordApp(
                     transparentBackdrop = true,
                     artworkPageChrome = true,
                     backButtonHazeState = hazeState,
+                    centeredTitle = recognitionOpen,
                     trailingTitle = if (detail != null && detailActiveShelf != null) detail.title else null,
                     // Search has no large in-list header to hand the title back to —
                     // the field takes that space — so its bar title is always up.
                     scrolled = {
                         when {
+                            recognitionOpen -> true
                             // The page leads with its own large "Replay", so the bar
                             // stays out of the way until that has been scrolled off.
                             route == AppRoute.Replay -> replayScrolled
@@ -3870,6 +3931,7 @@ private fun BitChordApp(
                     // The same step the back gesture takes — see [goBack] —
                     // offered on anything pushed over a tab.
                     onBack = when {
+                        recognitionOpen -> ({ recognitionOpen = false; MusicRecognitionService.reset() })
                         route != null || detail != null || selectedMoodGenre != null -> goBack
                         else -> null
                     },
@@ -4162,6 +4224,17 @@ private fun BitChordApp(
                         }
                     },
                 )
+
+                if (!recognitionOpen && route == null && detail == null && selectedMoodGenre == null && selectedTab == TAB_HOME) {
+                    RecognitionFab(
+                        visible = recognitionFabVisible,
+                        onClick = { recognitionOpen = true },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(
+                            end = 24.dp,
+                            bottom = if (player.song != null) 140.dp else 104.dp,
+                        ),
+                    )
+                }
 
                 // Drawn before the bars so their own glass reads on top of it.
                 BottomFadeScrim(

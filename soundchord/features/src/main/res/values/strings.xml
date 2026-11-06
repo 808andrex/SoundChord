@@ -83,4 +83,26 @@
     <string name="radio_playback_source">Radio</string>
     <string name="search_radio_placeholder">Search for radio stations by name or genre.</string>
     <string name="radio_name">Radio</string>
+    <string name="recognition_open">Identify a song</string>
+    <string name="recognition_back">Back</string>
+    <string name="recognition_title">Identify song</string>
+    <string name="recognition_tap_to_identify">Tap to identify</string>
+    <string name="recognition_listening">Listening…</string>
+    <string name="recognition_listening_hint">Bring your phone closer to the music</string>
+    <string name="recognition_processing">Finding a match</string>
+    <string name="recognition_processing_hint">Checking the audio fingerprint</string>
+    <string name="recognition_no_match">No song detected</string>
+    <string name="recognition_clear_audio_hint">Try again somewhere the music is clearer.</string>
+    <string name="recognition_permission_needed">Microphone permission is needed to identify music.</string>
+    <string name="recognition_permission_error">Microphone access was not granted</string>
+    <string name="recognition_permission_error_hint">Allow microphone access and try again.</string>
+    <string name="recognition_capture_error">Could not listen to the microphone</string>
+    <string name="recognition_capture_error_hint">Check that your microphone is available and try again.</string>
+    <string name="recognition_network_error">Could not connect to music recognition</string>
+    <string name="recognition_network_error_hint">Check your connection and try again.</string>
+    <string name="recognition_failed">Could not identify this song</string>
+    <string name="recognition_cancel">Cancel</string>
+    <string name="recognition_listen_again">Listen again</string>
+    <string name="recognition_play_soundchord">Play in SoundChord</string>
+    <string name="recognition_album_art_description">Album artwork for %1$s</string>
 </resources>

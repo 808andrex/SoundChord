@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
@@ -168,6 +169,8 @@ fun FrostedTopBar(
     /** Source sampled by floating top-bar surfaces when liquid glass is off. */
     backButtonHazeState: HazeState? = null,
     trailingTitle: String? = null,
+    /** Draws a persistent, centered title between the back control and trailing actions. */
+    centeredTitle: Boolean = false,
     onBack: (() -> Unit)? = null,
     refreshing: Boolean = false,
     // A lambda, not a value: the drag changes every frame, and reading it in
@@ -214,7 +217,10 @@ fun FrostedTopBar(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .windowInsetsPadding(stableStatusBarInsets())
+                .then(
+                    if (centeredTitle) Modifier.statusBarsPadding()
+                    else Modifier.windowInsetsPadding(stableStatusBarInsets()),
+                )
                 .height(TopBarContentHeight),
         ) {
             /* Temporarily hidden: keep the scrolling center-title implementation
@@ -342,6 +348,21 @@ fun FrostedTopBar(
                 } else {
                     actions()
                 }
+            }
+            if (centeredTitle) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .fillMaxWidth()
+                        .padding(horizontal = 76.dp),
+                )
             }
         }
         HorizontalDivider(thickness = 0.5.dp, color = dividerColor)

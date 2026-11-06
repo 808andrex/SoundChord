@@ -83,4 +83,26 @@
     <string name="radio_playback_source">Radio</string>
     <string name="search_radio_placeholder">Busca emisoras de radio por nombre o género.</string>
     <string name="radio_name">Radio</string>
+    <string name="recognition_open">Identificar canción</string>
+    <string name="recognition_back">Volver</string>
+    <string name="recognition_title">Identificar canción</string>
+    <string name="recognition_tap_to_identify">Toca para identificar</string>
+    <string name="recognition_listening">Escuchando…</string>
+    <string name="recognition_listening_hint">Acerca el teléfono a la música</string>
+    <string name="recognition_processing">Buscando coincidencia</string>
+    <string name="recognition_processing_hint">Analizando la huella de audio</string>
+    <string name="recognition_no_match">No se detectó ningún tema</string>
+    <string name="recognition_clear_audio_hint">Inténtalo de nuevo donde la música se escuche con más claridad.</string>
+    <string name="recognition_permission_needed">Se necesita permiso del micrófono para identificar música.</string>
+    <string name="recognition_permission_error">No se concedió acceso al micrófono</string>
+    <string name="recognition_permission_error_hint">Permite el acceso al micrófono e inténtalo de nuevo.</string>
+    <string name="recognition_capture_error">No se pudo escuchar el micrófono</string>
+    <string name="recognition_capture_error_hint">Comprueba que el micrófono esté disponible e inténtalo de nuevo.</string>
+    <string name="recognition_network_error">No se pudo conectar con el servicio de reconocimiento</string>
+    <string name="recognition_network_error_hint">Comprueba tu conexión e inténtalo de nuevo.</string>
+    <string name="recognition_failed">No se pudo identificar esta canción</string>
+    <string name="recognition_cancel">Cancelar</string>
+    <string name="recognition_listen_again">Volver a escuchar</string>
+    <string name="recognition_play_soundchord">Reproducir en SoundChord</string>
+    <string name="recognition_album_art_description">Portada del álbum de %1$s</string>
 </resources>
