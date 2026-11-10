@@ -3,9 +3,9 @@ package com.music.bitchord
 import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import com.music.bitchord.data.listentogether.JamInviteLink
 import com.music.bitchord.playback.MusicLink
@@ -22,7 +22,7 @@ import com.music.bitchord.ui.tv.theme.BitChordTvTheme
  * Dedicated TV Activity for Android TV, Google TV, and Fire TV devices.
  * Launched via `android.intent.category.LEANBACK_LAUNCHER`.
  */
-class TvActivity : ComponentActivity() {
+class TvActivity : AppCompatActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 

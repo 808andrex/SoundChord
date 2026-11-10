@@ -74,7 +74,7 @@
     <string name="radio_back">Volver</string>
     <string name="radio_add_favorite">Añadir a favoritos</string>
     <string name="radio_remove_favorite">Quitar de favoritos</string>
-    <string name="station_up_next">A continuación</string>
+    <string name="station_up_next">Estaciones similares</string>
     <string name="station_empty_suggestions">No hay canciones sugeridas para esta estación</string>
     <string name="station_retry">Reintentar</string>
     <string name="station_load_error">No se pudo cargar esta estación.</string>
@@ -108,4 +108,32 @@
     <string name="party_remote_audio_title">Modo Control Remoto</string>
     <string name="party_remote_audio_subtitle">Silenciar el audio local sin perder el control de la sesión.</string>
     <string name="audio_quality_accept">Aceptar</string>
+    <string name="welcome_title_tv">Bienvenido a SoundChord</string>
+    <string name="welcome_message_tv">Millones de canciones en un solo lugar.</string>
+    <string name="continue_tv_button">Continuar</string>
+    <string name="set_up_later_tv">Configurar más tarde</string>
+    <string name="sign_in_to_yt_music_tv">Inicia sesión en YouTube Music</string>
+    <string name="import_library_description">Importa tu biblioteca, listas de reproducción y recomendaciones. También puedes hacerlo más tarde desde Ajustes.</string>
+    <string name="sign_in">Iniciar sesión</string>
+    <string name="not_now">Ahora no</string>
+    <string name="signed_in_tv">Sesión iniciada</string>
+    <string name="signed_in_message_tv">SoundChord utilizará tu biblioteca y tus recomendaciones.</string>
+    <string name="continue_tv">Continuar</string>
+    <string name="choose_a_look_tv">Elige una apariencia</string>
+    <string name="change_appearance_later">Puedes cambiar esto más tarde desde Ajustes.</string>
+    <string name="artwork_tv">Portadas</string>
+    <string name="midnight_tv">Medianoche</string>
+    <string name="pure_black_tv">Negro puro</string>
+    <string name="synced_lyrics_tv">Letras sincronizadas</string>
+    <string name="motion_artwork_tv">\tPortadas animadas</string>
+    <string name="automix_tv">\tMezcla automática</string>
+    <string name="spatial_audio_tv">\tAudio espacial</string>
+    <string name="on_tv">Activado</string>
+    <string name="off_tv">Desactivado</string>
+    <string name="listening_tv">Reproducción</string>
+    <string name="select_row_toggle_description">Selecciona una opción para activarla o desactivarla.</string>
+    <string name="youre_all_set_tv">¡Todo listo!</string>
+    <string name="all_set_description_tv">Descubre música en Inicio y Explorar. Todo lo que guardes estará en Biblioteca.</string>
+    <string name="start_listening_tv">Comenzar a escuchar</string>
+
 </resources>

@@ -199,7 +199,7 @@
     <string name="blocking">रोक रहा है</string>
     <string name="crossfade">क्रॉसफ़ेड</string>
     <string name="crossfade_subtitle">एक ट्रैक को अगले में मिलाता है</string>
-    <string name="automix">ऑटोमिक्स [BETA]</string>
+    <string name="automix_tv">ऑटोमिक्स [BETA]</string>
     <string name="skip_silence">खामोशी छोड़ें</string>
     <string name="skip_silence_subtitle">एक सेकंड से लंबे गैप को काटता है</string>
     <string name="skip_silence_float_subtitle">32-बिट फ़्लोट आउटपुट पर उपलब्ध नहीं</string>
@@ -516,7 +516,7 @@
     <string name="member_since">सदस्य बने</string>
     <string name="member_since_value">%1$s से सदस्य</string>
     <string name="midday">दोपहर</string>
-    <string name="midnight">आधी रात</string>
+    <string name="midnight_tv">आधी रात</string>
     <string name="minutes">मिनट</string>
     <string name="minutes_grouped_short">%1$s मि.</string>
     <string name="minutes_listened">सुने गए मिनट</string>

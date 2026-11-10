@@ -29,12 +29,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.media3.session.MediaController
 import com.music.bitchord.data.model.BrowseItem
+import com.music.bitchord.R
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.EntityType
 import com.music.bitchord.data.model.SearchFilter
@@ -67,6 +69,15 @@ private val SearchFilters = listOf(
     SearchFilter.ARTISTS,
     SearchFilter.PLAYLISTS,
 )
+
+private fun SearchFilter.resourceId(): Int = when (this) {
+    SearchFilter.ALL -> R.string.tv_search_all
+    SearchFilter.SONGS -> R.string.tv_search_songs
+    SearchFilter.VIDEOS -> R.string.tv_search_videos
+    SearchFilter.ALBUMS -> R.string.tv_search_albums
+    SearchFilter.ARTISTS -> R.string.tv_search_artists
+    SearchFilter.PLAYLISTS -> R.string.tv_search_playlists
+}
 
 @Composable
 fun TvSearchScreen(
@@ -127,6 +138,17 @@ fun TvSearchScreen(
 
     val results = (resultsState as? UiState.Success)?.data
     val deduped = remember(results) { results?.deduplicated().orEmpty() }
+    val searchSuggestionsLabel = stringResource(R.string.tv_search_suggestions)
+    val searchEmptyLabel = stringResource(R.string.tv_search_empty)
+    val searchTitle = stringResource(R.string.tv_search_soundchord)
+    val recentSearchesTitle = stringResource(R.string.tv_recent_searches)
+    val clearLabel = stringResource(R.string.tv_search_clear)
+    val topResultsTitle = stringResource(R.string.tv_top_results)
+    val songsTitle = stringResource(R.string.tv_songs)
+    val artistsTitle = stringResource(R.string.tv_search_artists)
+    val albumsTitle = stringResource(R.string.tv_search_albums)
+    val playlistsTitle = stringResource(R.string.tv_search_playlists)
+    val moreTitle = stringResource(R.string.tv_more)
     if (results != null && filter != SearchFilter.ALL) {
         val nearEnd by remember(listState) {
             derivedStateOf {
@@ -151,7 +173,7 @@ fun TvSearchScreen(
                 TvTextField(
                     value = query,
                     onValueChange = viewModel::onQueryChange,
-                    placeholder = "Artists, Songs, Albums and More",
+                    placeholder = searchSuggestionsLabel,
                     leadingIcon = Icons.Rounded.Search,
                     imeAction = ImeAction.Search,
                     onImeAction = {
@@ -163,7 +185,7 @@ fun TvSearchScreen(
                 if (resultsState != null) {
                     Spacer(modifier = Modifier.height(14.dp))
                     TvSegmented(
-                        options = SearchFilters.map { it.label },
+                        options = SearchFilters.map { filterOption -> stringResource(filterOption.resourceId()) },
                         selectedIndex = SearchFilters.indexOf(filter).coerceAtLeast(0),
                         onSelect = { viewModel.onFilterChange(SearchFilters[it]) },
                     )
@@ -214,6 +236,10 @@ fun TvSearchScreen(
                         }
                     },
                     onClearHistory = viewModel::clearSearchHistory,
+                    searchTitle = searchTitle,
+                    emptyMessage = searchEmptyLabel,
+                    recentSearchesTitle = recentSearchesTitle,
+                    clearLabel = clearLabel,
                 )
             }
             UiState.Loading -> item(key = "loading") {
@@ -227,13 +253,17 @@ fun TvSearchScreen(
             is UiState.Success -> if (deduped.isEmpty()) {
                 item(key = "empty") {
                     TvEmptyState(
-                        title = "No Results",
-                        message = "Nothing matched “$query”. Check the spelling or try other words.",
+                        title = stringResource(R.string.tv_no_results),
+                        message = stringResource(R.string.tv_search_no_match, query),
                         modifier = Modifier.height(256.dp),
                     )
                 }
             } else if (filter == SearchFilter.ALL) {
-                groupedResults(deduped, playResult, openBrowse, onSongMenu = { menuSong = it })
+                groupedResults(
+                    deduped, playResult, openBrowse, topResultsTitle, songsTitle,
+                    artistsTitle, albumsTitle, playlistsTitle, moreTitle,
+                    onSongMenu = { menuSong = it },
+                )
             } else {
                 filteredResults(deduped, playResult, openBrowse, onSongMenu = { menuSong = it })
                 if (loadingMore) {
@@ -266,12 +296,16 @@ private fun LazyListScope.idleContent(
     history: List<com.music.bitchord.data.model.SearchHistoryEntity>,
     onHistory: (com.music.bitchord.data.model.SearchHistoryEntity) -> Unit,
     onClearHistory: () -> Unit,
+    searchTitle: String,
+    emptyMessage: String,
+    recentSearchesTitle: String,
+    clearLabel: String,
 ) {
     if (history.isEmpty()) {
         item(key = "idleEmpty") {
             TvEmptyState(
-                title = "Search BitChord",
-                message = "Find songs, albums, artists and playlists.",
+                title = searchTitle,
+                message = emptyMessage,
                 modifier = Modifier.height(240.dp),
             )
         }
@@ -279,8 +313,8 @@ private fun LazyListScope.idleContent(
     }
     item(key = "recentTitle") {
         TvShelfTitle(
-            title = "Recent Searches",
-            trailing = { TvButton(text = "Clear", onClick = onClearHistory) },
+            title = recentSearchesTitle,
+            trailing = { TvButton(text = clearLabel, onClick = onClearHistory) },
             modifier = Modifier.padding(top = 6.dp, bottom = 5.dp),
         )
     }
@@ -323,25 +357,31 @@ private fun LazyListScope.groupedResults(
     results: List<SearchResult>,
     onPlaySong: (Song) -> Unit,
     onOpen: (BrowseItem) -> Unit,
+    topResultsTitle: String,
+    songsTitle: String,
+    artistsTitle: String,
+    albumsTitle: String,
+    playlistsTitle: String,
+    moreTitle: String,
     onSongMenu: (Song) -> Unit,
 ) {
     val songs = results.mapNotNull { it.song() }
     val browse = results.filterIsInstance<SearchResult.Browse>().map { it.item }
 
     item(key = "top") {
-        TvShelf(title = "Top Results", items = results.take(10), key = { it.resultKey() }) { result ->
+        TvShelf(title = topResultsTitle, items = results.take(10), key = { it.resultKey() }) { result ->
             ResultLockup(result, onPlaySong, onOpen, onSongMenu)
         }
     }
     if (songs.isNotEmpty()) {
-        item(key = "songsTitle") { TvShelfTitle(title = "Songs") }
+        item(key = "songsTitle") { TvShelfTitle(title = songsTitle) }
         songGrid(songs.take(12), onPlaySong, onSongMenu, keyPrefix = "song")
     }
     listOf(
-        BrowseType.ARTIST to "Artists",
-        BrowseType.ALBUM to "Albums",
-        BrowseType.PLAYLIST to "Playlists",
-        BrowseType.OTHER to "More",
+        BrowseType.ARTIST to artistsTitle,
+        BrowseType.ALBUM to albumsTitle,
+        BrowseType.PLAYLIST to playlistsTitle,
+        BrowseType.OTHER to moreTitle,
     ).forEach { (type, title) ->
         val group = browse.filter { it.type == type }
         if (group.isNotEmpty()) {

@@ -194,7 +194,7 @@
     <string name="blocking">正在阻止</string>
     <string name="crossfade">交叉淡入淡出</string>
     <string name="crossfade_subtitle">将一首曲目渐变过渡到下一首</string>
-    <string name="automix">Automix [测试版]</string>
+    <string name="automix_tv">Automix [测试版]</string>
     <string name="skip_silence">跳过静音</string>
     <string name="skip_silence_subtitle">裁剪超过一秒的静音间隙</string>
     <string name="skip_silence_float_subtitle">32 位浮点输出时不可用</string>
@@ -501,7 +501,7 @@
     <string name="member_since">加入时间</string>
     <string name="member_since_value">加入时间：%1$s</string>
     <string name="midday">中午</string>
-    <string name="midnight">午夜</string>
+    <string name="midnight_tv">午夜</string>
     <string name="minutes">分钟</string>
     <string name="minutes_grouped_short">%1$s 分钟</string>
     <string name="minutes_listened">收听分钟数</string>

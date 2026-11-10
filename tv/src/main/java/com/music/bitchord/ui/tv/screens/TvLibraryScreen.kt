@@ -27,10 +27,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.media3.session.MediaController
 import com.music.bitchord.data.model.BrowseType
+import com.music.bitchord.R
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.UiState
@@ -77,6 +79,8 @@ fun TvLibraryScreen(
     val signedIn by viewModel.signedIn.collectAsState()
     val libraryState by viewModel.library.collectAsState()
     val library = (libraryState as? UiState.Success)?.data
+    val downloadedLabel = stringResource(R.string.tv_downloaded)
+    val deviceLabel = stringResource(R.string.tv_on_this_device)
     val scope = rememberCoroutineScope()
     var menuSong by remember { mutableStateOf<Song?>(null) }
 
@@ -112,7 +116,12 @@ fun TvLibraryScreen(
         ) {
             items(categories, key = { it.key }) { category ->
                 TvListRow(
-                    title = category.title,
+                    title = when (category) {
+                        LibraryCategory.RecentlyPlayed -> stringResource(R.string.tv_recently_played)
+                        LibraryCategory.Liked -> stringResource(R.string.tv_liked_songs)
+                        LibraryCategory.Songs -> stringResource(R.string.tv_songs)
+                        is LibraryCategory.Collection -> category.shelf.title
+                    },
                     resting = if (category.key == selected.key) Color.White.copy(alpha = 0.12f) else Color.Transparent,
                     onFocused = { selectedKey = category.key },
                     onClick = { selectedKey = category.key },
@@ -120,24 +129,24 @@ fun TvLibraryScreen(
             }
             item(key = "downloads") {
                 TvListRow(
-                    title = "Downloaded",
+                    title = stringResource(R.string.tv_downloaded),
                     resting = Color.Transparent,
                     trailingIcon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                    onClick = { onNavigateToDetail("local:downloads", "Downloaded", "", null, BrowseType.PLAYLIST) },
+                    onClick = { onNavigateToDetail("local:downloads", downloadedLabel, "", null, BrowseType.PLAYLIST) },
                 )
             }
             item(key = "device") {
                 TvListRow(
-                    title = "On This Device",
+                    title = stringResource(R.string.tv_on_this_device),
                     resting = Color.Transparent,
                     trailingIcon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                    onClick = { onNavigateToDetail("local:all", "On This Device", "", null, BrowseType.PLAYLIST) },
+                    onClick = { onNavigateToDetail("local:all", deviceLabel, "", null, BrowseType.PLAYLIST) },
                 )
             }
             if (!signedIn) {
                 item(key = "signin") {
                     TvListRow(
-                        title = "Sign In…",
+                        title = stringResource(R.string.tv_sign_in_ellipsis),
                         resting = Color.Transparent,
                         onClick = onOpenAccount,
                     )
@@ -213,7 +222,7 @@ private fun TvRecentlyPlayed(
         UiState.Loading -> TvPaneLoading()
         is UiState.Error -> TvErrorState(message = state.message, onRetry = { viewModel.loadHistory() })
         is UiState.Success -> if (state.data.isEmpty()) {
-            TvEmptyState(title = "Nothing Played Yet", message = "Songs you play show up here.")
+            TvEmptyState(title = stringResource(R.string.tv_nothing_played_yet), message = stringResource(R.string.tv_played_songs_message))
         } else {
             TvLibrarySongs(state.data, playingId, isPlaying, onPlay, onSongMenu)
         }
@@ -229,7 +238,7 @@ private fun TvLibrarySongs(
     onSongMenu: (Song) -> Unit,
 ) {
     if (songs.isEmpty()) {
-        TvEmptyState(title = "No Songs", message = "There's nothing here yet.")
+        TvEmptyState(title = stringResource(R.string.tv_no_songs), message = stringResource(R.string.tv_nothing_here_message))
         return
     }
     LazyColumn(
@@ -295,7 +304,7 @@ private fun TvLibraryBanner(message: String, onRetry: () -> Unit) {
                 color = TvGlass.TextSecondary,
                 maxLines = 1,
             )
-            TvButton(text = "Reload Library", onClick = onRetry)
+            TvButton(text = stringResource(R.string.tv_reload_library), onClick = onRetry)
         }
     }
 }

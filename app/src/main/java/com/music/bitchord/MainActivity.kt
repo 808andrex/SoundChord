@@ -372,6 +372,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import java.util.Locale
 import com.soundchord.features.icons.SoundChordIcons
+import com.soundchord.features.R as SoundChordFeaturesR
 import com.soundchord.features.radio.ui.RadioScreen
 import com.soundchord.features.recognition.RecognitionFab
 import com.soundchord.features.recognition.RecognitionScreen
@@ -1371,7 +1372,7 @@ private fun BitChordApp(
     val queueLabel = stringResource(R.string.queue)
     val sharedLinkLabel = stringResource(R.string.shared_link)
     val openedFileLabel = stringResource(R.string.opened_file)
-    val radioLabel = stringResource(com.soundchord.features.R.string.radio_name)
+    val radioLabel = stringResource(SoundChordFeaturesR.string.radio_name)
     val tabs = remember(homeLabel, exploreLabel, radioLabel, libraryLabel, searchLabel) {
         listOf(
             BottomTab(homeLabel, BitChordIcons.Home),
@@ -3701,7 +3702,7 @@ private fun BitChordApp(
                                         options = listOf(
                                             stringResource(R.string.search_source_youtube),
                                             stringResource(R.string.library),
-                                            stringResource(com.soundchord.features.R.string.radio_name),
+                                            stringResource(SoundChordFeaturesR.string.radio_name),
                                             stringResource(R.string.search_source_addons),
                                         ),
                                         selectedIndex = searchSource.ordinal,
@@ -3876,7 +3877,7 @@ private fun BitChordApp(
 
                 FrostedTopBar(
                     title = if (recognitionOpen) {
-                        stringResource(com.soundchord.features.R.string.recognition_title)
+                        stringResource(SoundChordFeaturesR.string.recognition_title)
                     } else when (route) {
                         AppRoute.Spotify -> stringResource(R.string.spotify)
                         AppRoute.Downloads -> stringResource(R.string.downloads)

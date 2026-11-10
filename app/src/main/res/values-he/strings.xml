@@ -200,7 +200,7 @@
     <string name="blocking">חוסם</string>
     <string name="crossfade">Crossfade</string>
     <string name="crossfade_subtitle">ממזג רצועה אחת לתוך הבאה</string>
-    <string name="automix">Automix [BETA]</string>
+    <string name="automix_tv">Automix [BETA]</string>
     <string name="skip_silence">דילוג על שקט</string>
     <string name="skip_silence_subtitle">קיצוץ הפסקות ארוכות משנייה</string>
     <string name="skip_silence_float_subtitle">לא זמין בפלט float של 32 סיביות</string>
@@ -480,7 +480,7 @@
     <string name="member_since">חבר מאז</string>
     <string name="member_since_value">חבר מאז %1$s</string>
     <string name="midday">אמצע היום</string>
-    <string name="midnight">חצות</string>
+    <string name="midnight_tv">חצות</string>
     <string name="minutes">דקות</string>
     <string name="minutes_grouped_short">%1$s דק\'</string>
     <string name="minutes_listened">דקות שהואזנו</string>

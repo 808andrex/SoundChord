@@ -212,7 +212,7 @@
     <string name="blocking">Engelliyor</string>
     <string name="crossfade">Çapraz geçiş</string>
     <string name="crossfade_subtitle">Bir parçayı diğerine karıştırır</string>
-    <string name="automix">Automix [BETA]</string>
+    <string name="automix_tv">Automix [BETA]</string>
     <string name="automix_performance">Automix performansı</string>
     <string name="automix_performance_subtitle">Arka plan analizinin ne kadar CPU kullanabileceğini ayarlar</string>
     <string name="automix_performance_warning">Daha yüksek performans, parçaları daha hızlı analiz eder ancak daha fazla pil kullanabilir ve telefonu ısıtabilir.</string>
@@ -545,7 +545,7 @@
     <string name="member_since">Üyelik başlangıcı</string>
     <string name="member_since_value">%1$s tarihinden beri üye</string>
     <string name="midday">öğlen</string>
-    <string name="midnight">gece yarısı</string>
+    <string name="midnight_tv">gece yarısı</string>
     <string name="minutes">Dakika</string>
     <string name="minutes_grouped_short">%1$s dk</string>
     <string name="minutes_listened">Dinlenen dakika</string>

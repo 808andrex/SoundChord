@@ -71,6 +71,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,6 +81,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import androidx.media3.common.Player
 import com.music.bitchord.data.NerdStats
+import com.music.bitchord.R
 import com.music.bitchord.data.canvas.CanvasArtwork
 import com.music.bitchord.data.canvas.CanvasRepository
 import com.music.bitchord.data.lyrics.LyricLine
@@ -366,25 +368,25 @@ internal fun TvTransport(
             Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
                 TvTransportButton(
                     icon = if (isLiked) BitChordIcons.StarFilled else BitChordIcons.Star,
-                    contentDescription = if (isLiked) "Unfavorite" else "Favorite",
+                    contentDescription = stringResource(if (isLiked) R.string.tv_unfavorite else R.string.tv_favorite),
                     onClick = onToggleLike,
                 )
                 TvTransportButton(
                     icon = BitChordIcons.LyricsQuote,
-                    contentDescription = "Lyrics",
+                    contentDescription = stringResource(R.string.tv_lyrics),
                     active = lyricsOn,
                     enabled = lyricsAvailable,
                     onClick = onToggleLyrics,
                 )
                 TvTransportButton(
                     icon = BitChordIcons.Queue,
-                    contentDescription = "Up Next",
+                    contentDescription = stringResource(R.string.tv_up_next),
                     active = upNextOpen,
                     onClick = onToggleUpNext,
                 )
                 TvTransportButton(
                     icon = Icons.Rounded.MoreHoriz,
-                    contentDescription = "More",
+                    contentDescription = stringResource(R.string.tv_more),
                     onClick = onMore,
                 )
             }
@@ -689,7 +691,7 @@ internal fun TvUpNext(
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "Up Next",
+                text = stringResource(R.string.tv_up_next),
                 style = TvType.Headline,
                 color = TvGlass.TextPrimary,
                 modifier = Modifier.weight(1f),
@@ -697,7 +699,7 @@ internal fun TvUpNext(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 TvTransportButton(
                     icon = BitChordIcons.Shuffle,
-                    contentDescription = "Shuffle",
+                    contentDescription = stringResource(R.string.tv_shuffle),
                     active = shuffle,
                     size = 32.dp,
                     onClick = onToggleShuffle,
@@ -705,9 +707,9 @@ internal fun TvUpNext(
                 TvTransportButton(
                     icon = if (repeatMode == Player.REPEAT_MODE_ONE) null else BitChordIcons.Repeat,
                     contentDescription = when (repeatMode) {
-                        Player.REPEAT_MODE_ONE -> "Repeat One"
-                        Player.REPEAT_MODE_ALL -> "Repeat All"
-                        else -> "Repeat Off"
+                        Player.REPEAT_MODE_ONE -> stringResource(R.string.tv_repeat_one)
+                        Player.REPEAT_MODE_ALL -> stringResource(R.string.tv_repeat_all)
+                        else -> stringResource(R.string.tv_repeat_off)
                     },
                     active = repeatMode != Player.REPEAT_MODE_OFF,
                     badge = if (repeatMode == Player.REPEAT_MODE_ONE) "1" else null,
@@ -716,7 +718,7 @@ internal fun TvUpNext(
                 )
                 TvTransportButton(
                     icon = BitChordIcons.Infinity,
-                    contentDescription = "Autoplay",
+                    contentDescription = stringResource(R.string.tv_autoplay),
                     active = autoplay,
                     size = 32.dp,
                     onClick = onToggleAutoplay,
@@ -725,7 +727,7 @@ internal fun TvUpNext(
         }
         if (upcoming.isEmpty()) {
             Text(
-                text = if (autoplay) "Similar music will play when this song ends." else "Nothing is queued after this song.",
+                text = stringResource(if (autoplay) R.string.tv_up_next_autoplay_empty else R.string.tv_up_next_empty),
                 style = TvType.Callout,
                 color = TvGlass.TextSecondary,
                 modifier = Modifier

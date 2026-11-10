@@ -260,7 +260,7 @@
     <string name="blocking">Blocking</string>
     <string name="crossfade">Crossfade</string>
     <string name="crossfade_subtitle">Blends one track into the next</string>
-    <string name="automix">Automix [BETA]</string>
+    <string name="automix_tv">Automix [BETA]</string>
     <string name="automix_performance">Automix performance</string>
     <string name="automix_performance_subtitle">Sets how much CPU background analysis may use</string>
     <string name="automix_performance_warning">Higher performance analyses tracks faster, but can use more battery and make the phone warmer.</string>
@@ -743,7 +743,7 @@
     <string name="member_since">Member since</string>
     <string name="member_since_value">Member since %1$s</string>
     <string name="midday">midday</string>
-    <string name="midnight">midnight</string>
+    <string name="midnight_tv">midnight</string>
     <string name="minutes">Minutes</string>
     <string name="minutes_grouped_short">%1$s min</string>
     <string name="minutes_listened">Minutes listened</string>

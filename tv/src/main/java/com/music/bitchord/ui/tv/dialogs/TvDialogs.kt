@@ -78,9 +78,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.R
 import com.music.bitchord.auth.GoogleAccountSession
 import com.music.bitchord.auth.WebSessionMode
 import com.music.bitchord.auth.YouTubeProfile
@@ -363,7 +365,7 @@ private fun TvProfileSwitcher(
                 Spacer(modifier = Modifier.height(18.dp))
 
                 Text(
-                    text = if (allProfiles.isEmpty()) "Sign In" else "Who's watching?",
+                    text = if (allProfiles.isEmpty()) stringResource(R.string.tv_sign_in) else stringResource(R.string.tv_who_is_listening),
                     style = TvType.Title.copy(fontSize = 32.sp, fontWeight = FontWeight.Bold),
                     color = TvGlass.TextPrimary,
                     textAlign = TextAlign.Center,
@@ -373,9 +375,9 @@ private fun TvProfileSwitcher(
 
                 Text(
                     text = if (allProfiles.isEmpty()) {
-                        "Nobody is signed in. Add a YouTube Music account to access your music."
+                        stringResource(R.string.tv_no_account_signed_in)
                     } else {
-                        "Choose a profile to switch your library, playlists and recommendations."
+                        stringResource(R.string.tv_choose_profile_description)
                     },
                     style = TvType.Callout,
                     color = TvGlass.TextSecondary,
@@ -1186,7 +1188,7 @@ fun TvScrobbleDialog(onDismiss: () -> Unit) {
 
     TvDialog(
         title = "Scrobbling",
-        message = "Connect these on the BitChord phone app; the TV uses the same accounts.",
+        message = "Connect these on the SoundChord phone app; the TV uses the same accounts.",
         onDismissRequest = onDismiss,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -1210,7 +1212,7 @@ fun TvScrobbleDialog(onDismiss: () -> Unit) {
 
 @Composable
 fun TvAboutDialog(onDismiss: () -> Unit) {
-    TvDialog(title = "BitChord", message = "Version ${BuildConfig.VERSION_NAME}", onDismissRequest = onDismiss) {
+    TvDialog(title = "SoundChord", message = "Version ${BuildConfig.VERSION_NAME}", onDismissRequest = onDismiss) {
         TvAppMark(size = 77.dp, modifier = Modifier.padding(bottom = 21.dp))
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
             TvListRow(title = "Kushagra Singh", value = "Creator", enabled = false, onClick = {})
@@ -1235,17 +1237,21 @@ fun TvRefreshRateDialog(onDismiss: () -> Unit) {
     val current by TvRefreshRateController.preference.collectAsState()
 
     TvDialog(
-        title = "Refresh Rate",
-        message = "Now ${capabilities.currentPhysicalWidth} × ${capabilities.currentPhysicalHeight} at " +
-            String.format(java.util.Locale.US, "%.0f Hz", capabilities.actualRefreshRateHz),
+        title = stringResource(R.string.tv_settings_refresh_rate),
+        message = stringResource(
+            R.string.tv_refresh_rate_message,
+            capabilities.currentPhysicalWidth,
+            capabilities.currentPhysicalHeight,
+            capabilities.actualRefreshRateHz,
+        ),
         onDismissRequest = onDismiss,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
             TvRefreshRatePreference.entries.forEach { preference ->
                 val supported = preference != TvRefreshRatePreference.SMOOTH_60 || capabilities.is60HzSupported
                 TvListRow(
-                    title = preference.label,
-                    subtitle = preference.description,
+                    title = stringResource(preference.titleRes()),
+                    subtitle = stringResource(preference.descriptionRes()),
                     trailingIcon = if (preference == current) Icons.Rounded.Check else null,
                     enabled = supported,
                     modifier = if (preference == current) Modifier.tvInitialFocus() else Modifier,
@@ -1264,12 +1270,12 @@ fun TvThemeDialog(onDismiss: () -> Unit) {
     val currentId by TvSettings.tvTheme.collectAsState()
     val current = AppThemeOption.fromId(currentId)
 
-    TvDialog(title = "Appearance", onDismissRequest = onDismiss) {
+    TvDialog(title = stringResource(R.string.tv_settings_appearance), onDismissRequest = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
             AppThemeOption.entries.forEach { theme ->
                 TvListRow(
-                    title = theme.title,
-                    subtitle = theme.description,
+                    title = stringResource(theme.titleRes()),
+                    subtitle = stringResource(theme.descriptionRes()),
                     trailingIcon = if (theme == current) Icons.Rounded.Check else null,
                     modifier = if (theme == current) Modifier.tvInitialFocus() else Modifier,
                     onClick = {
@@ -1295,8 +1301,8 @@ fun TvLyricsSourcesDialog(onDismiss: () -> Unit) {
     val order = remember(savedOrder) { LyricsSource.ordered(savedOrder) }
 
     TvDialog(
-        title = "Lyrics Sources",
-        message = "Select to turn a source on or off. Press Left or Right to move it up or down; the first is asked first.",
+        title = stringResource(R.string.tv_settings_lyrics_sources),
+        message = stringResource(R.string.tv_lyrics_sources_message),
         width = 512.dp,
         onDismissRequest = onDismiss,
     ) {
@@ -1335,16 +1341,40 @@ fun TvLyricsSourcesDialog(onDismiss: () -> Unit) {
             }
             item(key = "wordFirst") {
                 TvListRow(
-                    title = "Prefer Word-Synced",
-                    subtitle = "Hold out for word-by-word lyrics before settling for line-by-line.",
-                    value = if (wordFirst) "On" else "Off",
+                    title = stringResource(R.string.tv_prefer_word_synced),
+                    subtitle = stringResource(R.string.tv_prefer_word_synced_subtitle),
+                    value = stringResource(if (wordFirst) R.string.tv_on else R.string.tv_off),
                     onClick = { AppSettings.setPrioritizeSyllableSync(!wordFirst) },
                 )
             }
         }
         Spacer(modifier = Modifier.height(14.dp))
-        TvDialogButton(text = "Reset to Default", onClick = AppSettings::resetLyricsSourceSettings)
+        TvDialogButton(text = stringResource(R.string.tv_reset_default), onClick = AppSettings::resetLyricsSourceSettings)
         Spacer(modifier = Modifier.height(6.dp))
-        TvDialogButton(text = "Done", onClick = onDismiss)
+        TvDialogButton(text = stringResource(R.string.tv_done), onClick = onDismiss)
     }
+}
+
+private fun AppThemeOption.titleRes(): Int = when (this) {
+    AppThemeOption.DYNAMIC_ARTWORK -> R.string.tv_theme_artwork
+    AppThemeOption.MIDNIGHT -> R.string.tv_theme_midnight
+    AppThemeOption.PURE_BLACK -> R.string.tv_theme_pure_black
+}
+
+private fun AppThemeOption.descriptionRes(): Int = when (this) {
+    AppThemeOption.DYNAMIC_ARTWORK -> R.string.tv_theme_artwork_description
+    AppThemeOption.MIDNIGHT -> R.string.tv_theme_midnight_description
+    AppThemeOption.PURE_BLACK -> R.string.tv_theme_pure_black_description
+}
+
+private fun TvRefreshRatePreference.titleRes(): Int = when (this) {
+    TvRefreshRatePreference.SYSTEM_AUTO -> R.string.tv_refresh_auto
+    TvRefreshRatePreference.SMOOTH_60 -> R.string.tv_refresh_60
+    TvRefreshRatePreference.ULTRA_120 -> R.string.tv_refresh_120
+}
+
+private fun TvRefreshRatePreference.descriptionRes(): Int = when (this) {
+    TvRefreshRatePreference.SYSTEM_AUTO -> R.string.tv_refresh_auto_description
+    TvRefreshRatePreference.SMOOTH_60 -> R.string.tv_refresh_60_description
+    TvRefreshRatePreference.ULTRA_120 -> R.string.tv_refresh_120_description
 }

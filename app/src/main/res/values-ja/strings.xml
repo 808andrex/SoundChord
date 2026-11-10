@@ -194,7 +194,7 @@
     <string name="blocking">ブロック中</string>
     <string name="crossfade">クロスフェード</string>
     <string name="crossfade_subtitle">1曲を次の曲へなめらかにつなげます</string>
-    <string name="automix">オートミックス [BETA]</string>
+    <string name="automix_tv">オートミックス [BETA]</string>
     <string name="skip_silence">無音をスキップ</string>
     <string name="skip_silence_subtitle">1秒より長い無音部分をカットします</string>
     <string name="skip_silence_float_subtitle">32ビット浮動小数点出力では使用できません</string>
@@ -501,7 +501,7 @@
     <string name="member_since">登録日</string>
     <string name="member_since_value">登録日：%1$s</string>
     <string name="midday">正午</string>
-    <string name="midnight">真夜中</string>
+    <string name="midnight_tv">真夜中</string>
     <string name="minutes">分</string>
     <string name="minutes_grouped_short">%1$s分</string>
     <string name="minutes_listened">再生時間（分）</string>

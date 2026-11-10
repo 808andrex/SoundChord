@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tv_sign_in">Iniciar sesión</string>
+    <string name="tv_who_is_listening">¿Quién está escuchando?</string>
+    <string name="tv_no_account_signed_in">No hay ninguna sesión iniciada. Añade una cuenta de YouTube Music para acceder a tu música.</string>
+    <string name="tv_choose_profile_description">Elige un perfil para cambiar de biblioteca, listas de reproducción y recomendaciones.</string>
+</resources>

@@ -199,7 +199,7 @@
     <string name="blocking">Blockierend</string>
     <string name="crossfade">Überblendung</string>
     <string name="crossfade_subtitle">Blendet einen Track in den nächsten über</string>
-    <string name="automix">Automix [BETA]</string>
+    <string name="automix_tv">Automix [BETA]</string>
     <string name="skip_silence">Stille überspringen</string>
     <string name="skip_silence_subtitle">Kürzt Pausen länger als eine Sekunde</string>
     <string name="skip_silence_float_subtitle">Bei 32-Bit-Float-Ausgabe nicht verfügbar</string>
@@ -516,7 +516,7 @@
     <string name="member_since">Mitglied seit</string>
     <string name="member_since_value">Mitglied seit %1$s</string>
     <string name="midday">mittags</string>
-    <string name="midnight">Mitternacht</string>
+    <string name="midnight_tv">Mitternacht</string>
     <string name="minutes">Minuten</string>
     <string name="minutes_grouped_short">%1$s Min.</string>
     <string name="minutes_listened">Gehörte Minuten</string>

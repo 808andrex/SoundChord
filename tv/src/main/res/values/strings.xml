@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tv_sign_in">Sign In</string>
+    <string name="tv_who_is_listening">Who\'s watching?</string>
+    <string name="tv_no_account_signed_in">Nobody is signed in. Add a YouTube Music account to access your music.</string>
+    <string name="tv_choose_profile_description">Choose a profile to switch your library, playlists and recommendations.</string>
+</resources>

@@ -18,11 +18,13 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.AppUpdateChecker
 import com.music.bitchord.data.AppUpdateChecker.DownloadState
+import com.music.bitchord.R
 import com.music.bitchord.ui.tv.auth.TvQrCodeView
 import com.music.bitchord.ui.tv.components.TvDialog
 import com.music.bitchord.ui.tv.components.TvDialogButton
@@ -55,7 +57,7 @@ fun TvUpdateDialog(update: AppUpdateChecker.UpdateInfo, onDismiss: () -> Unit) {
     val notes = remember(update.notes) { update.notes?.let(::plainNotes) }
 
     TvDialog(
-        title = "BitChord ${update.version} Is Available",
+        title = stringResource(R.string.tv_update_available_title, update.version),
         message = when {
             update.apkUrl == null -> "Scan the code with your phone to get this update from GitHub."
             state is DownloadState.Ready -> "Downloaded. Select Install Now to update."

@@ -209,7 +209,7 @@
     <string name="blocking">Блокирует</string>
     <string name="crossfade">Кроссфейд</string>
     <string name="crossfade_subtitle">Плавно переходит от одного трека к другому</string>
-    <string name="automix">Автомикс [БЕТА]</string>
+    <string name="automix_tv">Автомикс [БЕТА]</string>
     <string name="skip_silence">Пропускать тишину</string>
     <string name="skip_silence_subtitle">Обрезает паузы длиннее секунды</string>
     <string name="skip_silence_float_subtitle">Недоступно при 32-битном выводе с плавающей точкой</string>
@@ -536,7 +536,7 @@
     <string name="member_since">Участник с</string>
     <string name="member_since_value">Участник с %1$s</string>
     <string name="midday">полдень</string>
-    <string name="midnight">полночь</string>
+    <string name="midnight_tv">полночь</string>
     <string name="minutes">Минуты</string>
     <string name="minutes_grouped_short">%1$s мин</string>
     <string name="minutes_listened">Минут прослушано</string>

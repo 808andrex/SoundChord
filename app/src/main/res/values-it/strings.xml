@@ -230,7 +230,7 @@
     <string name="blocking">Bloccante</string>
     <string name="crossfade">Dissolvenza incrociata</string>
     <string name="crossfade_subtitle">Sfuma un brano nel successivo</string>
-    <string name="automix">Automix [BETA]</string>
+    <string name="automix_tv">Automix [BETA]</string>
     <string name="automix_performance">Prestazioni Automix</string>
     <string name="automix_performance_subtitle">Imposta quanta CPU può usare l\'analisi in background</string>
     <string name="automix_performance_warning">Prestazioni più elevate analizzano i brani più velocemente, ma possono usare più batteria e scaldare il telefono.</string>
@@ -563,7 +563,7 @@
     <string name="member_since">Membro da</string>
     <string name="member_since_value">Membro da %1$s</string>
     <string name="midday">mezzogiorno</string>
-    <string name="midnight">mezzanotte</string>
+    <string name="midnight_tv">mezzanotte</string>
     <string name="minutes">Minuti</string>
     <string name="minutes_grouped_short">%1$s min</string>
     <string name="minutes_listened">Minuti ascoltati</string>

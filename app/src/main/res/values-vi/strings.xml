@@ -216,7 +216,7 @@
     <string name="blocking">Đang chặn</string>
     <string name="crossfade">Chuyển bài mượt (Crossfade)</string>
     <string name="crossfade_subtitle">Hòa quyện bài hát hiện tại vào bài tiếp theo</string>
-    <string name="automix">Automix [BETA]</string>
+    <string name="automix_tv">Automix [BETA]</string>
     <string name="automix_performance">Hiệu năng Automix</string>
     <string name="automix_performance_subtitle">Đặt mức sử dụng CPU cho phân tích nền</string>
     <string name="automix_performance_warning">Hiệu năng cao hơn phân tích nhanh hơn, nhưng có thể tốn pin hơn và làm máy ấm lên.</string>
@@ -538,7 +538,7 @@
     <string name="member_since">Thành viên từ</string>
     <string name="member_since_value">Thành viên từ %1$s</string>
     <string name="midday">buổi trưa</string>
-    <string name="midnight">nửa đêm</string>
+    <string name="midnight_tv">nửa đêm</string>
     <string name="minutes">Phút</string>
     <string name="minutes_grouped_short">%1$s phút</string>
     <string name="minutes_listened">Số phút đã nghe</string>

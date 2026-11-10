@@ -21,7 +21,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.music.bitchord.R
 import androidx.media3.session.MediaController
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.HomeShelf
@@ -174,7 +176,7 @@ internal fun TvShelfFeed(
             }
             when {
                 picksFirst && index == 0 -> TvShelf(
-                    title = shelf.title,
+                    title = localizedShelfTitle(shelf.title),
                     subtitle = shelf.subtitle.takeIf { it.isNotBlank() },
                     items = shelf.items,
                     key = { it.itemKey() },
@@ -189,7 +191,7 @@ internal fun TvShelfFeed(
                     )
                 }
                 shelf.isArtistShelf() -> TvShelf(
-                    title = shelf.title,
+                    title = localizedShelfTitle(shelf.title),
                     subtitle = shelf.subtitle.takeIf { it.isNotBlank() },
                     items = shelf.items,
                     key = { it.itemKey() },
@@ -204,7 +206,7 @@ internal fun TvShelfFeed(
                     )
                 }
                 else -> TvShelf(
-                    title = shelf.title,
+                    title = localizedShelfTitle(shelf.title),
                     subtitle = shelf.subtitle.takeIf { it.isNotBlank() },
                     items = shelf.items,
                     key = { it.itemKey() },
@@ -229,6 +231,12 @@ internal fun TvShelfFeed(
         }
     }
     }
+}
+
+@Composable
+private fun localizedShelfTitle(title: String): String = when (title.trim().lowercase()) {
+    "recent", "recents" -> stringResource(R.string.tv_recents)
+    else -> title
 }
 
 private fun ShelfItem.itemKey(): String = videoId ?: browseId ?: title

@@ -289,7 +289,7 @@ fun grouped(value: Long): String = String.format(Locale.US, "%,d", value)
 
 /** "3 pm", "midnight" — an hour of the day said the way anyone would say it. */
 fun formatHour(context: Context, hour: Int): String = when (hour) {
-    0 -> context.getString(R.string.midnight)
+    0 -> context.getString(R.string.midnight_tv)
     12 -> context.getString(R.string.midday)
     in 1..11 -> context.getString(R.string.hour_am, hour)
     else -> context.getString(R.string.hour_pm, hour - 12)
