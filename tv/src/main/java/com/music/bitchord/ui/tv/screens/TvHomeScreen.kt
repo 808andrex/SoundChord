@@ -185,7 +185,12 @@ internal fun TvShelfFeed(
                         title = item.title,
                         subtitle = item.subtitle,
                         artworkUrl = item.thumbnailUrl,
-                        cardWidth = 163.dp,
+                        cardWidth = if (shelf.isMixedVideoAudioShelf() && item.isVideo) {
+                            163.dp * (16f / 9f)
+                        } else {
+                            163.dp
+                        },
+                        aspectRatio = if (item.isVideo) 16f / 9f else 1f,
                         onClick = { onItem(item) },
                         onLongClick = onItemMenu(item),
                     )
@@ -203,6 +208,26 @@ internal fun TvShelfFeed(
                         circle = true,
                         width = 120.dp,
                         onClick = { onItem(item) },
+                    )
+                }
+                shelf.items.any { it.isVideo } -> TvShelf(
+                    title = localizedShelfTitle(shelf.title),
+                    subtitle = shelf.subtitle.takeIf { it.isNotBlank() },
+                    items = shelf.items,
+                    key = { it.itemKey() },
+                ) { item ->
+                    TvCard(
+                        title = item.title,
+                        subtitle = item.subtitle,
+                        artworkUrl = item.thumbnailUrl,
+                        cardWidth = if (shelf.isMixedVideoAudioShelf() && item.isVideo) {
+                            163.dp * (16f / 9f)
+                        } else {
+                            163.dp
+                        },
+                        aspectRatio = if (item.isVideo) 16f / 9f else 1f,
+                        onClick = { onItem(item) },
+                        onLongClick = onItemMenu(item),
                     )
                 }
                 else -> TvShelf(
@@ -244,8 +269,17 @@ private fun ShelfItem.itemKey(): String = videoId ?: browseId ?: title
 private fun HomeShelf.isArtistShelf(): Boolean =
     items.isNotEmpty() && items.count { it.browseId?.startsWith("UC") == true } * 2 > items.size
 
+private fun HomeShelf.isMixedVideoAudioShelf(): Boolean =
+    items.any { it.isVideo } && items.any { !it.isVideo }
+
 internal fun ShelfItem.toSong(): Song? = videoId?.let {
-    Song(videoId = it, title = title, artist = subtitle, thumbnailUrl = thumbnailUrl)
+    Song(
+        videoId = it,
+        title = title,
+        artist = subtitle,
+        thumbnailUrl = thumbnailUrl,
+        isVideo = isVideo,
+    )
 }
 
 internal fun browseTypeOf(browseId: String): BrowseType = when {

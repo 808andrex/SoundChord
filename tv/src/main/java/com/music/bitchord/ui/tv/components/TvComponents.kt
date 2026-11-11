@@ -217,10 +217,11 @@ fun TvCard(
                     }
                 }
             }
+            val regularCaptionHeight = if (subtitle.isNullOrBlank()) 42.dp else 51.dp
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(if (subtitle.isNullOrBlank()) 42.dp else 51.dp)
+                    .height(regularCaptionHeight)
                     .padding(horizontal = 10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,

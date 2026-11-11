@@ -14,8 +14,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -63,7 +61,7 @@ private sealed class LibraryCategory(val key: String, val title: String) {
 /**
  * Library, as Apple Music lays it out on tvOS: categories down the left, the
  * focused one's contents on the right. The sidebar follows focus, so moving
- * down it previews each category; Downloaded and On This Device open pages.
+ * down it previews each category.
  */
 @Composable
 fun TvLibraryScreen(
@@ -79,8 +77,6 @@ fun TvLibraryScreen(
     val signedIn by viewModel.signedIn.collectAsState()
     val libraryState by viewModel.library.collectAsState()
     val library = (libraryState as? UiState.Success)?.data
-    val downloadedLabel = stringResource(R.string.tv_downloaded)
-    val deviceLabel = stringResource(R.string.tv_on_this_device)
     val scope = rememberCoroutineScope()
     var menuSong by remember { mutableStateOf<Song?>(null) }
 
@@ -125,22 +121,6 @@ fun TvLibraryScreen(
                     resting = if (category.key == selected.key) Color.White.copy(alpha = 0.12f) else Color.Transparent,
                     onFocused = { selectedKey = category.key },
                     onClick = { selectedKey = category.key },
-                )
-            }
-            item(key = "downloads") {
-                TvListRow(
-                    title = stringResource(R.string.tv_downloaded),
-                    resting = Color.Transparent,
-                    trailingIcon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                    onClick = { onNavigateToDetail("local:downloads", downloadedLabel, "", null, BrowseType.PLAYLIST) },
-                )
-            }
-            item(key = "device") {
-                TvListRow(
-                    title = stringResource(R.string.tv_on_this_device),
-                    resting = Color.Transparent,
-                    trailingIcon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                    onClick = { onNavigateToDetail("local:all", deviceLabel, "", null, BrowseType.PLAYLIST) },
                 )
             }
             if (!signedIn) {
