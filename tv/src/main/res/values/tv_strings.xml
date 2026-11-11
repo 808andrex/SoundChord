@@ -1,4 +1,11 @@
 <resources>
+    <string name="tv_radio_tab">Radio</string>
+    <string name="tv_radio_popular">Popular stations</string>
+    <string name="tv_radio_loading">Loading radio stations…</string>
+    <string name="tv_radio_nearby_error">Nearby stations could not be loaded.</string>
+    <string name="tv_radio_stations_for">Stations for %1$s</string>
+    <string name="tv_search_music_source">YouTube</string>
+    <string name="tv_search_radio_source">Radio</string>
     <string name="tv_language_system_default">System default</string>
     <string name="tv_language_english_name">English</string>
     <string name="tv_language_spanish_name">Español</string>

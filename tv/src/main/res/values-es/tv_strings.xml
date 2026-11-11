@@ -1,4 +1,11 @@
 <resources>
+    <string name="tv_radio_tab">Radio</string>
+    <string name="tv_radio_popular">Emisoras populares</string>
+    <string name="tv_radio_loading">Cargando emisoras…</string>
+    <string name="tv_radio_nearby_error">No se pudieron cargar las emisoras cercanas.</string>
+    <string name="tv_radio_stations_for">Emisoras de %1$s</string>
+    <string name="tv_search_music_source">YouTube</string>
+    <string name="tv_search_radio_source">Radio</string>
     <string name="tv_language_system_default">Predeterminado del sistema</string>
     <string name="tv_language_english_name">English</string>
     <string name="tv_language_spanish_name">Español</string>

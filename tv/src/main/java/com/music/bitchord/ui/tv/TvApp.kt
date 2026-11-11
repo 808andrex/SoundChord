@@ -78,6 +78,7 @@ import com.music.bitchord.ui.tv.screens.TvDetailScreen
 import com.music.bitchord.ui.tv.screens.TvExploreScreen
 import com.music.bitchord.ui.tv.screens.TvHomeScreen
 import com.music.bitchord.ui.tv.screens.TvLibraryScreen
+import com.music.bitchord.ui.tv.screens.TvRadioScreen
 import com.music.bitchord.ui.tv.screens.TvSearchScreen
 import com.music.bitchord.ui.tv.screens.TvSettingsScreen
 import com.music.bitchord.ui.tv.theme.TvGlass
@@ -89,6 +90,7 @@ enum class TvDestination(val labelRes: Int) {
     HOME(R.string.home),
     EXPLORE(R.string.explore),
     LIBRARY(R.string.library),
+    RADIO(R.string.tv_radio_tab),
     SEARCH(R.string.search),
     SETTINGS(R.string.settings),
 }
@@ -458,6 +460,10 @@ private fun TvMainShell(
                                 onNavigateToNowPlaying = openNowPlaying,
                                 onOpenAccount = onOpenAccount,
                             )
+                            TvDestination.RADIO -> TvRadioScreen(
+                                mediaController = mediaController,
+                                onNavigateToNowPlaying = openNowPlaying,
+                            )
                             TvDestination.SEARCH -> TvSearchScreen(
                                 viewModel = viewModel,
                                 mediaController = mediaController,
@@ -585,7 +591,7 @@ private fun TvTopBar(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            listOf(TvDestination.HOME, TvDestination.EXPLORE, TvDestination.LIBRARY).forEach { tab ->
+            listOf(TvDestination.HOME, TvDestination.EXPLORE, TvDestination.LIBRARY, TvDestination.RADIO).forEach { tab ->
                 val interaction = remember { MutableInteractionSource() }
                 val focused by interaction.collectIsFocusedAsState()
                 LaunchedEffect(focused) {

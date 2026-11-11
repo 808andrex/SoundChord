@@ -123,27 +123,30 @@ fun TvNowPlayingScreen(
 
     val lyrics by viewModel.lyrics.collectAsState()
     val lyricsChecked by viewModel.lyricsChecked.collectAsState()
+    val isRadio = song.isLiveRadioStream || song.playbackSourceId?.startsWith("radio:") == true
     val likeOverrides by LikeState.overrides.collectAsState()
     val isLiked = likeOverrides[song.videoId] == LikeStatus.LIKE
     val shuffle by com.music.bitchord.playback.QueueShuffle.enabled.collectAsState()
     val autoplay by AppSettings.autoplay.collectAsState()
     val playerStyle by TvSettings.tvPlayerStyle.collectAsState()
 
-    LaunchedEffect(song.videoId, durationMs) {
-        viewModel.loadLyrics(
-            videoId = song.videoId,
-            title = song.title,
-            artist = song.artist,
-            durationMs = durationMs.coerceAtLeast(0L),
-            album = song.albumName,
-        )
+    LaunchedEffect(song.videoId, durationMs, isRadio) {
+        if (!song.isVideo && !isRadio) {
+            viewModel.loadLyrics(
+                videoId = song.videoId,
+                title = song.title,
+                artist = song.artist,
+                durationMs = durationMs.coerceAtLeast(0L),
+                album = song.albumName,
+            )
+        }
     }
 
     var lyricsHidden by rememberSaveable { mutableStateOf(false) }
     val hasLyrics = !lyrics.isNullOrEmpty()
     // Music videos are a clean video surface on TV; synced lyrics belong to
     // audio playback and must never draw over the video.
-    val showLyrics = !song.isVideo && hasLyrics && !lyricsHidden
+    val showLyrics = !song.isVideo && !isRadio && hasLyrics && !lyricsHidden
 
     var controlsVisible by remember { mutableStateOf(true) }
     var upNextOpen by remember { mutableStateOf(false) }
@@ -275,7 +278,8 @@ fun TvNowPlayingScreen(
             position = position,
             lyrics = lyrics.orEmpty(),
             showLyrics = showLyrics,
-            lyricsLoading = !song.isVideo && !lyricsChecked && lyrics == null && !lyricsHidden,
+            lyricsLoading = !song.isVideo && !isRadio && !lyricsChecked && lyrics == null && !lyricsHidden,
+            isRadio = isRadio,
             controlsVisible = controlsVisible,
             onSeek = { mediaController?.seekTo(it) },
             modifier = Modifier.graphicsLayer { alpha = dim },
@@ -295,7 +299,8 @@ fun TvNowPlayingScreen(
                 durationMs = durationMs,
                 scrubTarget = scrubTarget,
                 isLiked = isLiked,
-                lyricsAvailable = !song.isVideo && hasLyrics,
+                isRadio = isRadio,
+                lyricsAvailable = !song.isVideo && !isRadio && hasLyrics,
                 lyricsOn = showLyrics,
                 upNextOpen = upNextOpen,
                 scrubberFocus = scrubberFocus,

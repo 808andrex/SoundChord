@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -171,6 +172,7 @@ internal fun TvNowPlayingStage(
     lyrics: List<LyricLine>,
     showLyrics: Boolean,
     lyricsLoading: Boolean,
+    isRadio: Boolean,
     controlsVisible: Boolean,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
@@ -277,7 +279,7 @@ internal fun TvNowPlayingStage(
             }
         }
 
-        if (showLyrics || side > 0f) {
+        if (!isRadio && (showLyrics || side > 0f)) {
             Box(
                 modifier = Modifier
                     .padding(start = sideStart + sideSize + 51.dp, end = 38.dp)
@@ -380,6 +382,7 @@ internal fun TvTransport(
     durationMs: Long,
     scrubTarget: Long?,
     isLiked: Boolean,
+    isRadio: Boolean,
     lyricsAvailable: Boolean,
     lyricsOn: Boolean,
     upNextOpen: Boolean,
@@ -432,7 +435,7 @@ internal fun TvTransport(
                     contentDescription = stringResource(if (isLiked) R.string.tv_unfavorite else R.string.tv_favorite),
                     onClick = onToggleLike,
                 )
-                if (!song.isVideo) {
+                if (!song.isVideo && !isRadio) {
                     TvTransportButton(
                         icon = BitChordIcons.LyricsQuote,
                         contentDescription = stringResource(R.string.tv_lyrics),
@@ -454,7 +457,10 @@ internal fun TvTransport(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+        if (isRadio) {
+            TvLiveBadge(modifier = Modifier.padding(bottom = 5.dp))
+        }
         TvScrubber(
             position = position,
             durationMs = durationMs,
@@ -476,6 +482,26 @@ internal fun TvTransport(
                 upNext()
             }
         }
+    }
+}
+
+@Composable
+private fun TvLiveBadge(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        Canvas(Modifier.size(10.dp)) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            drawCircle(Color(0xFFFF3038).copy(alpha = 0.42f), radius = size.minDimension / 2f, center = center)
+            drawCircle(Color(0xFFFF3038), radius = size.minDimension * 0.3f, center = center)
+        }
+        Text(
+            text = stringResource(com.soundchord.features.R.string.radio_live),
+            style = TvType.Caption.copy(fontWeight = FontWeight.W700, fontSize = 12.sp),
+            color = Color(0xFFFF4A50),
+        )
     }
 }
 

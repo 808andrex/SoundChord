@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,12 +30,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.media3.session.MediaController
+import androidx.lifecycle.viewmodel.compose.viewModel as composeViewModel
 import com.music.bitchord.data.model.BrowseItem
 import com.music.bitchord.R
 import com.music.bitchord.data.model.BrowseType
@@ -46,6 +49,7 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.UiState
 import com.music.bitchord.playback.playSongs
 import com.music.bitchord.ui.MainViewModel
+import com.music.bitchord.ui.SearchSource
 import com.music.bitchord.ui.tv.components.TvActivityIndicator
 import com.music.bitchord.ui.tv.components.TvButton
 import com.music.bitchord.ui.tv.components.TvChromeScrollEffect
@@ -58,8 +62,12 @@ import com.music.bitchord.ui.tv.components.TvShelf
 import com.music.bitchord.ui.tv.components.TvShelfTitle
 import com.music.bitchord.ui.tv.components.TvSongRow
 import com.music.bitchord.ui.tv.components.TvTextField
+import com.music.bitchord.ui.tv.components.tvInitialFocus
 import com.music.bitchord.ui.tv.dialogs.TvSongMenu
 import com.music.bitchord.ui.tv.theme.TvDimensions
+import com.soundchord.features.radio.playback.toSong
+import com.soundchord.features.radio.ui.RadioUiState
+import com.soundchord.features.radio.ui.RadioViewModel
 import kotlinx.coroutines.launch
 
 private val SearchFilters = listOf(
@@ -88,17 +96,28 @@ fun TvSearchScreen(
     modifier: Modifier = Modifier,
 ) {
     val query by viewModel.query.collectAsState()
+    val searchSource by viewModel.searchSource.collectAsState()
     val resultsState by viewModel.results.collectAsState()
     val filter by viewModel.filter.collectAsState()
     val history by viewModel.searchHistory.collectAsState()
     val suggestions by viewModel.suggestions.collectAsState()
     val loadingMore by viewModel.searchLoadingMore.collectAsState()
     val keyboard = LocalSoftwareKeyboardController.current
+    val context = LocalContext.current
+    val radioViewModel: RadioViewModel = composeViewModel(
+        factory = remember(context) { RadioViewModel.Factory(context) },
+    )
+    val radioState by radioViewModel.uiState.collectAsState()
+    val favoriteStations by radioViewModel.favoriteStations.collectAsState()
     val scope = rememberCoroutineScope()
     var menuSong by remember { mutableStateOf<Song?>(null) }
 
     val listState = rememberLazyListState()
     TvChromeScrollEffect(listState)
+
+    LaunchedEffect(searchSource, query) {
+        if (searchSource == SearchSource.RADIO) radioViewModel.onSearchQueryChanged(query)
+    }
 
     val playSong: (Song) -> Unit = { song ->
         scope.launch { mediaController?.playSongs(listOf(song), 0) }
@@ -182,7 +201,18 @@ fun TvSearchScreen(
                     },
                     modifier = Modifier.widthIn(max = 576.dp),
                 )
-                if (resultsState != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                TvSegmented(
+                    options = listOf(
+                        stringResource(R.string.tv_search_music_source),
+                        stringResource(R.string.tv_search_radio_source),
+                    ),
+                    selectedIndex = if (searchSource == SearchSource.RADIO) 1 else 0,
+                    onSelect = { index ->
+                        viewModel.setSearchSource(if (index == 1) SearchSource.RADIO else SearchSource.YOUTUBE)
+                    },
+                )
+                if (resultsState != null && searchSource != SearchSource.RADIO) {
                     Spacer(modifier = Modifier.height(14.dp))
                     TvSegmented(
                         options = SearchFilters.map { filterOption -> stringResource(filterOption.resourceId()) },
@@ -194,7 +224,48 @@ fun TvSearchScreen(
             }
         }
 
-        when (val state = resultsState) {
+        if (searchSource == SearchSource.RADIO) {
+            when (val state = radioState) {
+                RadioUiState.Loading -> item(key = "radio_loading") {
+                    Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
+                        TvActivityIndicator()
+                    }
+                }
+                is RadioUiState.Error -> item(key = "radio_error") {
+                    TvErrorState(
+                        message = state.message,
+                        onRetry = { radioViewModel.onSearchQueryChanged(query) },
+                        modifier = Modifier.height(256.dp),
+                    )
+                }
+                is RadioUiState.Success -> if (state.stations.isEmpty()) {
+                    item(key = "radio_empty") {
+                        TvEmptyState(
+                            title = stringResource(com.soundchord.features.R.string.radio_search_empty),
+                            message = stringResource(com.soundchord.features.R.string.radio_search_hint),
+                            modifier = Modifier.height(256.dp),
+                        )
+                    }
+                } else {
+                    items(state.stations, key = { "global_radio_${it.uuid}" }) { station ->
+                        TvRadioStationListRow(
+                            station = station,
+                            isFavorite = favoriteStations.any { it.uuid == station.uuid },
+                            onFavorite = { radioViewModel.toggleFavorite(station) },
+                            modifier = Modifier
+                                .padding(horizontal = TvDimensions.SafeMarginHorizontal)
+                                .widthIn(max = 576.dp),
+                            onPlay = {
+                                radioViewModel.setCurrentlyPlayingStation(station)
+                                scope.launch { mediaController?.playSongs(listOf(station.toSong(context)), 0) }
+                                onNavigateToNowPlaying()
+                            },
+                            initialFocus = station == state.stations.firstOrNull(),
+                        )
+                    }
+                }
+            }
+        } else when (val state = resultsState) {
             null -> if (query.isNotBlank() && suggestions.isNotEmpty()) {
                 items(suggestions, key = { "suggest:$it" }) { suggestion ->
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
