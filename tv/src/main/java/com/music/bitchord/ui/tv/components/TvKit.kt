@@ -62,9 +62,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -325,7 +325,10 @@ fun <T> TvRow(
             horizontalArrangement = Arrangement.spacedBy(spacing),
             modifier = modifier
                 .fillMaxWidth()
-                .focusProperties { onEnter = { runCatching { entry.requestFocus() } } }
+                // Keep each rail's last focused card when D-pad navigation
+                // moves down to another shelf and later returns to this row.
+                // On first entry, use the first visible card as the fallback.
+                .focusRestorer(entry)
                 .focusGroup(),
         ) {
             itemsIndexed(items = items, key = { _, item -> key(item) }, contentType = { _, item -> contentType(item) }) { index, item ->

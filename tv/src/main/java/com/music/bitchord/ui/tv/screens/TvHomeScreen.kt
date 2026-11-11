@@ -28,6 +28,7 @@ import androidx.media3.session.MediaController
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.ShelfItem
+import com.music.bitchord.data.model.ShelfLayout
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.UiState
 import com.music.bitchord.playback.playSongs
@@ -130,6 +131,7 @@ internal fun TvShelfFeed(
     picksFirst: Boolean = false,
     loadingMore: Boolean = false,
     onNearEnd: (() -> Unit)? = null,
+    plainCardStyle: Boolean = false,
     header: (@Composable () -> Unit)? = null,
 ) {
     val listState = rememberLazyListState()
@@ -181,19 +183,32 @@ internal fun TvShelfFeed(
                     items = shelf.items,
                     key = { it.itemKey() },
                 ) { item ->
-                    TvCard(
-                        title = item.title,
-                        subtitle = item.subtitle,
-                        artworkUrl = item.thumbnailUrl,
-                        cardWidth = if (shelf.isMixedVideoAudioShelf() && item.isVideo) {
-                            163.dp * (16f / 9f)
-                        } else {
-                            163.dp
-                        },
-                        aspectRatio = if (item.isVideo) 16f / 9f else 1f,
-                        onClick = { onItem(item) },
-                        onLongClick = onItemMenu(item),
-                    )
+                    if (plainCardStyle) {
+                        val video = shelf.layout == ShelfLayout.VIDEO || item.isVideo
+                        TvLockup(
+                            title = item.title,
+                            subtitle = item.subtitle,
+                            artworkUrl = item.thumbnailUrl,
+                            width = if (video) 220.dp else 131.dp,
+                            aspectRatio = if (video) 16f / 9f else 1f,
+                            onClick = { onItem(item) },
+                            onLongClick = onItemMenu(item),
+                        )
+                    } else {
+                        TvCard(
+                            title = item.title,
+                            subtitle = item.subtitle,
+                            artworkUrl = item.thumbnailUrl,
+                            cardWidth = if (shelf.isMixedVideoAudioShelf() && item.isVideo) {
+                                163.dp * (16f / 9f)
+                            } else {
+                                163.dp
+                            },
+                            aspectRatio = if (item.isVideo) 16f / 9f else 1f,
+                            onClick = { onItem(item) },
+                            onLongClick = onItemMenu(item),
+                        )
+                    }
                 }
                 shelf.isArtistShelf() -> TvShelf(
                     title = localizedShelfTitle(shelf.title),
@@ -216,19 +231,32 @@ internal fun TvShelfFeed(
                     items = shelf.items,
                     key = { it.itemKey() },
                 ) { item ->
-                    TvCard(
-                        title = item.title,
-                        subtitle = item.subtitle,
-                        artworkUrl = item.thumbnailUrl,
-                        cardWidth = if (shelf.isMixedVideoAudioShelf() && item.isVideo) {
-                            163.dp * (16f / 9f)
-                        } else {
-                            163.dp
-                        },
-                        aspectRatio = if (item.isVideo) 16f / 9f else 1f,
-                        onClick = { onItem(item) },
-                        onLongClick = onItemMenu(item),
-                    )
+                    if (plainCardStyle) {
+                        val video = shelf.layout == ShelfLayout.VIDEO || item.isVideo
+                        TvLockup(
+                            title = item.title,
+                            subtitle = item.subtitle,
+                            artworkUrl = item.thumbnailUrl,
+                            width = if (video) 220.dp else 131.dp,
+                            aspectRatio = if (video) 16f / 9f else 1f,
+                            onClick = { onItem(item) },
+                            onLongClick = onItemMenu(item),
+                        )
+                    } else {
+                        TvCard(
+                            title = item.title,
+                            subtitle = item.subtitle,
+                            artworkUrl = item.thumbnailUrl,
+                            cardWidth = if (shelf.isMixedVideoAudioShelf() && item.isVideo) {
+                                163.dp * (16f / 9f)
+                            } else {
+                                163.dp
+                            },
+                            aspectRatio = if (item.isVideo) 16f / 9f else 1f,
+                            onClick = { onItem(item) },
+                            onLongClick = onItemMenu(item),
+                        )
+                    }
                 }
                 else -> TvShelf(
                     title = localizedShelfTitle(shelf.title),

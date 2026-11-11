@@ -64,7 +64,7 @@ fun ExploreScreen(
     modifier: Modifier = Modifier,
     showTitle: Boolean = true,
 ) {
-    val contentShelves = shelves.filter { it.items.isNotEmpty() && !it.isExploreExcluded() }
+    val contentShelves = shelves.exploreContentShelves()
     val categories = ExploreShelfCategory.entries
         .mapNotNull { category -> category to contentShelves.filter { it.exploreCategory() == category } }
         .filter { (_, matching) -> matching.isNotEmpty() }
@@ -415,7 +415,7 @@ private fun ExploreShelfCard(item: ShelfItem, video: Boolean, onClick: () -> Uni
     }
 }
 
-private enum class ExploreShelfCategory(val titleRes: Int) {
+enum class ExploreShelfCategory(val titleRes: Int) {
     MUSIC_VIDEOS(R.string.explore_music_videos),
     TRENDING(R.string.explore_trending),
     REMIXES(R.string.explore_remixes),
@@ -428,7 +428,7 @@ private enum class ExploreShelfCategory(val titleRes: Int) {
     GOOD_MORNING(R.string.explore_good_morning),
 }
 
-private fun HomeShelf.exploreCategory(): ExploreShelfCategory? {
+fun HomeShelf.exploreCategory(): ExploreShelfCategory? {
     val label = title.lowercase()
     return when {
         listOf("buen día", "buen dia", "good morning").any(label::contains) -> ExploreShelfCategory.GOOD_MORNING
@@ -445,7 +445,7 @@ private fun HomeShelf.exploreCategory(): ExploreShelfCategory? {
     }
 }
 
-private fun HomeShelf.isExploreExcluded(): Boolean {
+fun HomeShelf.isExploreExcluded(): Boolean {
     val label = title.trim().lowercase()
     return label in setOf(
         "recents", "recientes", "recently played", "recently played songs", "vuelve a escucharlo", "listen again",
@@ -454,7 +454,11 @@ private fun HomeShelf.isExploreExcluded(): Boolean {
     )
 }
 
-private fun HomeShelf.isReleaseShelf(): Boolean {
+fun HomeShelf.isReleaseShelf(): Boolean {
     val label = title.lowercase()
     return listOf("release", "álbum", "album", "single").any(label::contains)
 }
+
+/** Home-feed shelves that Explore is allowed to present, shared with TV layouts. */
+fun List<HomeShelf>.exploreContentShelves(): List<HomeShelf> =
+    filter { it.items.isNotEmpty() && !it.isExploreExcluded() }
