@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -607,7 +608,7 @@ internal fun AndroidMusicVideo(
             onRelease = { if (view === it) view = null },
             // The picture at its own shape: letterboxed into the bounds, or
             // overflowing them and cropped by the clip above.
-            modifier = Modifier.layout { measurable, constraints ->
+            modifier = Modifier.fillMaxSize().layout { measurable, constraints ->
                 val width = constraints.maxWidth
                 val height = if (constraints.hasBoundedHeight) {
                     constraints.maxHeight

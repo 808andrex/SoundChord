@@ -64,9 +64,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
@@ -98,6 +102,7 @@ import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.data.settings.TvPlayerStyle
 import com.music.bitchord.ui.player.ArtworkMeshBackdrop
 import com.music.bitchord.ui.player.CanvasArtworkPlayer
+import com.music.bitchord.ui.player.PlayerPlatform
 import com.music.bitchord.ui.player.SyncedLyricsPanel
 import com.music.bitchord.ui.player.rememberArtworkMesh
 import com.music.bitchord.ui.tv.components.TvActivityIndicator
@@ -174,12 +179,23 @@ internal fun TvNowPlayingStage(
     val underControls by animateFloatAsState(if (controlsVisible) 1f else 0f, tween(320), label = "lyricsFade")
     val canvasEnabled by AppSettings.animatedCanvas.collectAsState()
     var canvas by remember(song.videoId) { mutableStateOf<CanvasArtwork?>(null) }
-    LaunchedEffect(song.videoId, canvasEnabled) {
-        canvas = if (canvasEnabled) CanvasRepository.canvasFor(song) else null
+    var videoRendered by remember(song.videoId) { mutableStateOf(false) }
+    val canShowMusicVideo = song.isVideo && PlayerPlatform.host.musicVideoSupported
+    LaunchedEffect(song.videoId, canvasEnabled, song.isVideo) {
+        canvas = if (canvasEnabled && !song.isVideo) CanvasRepository.canvasFor(song) else null
     }
     val side by animateFloatAsState(if (showLyrics) 1f else 0f, tween(520), label = "artToSide")
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        if (canShowMusicVideo) {
+            PlayerPlatform.host.MusicVideo(
+                videoId = song.videoId,
+                fit = false,
+                onRenderedChanged = { videoRendered = it },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
         val centredSize = (maxHeight * 0.62f).coerceAtMost(320.dp)
         val sideSize = (maxHeight * 0.54f).coerceAtMost(272.dp)
         val sideStart = 51.dp
@@ -189,29 +205,39 @@ internal fun TvNowPlayingStage(
         val sideY = (maxHeight - sideSize) / 2 - lift
         val shape = RoundedCornerShape(11.dp)
 
-        Box(
-            modifier = Modifier
-                .offset(x = centredX, y = centredY)
-                .size(centredSize)
-                .graphicsLayer {
-                    val scale = lerp(1f, sideSize / centredSize, side)
-                    transformOrigin = TransformOrigin(0f, 0f)
-                    scaleX = scale
-                    scaleY = scale
-                    translationX = lerp(0f, (sideStart - centredX).toPx(), side)
-                    translationY = lerp(0f, (sideY - centredY).toPx(), side)
-                    shadowElevation = 29.dp.toPx()
-                    this.shape = shape
-                    clip = true
-                },
-        ) {
-            TvArtwork(url = song.thumbnailUrl, px = 720, shape = RectangleShape, modifier = Modifier.fillMaxSize())
-            canvas?.let { CanvasArtworkPlayer(canvas = it, isPlaying = isPlaying, modifier = Modifier.fillMaxSize()) }
+        if (!videoRendered) {
+            Box(
+                modifier = Modifier
+                    .offset(x = centredX, y = centredY)
+                    .size(centredSize)
+                    .graphicsLayer {
+                        val scale = lerp(1f, sideSize / centredSize, side)
+                        transformOrigin = TransformOrigin(0f, 0f)
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = lerp(0f, (sideStart - centredX).toPx(), side)
+                        translationY = lerp(0f, (sideY - centredY).toPx(), side)
+                        shadowElevation = 29.dp.toPx()
+                        this.shape = shape
+                        clip = true
+                    },
+            ) {
+                TvArtwork(url = song.thumbnailUrl, px = 720, shape = RectangleShape, modifier = Modifier.fillMaxSize())
+                if (!canShowMusicVideo) {
+                    canvas?.let { CanvasArtworkPlayer(canvas = it, isPlaying = isPlaying, modifier = Modifier.fillMaxSize()) }
+                }
+            }
         }
 
         // With the transport away, the song is named under the cover: the title and
         // artist the transport carries, riding the same glide to the side.
-        val captionShown by animateFloatAsState(if (controlsVisible) 0f else 1f, tween(320), label = "captionFade")
+        // Audio uses the artwork caption while controls are away. A video must
+        // stay unobstructed once its controls disappear.
+        val captionShown by animateFloatAsState(
+            if (song.isVideo || controlsVisible) 0f else 1f,
+            tween(320),
+            label = "captionFade",
+        )
         if (captionShown > 0f) {
             val captionGap = 14.dp
             val sideCaptionY = sideY + sideSize + captionGap
@@ -307,6 +333,33 @@ internal fun TvNowPlayingStage(
 
 private const val LYRIC_FONT_SCALE = 0.8f
 
+private val TvHdQualityIcon: ImageVector by lazy {
+    val white = SolidColor(Color.White)
+    ImageVector.Builder(
+        name = "tv_hd_quality",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        listOf(
+            "M10,12 H6",
+            "M10,15 V9",
+            "M14,14.5 a0.5,0.5 0,0,0 0.5,0.5 h1 a2.5,2.5 0,0,0 2.5,-2.5 v-1 a2.5,2.5 0,0,0 -2.5,-2.5 h-1 a0.5,0.5 0,0,0 -0.5,0.5 z",
+            "M6,15 V9",
+            "M2,5 h20 a2,2 0,0,1 2,2 v10 a2,2 0,0,1 -2,2 H2 a2,2 0,0,1 -2,-2 V7 a2,2 0,0,1 2,-2 z",
+        ).forEach { data ->
+            addPath(
+                pathData = PathParser().parsePathString(data).toNodes(),
+                stroke = white,
+                strokeLineWidth = 2f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            )
+        }
+    }.build()
+}
+
 private val TransportScrim = Brush.verticalGradient(
     0f to Color.Transparent,
     0.4f to Color.Black.copy(alpha = 0.38f),
@@ -335,6 +388,7 @@ internal fun TvTransport(
     onSelectOnScrubber: () -> Unit,
     onOpenUpNext: () -> Unit,
     onToggleLike: () -> Unit,
+    onOpenQuality: () -> Unit,
     onToggleLyrics: () -> Unit,
     onToggleUpNext: () -> Unit,
     onMore: () -> Unit,
@@ -366,18 +420,27 @@ internal fun TvTransport(
                 TvQualityLine(showStats = showStats, modifier = Modifier.padding(top = 6.dp))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                if (song.isVideo && PlayerPlatform.host.musicVideoSupported) {
+                    TvTransportButton(
+                        icon = TvHdQualityIcon,
+                        contentDescription = stringResource(R.string.tv_video_quality),
+                        onClick = onOpenQuality,
+                    )
+                }
                 TvTransportButton(
                     icon = if (isLiked) BitChordIcons.StarFilled else BitChordIcons.Star,
                     contentDescription = stringResource(if (isLiked) R.string.tv_unfavorite else R.string.tv_favorite),
                     onClick = onToggleLike,
                 )
-                TvTransportButton(
-                    icon = BitChordIcons.LyricsQuote,
-                    contentDescription = stringResource(R.string.tv_lyrics),
-                    active = lyricsOn,
-                    enabled = lyricsAvailable,
-                    onClick = onToggleLyrics,
-                )
+                if (!song.isVideo) {
+                    TvTransportButton(
+                        icon = BitChordIcons.LyricsQuote,
+                        contentDescription = stringResource(R.string.tv_lyrics),
+                        active = lyricsOn,
+                        enabled = lyricsAvailable,
+                        onClick = onToggleLyrics,
+                    )
+                }
                 TvTransportButton(
                     icon = BitChordIcons.Queue,
                     contentDescription = stringResource(R.string.tv_up_next),

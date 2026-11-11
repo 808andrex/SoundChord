@@ -11,8 +11,16 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,6 +36,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -38,10 +48,16 @@ import com.music.bitchord.data.LikeState
 import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.TvSettings
+import com.music.bitchord.R
 import com.music.bitchord.playback.PlayerState
 import com.music.bitchord.playback.toggleAutoplay
 import com.music.bitchord.playback.toggleShuffle
 import com.music.bitchord.ui.MainViewModel
+import com.music.bitchord.ui.player.MusicVideoEngine
+import com.music.bitchord.ui.player.PlayerPlatform
+import com.music.bitchord.ui.tv.components.TvDialog
+import com.music.bitchord.ui.tv.components.TvListRow
+import com.music.bitchord.ui.tv.components.tvInitialFocus
 import com.music.bitchord.ui.tv.dialogs.TvSongActionMenuDialog
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -56,7 +72,7 @@ private const val ScrubStepMs = 10_000L
 /** How long the scrubber waits for more presses before it actually seeks. */
 private const val ScrubCommitDelayMs = 650L
 
-private enum class PlayerSheet { Menu }
+private enum class PlayerSheet { Menu, Quality }
 
 /**
  * Now Playing, as Apple Music has it on Apple TV.
@@ -88,6 +104,14 @@ fun TvNowPlayingScreen(
     val scope = rememberCoroutineScope()
     val isPlaying = playerState.isPlaying
 
+    // The shared Android video surface follows this MediaController's clock.
+    // MainActivity already attaches its own controller; TvActivity needs the
+    // same connection for the silent video decoder to know which item to load.
+    DisposableEffect(mediaController) {
+        MusicVideoEngine.attach(mediaController)
+        onDispose { MusicVideoEngine.attach(null) }
+    }
+
     // Keep the TV awake (no screensaver) while a song plays on this screen.
     val view = androidx.compose.ui.platform.LocalView.current
     androidx.compose.runtime.DisposableEffect(isPlaying) {
@@ -117,7 +141,9 @@ fun TvNowPlayingScreen(
 
     var lyricsHidden by rememberSaveable { mutableStateOf(false) }
     val hasLyrics = !lyrics.isNullOrEmpty()
-    val showLyrics = hasLyrics && !lyricsHidden
+    // Music videos are a clean video surface on TV; synced lyrics belong to
+    // audio playback and must never draw over the video.
+    val showLyrics = !song.isVideo && hasLyrics && !lyricsHidden
 
     var controlsVisible by remember { mutableStateOf(true) }
     var upNextOpen by remember { mutableStateOf(false) }
@@ -249,7 +275,7 @@ fun TvNowPlayingScreen(
             position = position,
             lyrics = lyrics.orEmpty(),
             showLyrics = showLyrics,
-            lyricsLoading = !lyricsChecked && lyrics == null && !lyricsHidden,
+            lyricsLoading = !song.isVideo && !lyricsChecked && lyrics == null && !lyricsHidden,
             controlsVisible = controlsVisible,
             onSeek = { mediaController?.seekTo(it) },
             modifier = Modifier.graphicsLayer { alpha = dim },
@@ -269,7 +295,7 @@ fun TvNowPlayingScreen(
                 durationMs = durationMs,
                 scrubTarget = scrubTarget,
                 isLiked = isLiked,
-                lyricsAvailable = hasLyrics,
+                lyricsAvailable = !song.isVideo && hasLyrics,
                 lyricsOn = showLyrics,
                 upNextOpen = upNextOpen,
                 scrubberFocus = scrubberFocus,
@@ -279,6 +305,7 @@ fun TvNowPlayingScreen(
                 },
                 onOpenUpNext = { upNextOpen = true },
                 onToggleLike = { viewModel.toggleLike(song.videoId) },
+                onOpenQuality = { sheet = PlayerSheet.Quality },
                 onToggleLyrics = { lyricsHidden = !lyricsHidden },
                 onToggleUpNext = { upNextOpen = !upNextOpen },
                 onMore = { sheet = PlayerSheet.Menu },
@@ -312,11 +339,13 @@ fun TvNowPlayingScreen(
             )
         }
 
-        TvFlashGlyph(
-            flash = flash,
-            tick = flashTick,
-            modifier = Modifier.align(Alignment.Center),
-        )
+        if (!song.isVideo) {
+            TvFlashGlyph(
+                flash = flash,
+                tick = flashTick,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
     }
 
     when (sheet) {
@@ -328,6 +357,68 @@ fun TvNowPlayingScreen(
             onToggleLike = { viewModel.toggleLike(song.videoId) },
             onDismiss = { sheet = null },
         )
+        PlayerSheet.Quality -> TvVideoQualityDialog(
+            onDismiss = { sheet = null },
+        )
         null -> Unit
+    }
+}
+
+@Composable
+private fun TvVideoQualityDialog(onDismiss: () -> Unit) {
+    val host = PlayerPlatform.host
+    val videoQuality by host.musicVideoQuality.collectAsState()
+
+    TvDialog(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.tv_video_quality),
+        width = 512.dp,
+    ) {
+        LazyColumn(
+            modifier = Modifier.heightIn(max = 470.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            item {
+                TvListRow(
+                    title = stringResource(R.string.tv_quality_auto),
+                    value = videoQuality.activeHeight?.let { stringResource(R.string.tv_quality_resolution, it) },
+                    trailingIcon = if (videoQuality.held == null) Icons.Rounded.Check else null,
+                    modifier = Modifier.tvInitialFocus(),
+                    onClick = {
+                        host.setMusicVideoQuality(null)
+                        onDismiss()
+                    },
+                )
+            }
+            if (videoQuality.heights.isEmpty()) {
+                item {
+                    Text(
+                        text = stringResource(R.string.tv_quality_loading),
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    )
+                }
+            } else {
+                items(videoQuality.heights.distinct().sortedDescending(), key = { "video:$it" }) { height ->
+                    val resolution = stringResource(R.string.tv_quality_resolution, height)
+                    val label = when {
+                        height >= 4320 -> stringResource(R.string.tv_quality_8k)
+                        height >= 2160 -> stringResource(R.string.tv_quality_4k)
+                        height >= 1440 -> stringResource(R.string.tv_quality_2k)
+                        height >= 1080 -> stringResource(R.string.tv_quality_full_hd)
+                        height >= 720 -> stringResource(R.string.tv_quality_hd)
+                        else -> resolution
+                    }
+                    TvListRow(
+                        title = label,
+                        value = resolution.takeIf { label != it },
+                        trailingIcon = if (videoQuality.held == height) Icons.Rounded.Check else null,
+                        onClick = {
+                            host.setMusicVideoQuality(height)
+                            onDismiss()
+                        },
+                    )
+                }
+            }
+        }
     }
 }

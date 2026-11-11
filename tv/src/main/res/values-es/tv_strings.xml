@@ -96,6 +96,15 @@
     <string name="tv_not_playing_message">Elige algo para escuchar.</string>
     <string name="tv_browse_music">Explorar música</string>
     <string name="tv_lyrics">Letras</string>
+    <string name="tv_video_quality">Calidad de video</string>
+    <string name="tv_quality_auto">Automática</string>
+    <string name="tv_quality_loading">Buscando calidades de video disponibles…</string>
+    <string name="tv_quality_resolution">%1$dp</string>
+    <string name="tv_quality_8k">8K</string>
+    <string name="tv_quality_4k">4K</string>
+    <string name="tv_quality_2k">2K</string>
+    <string name="tv_quality_full_hd">Full HD</string>
+    <string name="tv_quality_hd">HD</string>
     <string name="tv_up_next">A continuación</string>
     <string name="tv_up_next_autoplay_empty">Al terminar esta canción, sonará música similar.</string>
     <string name="tv_up_next_empty">No hay nada en cola después de esta canción.</string>
