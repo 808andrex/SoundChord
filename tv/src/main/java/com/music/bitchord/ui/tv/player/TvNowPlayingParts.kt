@@ -432,7 +432,14 @@ internal fun TvTransport(
                 }
                 TvTransportButton(
                     icon = if (isLiked) BitChordIcons.StarFilled else BitChordIcons.Star,
-                    contentDescription = stringResource(if (isLiked) R.string.tv_unfavorite else R.string.tv_favorite),
+                    contentDescription = stringResource(
+                        when {
+                            isRadio && isLiked -> com.soundchord.features.R.string.radio_remove_favorite
+                            isRadio -> com.soundchord.features.R.string.radio_add_favorite
+                            isLiked -> R.string.tv_unfavorite
+                            else -> R.string.tv_favorite
+                        },
+                    ),
                     onClick = onToggleLike,
                 )
                 if (!song.isVideo && !isRadio) {

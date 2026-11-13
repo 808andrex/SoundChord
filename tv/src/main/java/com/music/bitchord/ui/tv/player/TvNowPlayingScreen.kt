@@ -33,6 +33,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
@@ -44,6 +45,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.lifecycle.viewmodel.compose.viewModel as composeViewModel
 import com.music.bitchord.data.LikeState
 import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.data.settings.AppSettings
@@ -59,6 +61,8 @@ import com.music.bitchord.ui.tv.components.TvDialog
 import com.music.bitchord.ui.tv.components.TvListRow
 import com.music.bitchord.ui.tv.components.tvInitialFocus
 import com.music.bitchord.ui.tv.dialogs.TvSongActionMenuDialog
+import com.soundchord.features.radio.data.RadioStation
+import com.soundchord.features.radio.ui.RadioViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -121,11 +125,38 @@ fun TvNowPlayingScreen(
     val position = playerState.position
     val durationMs = playerState.durationMs
 
+    val context = LocalContext.current
+    val radioViewModel: RadioViewModel = composeViewModel(
+        factory = remember(context) { RadioViewModel.Factory(context) },
+    )
+    val favoriteStations by radioViewModel.favoriteStations.collectAsState()
+    val currentlyPlayingStation by radioViewModel.currentlyPlayingStation.collectAsState()
+
     val lyrics by viewModel.lyrics.collectAsState()
     val lyricsChecked by viewModel.lyricsChecked.collectAsState()
     val isRadio = song.isLiveRadioStream || song.playbackSourceId?.startsWith("radio:") == true
+    val radioStation = remember(song.videoId, song.title, song.artist, song.thumbnailUrl, song.albumName, song.playbackSourceId, currentlyPlayingStation, favoriteStations) {
+        val stationUuid = song.playbackSourceId
+            ?.takeIf { it.startsWith("radio:") }
+            ?.removePrefix("radio:")
+            ?.takeIf(String::isNotBlank)
+        stationUuid?.let { uuid ->
+            currentlyPlayingStation?.takeIf { it.uuid == uuid }
+                ?: favoriteStations.firstOrNull { it.uuid == uuid }
+                ?: RadioStation(
+                    uuid = uuid,
+                    name = song.radioName?.takeIf(String::isNotBlank) ?: song.title,
+                    streamUrl = song.videoId,
+                    favicon = song.thumbnailUrl,
+                    country = song.artist,
+                    codec = song.albumName,
+                )
+        }
+    }
     val likeOverrides by LikeState.overrides.collectAsState()
-    val isLiked = likeOverrides[song.videoId] == LikeStatus.LIKE
+    val isLiked = if (isRadio) {
+        radioStation?.let { station -> favoriteStations.any { it.uuid == station.uuid } } == true
+    } else likeOverrides[song.videoId] == LikeStatus.LIKE
     val shuffle by com.music.bitchord.playback.QueueShuffle.enabled.collectAsState()
     val autoplay by AppSettings.autoplay.collectAsState()
     val playerStyle by TvSettings.tvPlayerStyle.collectAsState()
@@ -309,7 +340,10 @@ fun TvNowPlayingScreen(
                     if (scrubTarget != null) commitScrub() else togglePlay()
                 },
                 onOpenUpNext = { upNextOpen = true },
-                onToggleLike = { viewModel.toggleLike(song.videoId) },
+                onToggleLike = {
+                    if (isRadio) radioStation?.let(radioViewModel::toggleFavorite)
+                    else viewModel.toggleLike(song.videoId)
+                },
                 onOpenQuality = { sheet = PlayerSheet.Quality },
                 onToggleLyrics = { lyricsHidden = !lyricsHidden },
                 onToggleUpNext = { upNextOpen = !upNextOpen },
