@@ -64,6 +64,7 @@ import com.music.bitchord.data.settings.TvSettings
 import com.music.bitchord.playback.PlayerState
 import com.music.bitchord.ui.MainViewModel
 import com.music.bitchord.ui.tv.components.LocalTvChrome
+import com.music.bitchord.ui.tv.components.LocalTvTabBarHasFocus
 import com.music.bitchord.ui.tv.components.TvArtwork
 import com.music.bitchord.ui.tv.components.TvChrome
 import com.music.bitchord.ui.tv.components.TvTabIcon
@@ -413,7 +414,10 @@ private fun TvMainShell(
     val barVisible = !chrome.contentScrolled || barHasFocus
     val barProgress by animateFloatAsState(if (barVisible) 1f else 0f, tween(260), label = "barProgress")
 
-    CompositionLocalProvider(LocalTvChrome provides chrome) {
+    CompositionLocalProvider(
+        LocalTvChrome provides chrome,
+        LocalTvTabBarHasFocus provides barHasFocus,
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()

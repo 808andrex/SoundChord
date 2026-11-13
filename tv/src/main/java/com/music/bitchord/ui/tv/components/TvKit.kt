@@ -183,7 +183,7 @@ fun Modifier.tvPlatter(
 /** Puts focus here once, when this first enters composition. */
 @Composable
 fun Modifier.tvInitialFocus(enabled: Boolean = true): Modifier {
-    if (!enabled) return this
+    if (!enabled || LocalTvTabBarHasFocus.current) return this
     val requester = remember { FocusRequester() }
     LaunchedEffect(requester) { runCatching { requester.requestFocus() } }
     return focusRequester(requester)
@@ -213,6 +213,9 @@ class TvChrome {
 }
 
 val LocalTvChrome = staticCompositionLocalOf { TvChrome() }
+
+/** Prevent newly selected tab content from taking focus away from the tab bar. */
+val LocalTvTabBarHasFocus = staticCompositionLocalOf { false }
 
 @Composable
 fun TvChromeScrollEffect(state: LazyListState) {
