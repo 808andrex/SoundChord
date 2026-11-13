@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -62,7 +61,6 @@ import com.music.bitchord.ui.tv.components.TvShelf
 import com.music.bitchord.ui.tv.components.TvShelfTitle
 import com.music.bitchord.ui.tv.components.TvSongRow
 import com.music.bitchord.ui.tv.components.TvTextField
-import com.music.bitchord.ui.tv.components.tvInitialFocus
 import com.music.bitchord.ui.tv.dialogs.TvSongMenu
 import com.music.bitchord.ui.tv.theme.TvDimensions
 import com.soundchord.features.radio.playback.toSong
@@ -116,7 +114,7 @@ fun TvSearchScreen(
     TvChromeScrollEffect(listState)
 
     LaunchedEffect(searchSource, query) {
-        if (searchSource == SearchSource.RADIO) radioViewModel.onSearchQueryChanged(query)
+        if (searchSource == SearchSource.RADIO) radioViewModel.searchAllStations(query.trim())
     }
 
     val playSong: (Song) -> Unit = { song ->
@@ -197,7 +195,11 @@ fun TvSearchScreen(
                     imeAction = ImeAction.Search,
                     onImeAction = {
                         keyboard?.hide()
-                        viewModel.submitSearch()
+                        if (searchSource == SearchSource.RADIO) {
+                            radioViewModel.searchAllStations(query, submit = true)
+                        } else {
+                            viewModel.submitSearch()
+                        }
                     },
                     modifier = Modifier.widthIn(max = 576.dp),
                 )

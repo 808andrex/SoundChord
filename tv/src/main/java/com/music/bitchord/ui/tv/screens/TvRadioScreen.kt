@@ -22,13 +22,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -116,6 +117,7 @@ fun TvRadioScreen(
     )
     val stationsState by vm.uiState.collectAsState()
     val favorites by vm.favoriteStations.collectAsState()
+    val favoriteUuids = remember(favorites) { favorites.mapTo(hashSetOf()) { it.uuid } }
     val genres by vm.popularGenres.collectAsState()
     val nearby by vm.nearbyStations.collectAsState()
     val nearbyState by vm.nearbyStationsState.collectAsState()
@@ -201,6 +203,12 @@ fun TvRadioScreen(
 
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     TvChromeScrollEffect(listState)
+    var favoritesWereVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(favorites.isNotEmpty()) {
+        val favoritesVisible = favorites.isNotEmpty()
+        if (favoritesVisible && !favoritesWereVisible) listState.scrollToItem(0)
+        favoritesWereVisible = favoritesVisible
+    }
     LaunchedEffect(selectedCategoryTitle) {
         if (selectedCategoryTitle != null) listState.scrollToItem(0)
     }
@@ -239,7 +247,7 @@ fun TvRadioScreen(
                 } else items(visibleStations, key = { "radio_category_${it.uuid}" }) { station ->
                     TvRadioStationListRow(
                         station = station,
-                        isFavorite = vm.isFavorite(station.uuid),
+                        isFavorite = station.uuid in favoriteUuids,
                         onFavorite = { vm.toggleFavorite(station) },
                         onPlay = { playStation(station) },
                         modifier = Modifier.padding(horizontal = TvDimensions.SafeMarginHorizontal),
@@ -252,7 +260,7 @@ fun TvRadioScreen(
                 item(key = "radio_favorites") {
                     RadioStationShelf(
                         favoritesLabel, favorites, playing?.uuid, playStation,
-                        favoriteUuids = favorites.mapTo(hashSetOf()) { it.uuid },
+                        favoriteUuids = favoriteUuids,
                         onFavorite = vm::toggleFavorite,
                     )
                 }
@@ -298,7 +306,7 @@ fun TvRadioScreen(
                             playing?.uuid,
                             playStation,
                             initialFocus = (personalStations as? RecentStationsState.Success)?.songs.isNullOrEmpty(),
-                            favoriteUuids = favorites.mapTo(hashSetOf()) { it.uuid },
+                            favoriteUuids = favoriteUuids,
                             onFavorite = vm::toggleFavorite,
                         )
                     } else {
@@ -346,7 +354,7 @@ fun TvRadioScreen(
                             stations = visibleStations,
                             playingUuid = playing?.uuid,
                             onPlay = playStation,
-                            favoriteUuids = favorites.mapTo(hashSetOf()) { it.uuid },
+                            favoriteUuids = favoriteUuids,
                             onFavorite = vm::toggleFavorite,
                         )
                     }
@@ -403,16 +411,24 @@ private fun RadioStationShelf(
             modifier = Modifier.tvInitialFocus(initialFocus && station == stations.firstOrNull()),
             overlay = {
                 if (station.uuid == playingUuid) {
-                    Text(stringResource(com.soundchord.features.R.string.radio_live), modifier = Modifier.align(Alignment.TopStart).padding(8.dp), color = androidx.compose.ui.graphics.Color.White)
+                    Text(
+                        text = stringResource(com.soundchord.features.R.string.radio_live),
+                        modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                            .clip(RoundedCornerShape(50.dp))
+                            .background(Color(0xFFE53935))
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        style = TvType.Caption.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
+                        color = Color.White,
+                    )
                 }
-                IconButton(
+                RadioFavoriteButton(
                     onClick = { onFavorite(station) },
                     modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
                 ) {
                     Icon(
                         imageVector = if (station.uuid in favoriteUuids) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                         contentDescription = stringResource(if (station.uuid in favoriteUuids) com.soundchord.features.R.string.radio_remove_favorite else com.soundchord.features.R.string.radio_add_favorite),
-                        tint = if (station.uuid in favoriteUuids) Color(0xFFFFD54F) else Color.White,
+                        tint = if (station.uuid in favoriteUuids) Color(0xFFFFD54F) else if (it) TvGlass.OnPlatter else Color.White,
                     )
                 }
             },
@@ -450,13 +466,42 @@ internal fun TvRadioStationListRow(
             modifier = Modifier.weight(1f).tvInitialFocus(initialFocus),
             onClick = onPlay,
         )
-        IconButton(onClick = onFavorite) {
+        RadioFavoriteButton(
+            onClick = onFavorite,
+            modifier = Modifier.padding(start = 3.dp),
+        ) {
             Icon(
                 imageVector = if (isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                 contentDescription = stringResource(if (isFavorite) com.soundchord.features.R.string.radio_remove_favorite else com.soundchord.features.R.string.radio_add_favorite),
-                tint = if (isFavorite) Color(0xFFFFD54F) else TvGlass.TextSecondary,
+                tint = if (it && isFavorite) Color(0xFFE0A800) else if (it) TvGlass.OnPlatter else if (isFavorite) Color(0xFFFFD54F) else TvGlass.TextSecondary,
             )
         }
+    }
+}
+
+@Composable
+private fun RadioFavoriteButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable (isFocused: Boolean) -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    Box(
+        modifier = modifier
+            .size(44.dp)
+            .tvLift(interaction, CircleShape, focusedScale = 1.14f, elevation = 9.dp)
+            .clip(CircleShape)
+            .background(if (focused) Color.White else Color.Transparent)
+            .border(
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) Color(0xFFFFD54F) else Color.White.copy(alpha = 0.34f),
+                shape = CircleShape,
+            )
+            .tvClick(interaction, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        content(focused)
     }
 }
 
