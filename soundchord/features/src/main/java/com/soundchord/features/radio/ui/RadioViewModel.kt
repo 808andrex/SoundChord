@@ -147,6 +147,17 @@ class RadioViewModel(
         _searchQuery.value = query
     }
 
+    /** Search Radio Browser across all stations, independent of prior category filters. */
+    fun searchAllStations(query: String, submit: Boolean = false) {
+        _showFavorites.value = false
+        _countryCode.value = null
+        _genre.value = null
+        _language.value = null
+        val trimmedQuery = query.trim()
+        _searchQuery.value = trimmedQuery
+        if (submit) loadStations(trimmedQuery, null, null, null)
+    }
+
     private fun loadPopularGenres() {
         viewModelScope.launch {
             runCatching { repository.getPopularTags(limit = 30) }
