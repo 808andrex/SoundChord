@@ -1329,7 +1329,14 @@ object InnertubeParser {
             val foundId = found.s("videoId") ?: return@forEach
             if (foundId in dropped) return@forEach
             val song = panelSong(replacements[foundId] ?: found) ?: return@forEach
-            out[song.videoId] = song
+            // When a paired row was explicitly replaced with its non-ATV
+            // counterpart for a video-origin station, the row type is already
+            // authoritative even when the renderer omits its view-count byline.
+            out[song.videoId] = if (preferVideo && replacements.containsKey(foundId)) {
+                song.copy(isVideo = true, isVideoOrigin = true)
+            } else {
+                song
+            }
         }
         return out.values.toList()
     }

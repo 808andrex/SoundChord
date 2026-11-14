@@ -40,7 +40,8 @@ object CanvasCache {
      */
     private const val CACHE_LIMIT_BYTES = 150L * 1024 * 1024
 
-    private lateinit var cache: SimpleCache
+    @Volatile
+    private var cache: SimpleCache? = null
 
     /** Opened once per process, alongside [com.music.bitchord.playback.AudioCache.init]. */
     fun init(context: Context) {
@@ -59,8 +60,10 @@ object CanvasCache {
      * choice [com.music.bitchord.playback.AudioCache] makes for audio.
      */
     fun dataSourceFactory(upstream: DataSource.Factory): DataSource.Factory =
-        CacheDataSource.Factory()
-            .setCache(cache)
-            .setUpstreamDataSourceFactory(upstream)
-            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        cache?.let { readyCache ->
+            CacheDataSource.Factory()
+                .setCache(readyCache)
+                .setUpstreamDataSourceFactory(upstream)
+                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        } ?: upstream
 }

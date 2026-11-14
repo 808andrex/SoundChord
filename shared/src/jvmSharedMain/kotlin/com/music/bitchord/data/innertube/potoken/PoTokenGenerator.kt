@@ -5,10 +5,12 @@ import com.metrolist.innertubex.extraction.TokenProviderCapabilities
 import com.metrolist.innertubex.extraction.strategy.PoTokenProviderKind
 import com.music.bitchord.data.TrackLog
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * One loaded BotGuard: a browser page that has run the challenge, holds an
@@ -54,8 +56,19 @@ class PoTokenGenerator(
     private var webPoTokenSessionId: String? = null
     private var webPoTokenStreamingPot: String? = null
     private var webPoTokenGenerator: PoTokenMinter? = null
+    private data class CachedPoTokens(
+        val playerRequest: String,
+        val streamingData: String,
+        val expiresAtMs: Long,
+    )
+    private val cachedVideoTokens = ConcurrentHashMap<String, CachedPoTokens>()
+    private val pendingVideoTokens = ConcurrentHashMap<String, CompletableDeferred<PoTokenResult?>>()
 
     suspend fun getWebClientPoToken(videoId: String, sessionId: String): PoTokenResult? {
+        val key = "$sessionId\u0000$videoId"
+        cachedVideoTokens[key]?.takeIf { it.expiresAtMs > System.currentTimeMillis() }?.let {
+            return PoTokenResult(playerRequestPoToken = it.playerRequest, streamingDataPoToken = it.streamingData)
+        }
         val supported = available()
         TrackLog.d(TAG, "WebView state: supported=$supported, badImpl=$webViewBadImpl")
         if (!supported || webViewBadImpl) {
@@ -64,7 +77,7 @@ class PoTokenGenerator(
         }
         return try {
             withTimeout(POTOKEN_TIMEOUT_MS) {
-                getWebClientPoToken(videoId, sessionId, forceRecreate = false)
+                cachedOrMintVideoToken(key, videoId, sessionId)
             }
         } catch (e: TimeoutCancellationException) {
             TrackLog.w(TAG, "poToken generation timed out after ${POTOKEN_TIMEOUT_MS}ms; proceeding without PoToken")
@@ -84,6 +97,40 @@ class PoTokenGenerator(
 
     suspend fun close() {
         clearGenerator()
+        cachedVideoTokens.clear()
+    }
+
+    private suspend fun cachedOrMintVideoToken(
+        key: String,
+        videoId: String,
+        sessionId: String,
+    ): PoTokenResult? {
+        cachedVideoTokens[key]?.takeIf { it.expiresAtMs > System.currentTimeMillis() }?.let {
+            return PoTokenResult(playerRequestPoToken = it.playerRequest, streamingDataPoToken = it.streamingData)
+        }
+        val created = CompletableDeferred<PoTokenResult?>()
+        val pending = pendingVideoTokens.putIfAbsent(key, created)
+        if (pending != null) return pending.await()
+        try {
+            val tokens = getWebClientPoToken(videoId, sessionId, forceRecreate = false)
+            cachedVideoTokens[key] = CachedPoTokens(
+                playerRequest = tokens.playerRequestPoToken,
+                streamingData = tokens.streamingDataPoToken,
+                expiresAtMs = System.currentTimeMillis() + VIDEO_TOKEN_TTL_MS,
+            )
+            if (cachedVideoTokens.size > MAX_CACHED_VIDEO_TOKENS) {
+                val now = System.currentTimeMillis()
+                cachedVideoTokens.entries.removeAll { it.value.expiresAtMs <= now }
+                if (cachedVideoTokens.size > MAX_CACHED_VIDEO_TOKENS) cachedVideoTokens.clear()
+            }
+            created.complete(tokens)
+            return tokens
+        } catch (error: Throwable) {
+            created.completeExceptionally(error)
+            throw error
+        } finally {
+            pendingVideoTokens.remove(key, created)
+        }
     }
 
     private suspend fun clearGenerator() {
@@ -101,6 +148,8 @@ class PoTokenGenerator(
 
     private companion object {
         const val POTOKEN_TIMEOUT_MS = 8_000L
+        const val VIDEO_TOKEN_TTL_MS = 45 * 60 * 1000L
+        const val MAX_CACHED_VIDEO_TOKENS = 256
     }
 
     private suspend fun getWebClientPoToken(videoId: String, sessionId: String, forceRecreate: Boolean): PoTokenResult {

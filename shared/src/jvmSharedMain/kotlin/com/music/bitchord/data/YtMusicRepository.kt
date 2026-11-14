@@ -137,6 +137,7 @@ object YtMusicRepository {
                     thumbnailUrl = it.thumbnailUrl,
                     videoId = it.videoId,
                     browseId = null,
+                    isVideo = it.isVideo,
                 )
             },
         )
@@ -218,6 +219,8 @@ object YtMusicRepository {
                     title = item.title,
                     artist = InnertubeParser.artistFromSubtitle(item.subtitle),
                     thumbnailUrl = item.thumbnailUrl,
+                    isVideo = item.isVideo,
+                    isVideoOrigin = item.isVideo,
                 )
             }
         }.orEmpty()
@@ -240,6 +243,8 @@ object YtMusicRepository {
                         title = item.title,
                         artist = InnertubeParser.artistFromSubtitle(item.subtitle),
                         thumbnailUrl = item.thumbnailUrl,
+                        isVideo = item.isVideo,
+                        isVideoOrigin = item.isVideo,
                     )
                 }
             }
@@ -256,6 +261,8 @@ object YtMusicRepository {
                         title = item.title,
                         artist = InnertubeParser.artistFromSubtitle(item.subtitle),
                         thumbnailUrl = item.thumbnailUrl,
+                        isVideo = item.isVideo,
+                        isVideoOrigin = item.isVideo,
                     )
                 }
             }
@@ -274,6 +281,8 @@ object YtMusicRepository {
                         title = item.title,
                         artist = InnertubeParser.artistFromSubtitle(item.subtitle),
                         thumbnailUrl = item.thumbnailUrl,
+                        isVideo = item.isVideo,
+                        isVideoOrigin = item.isVideo,
                     )
                 }
             }
@@ -463,7 +472,11 @@ object YtMusicRepository {
      * This is the inverse of [resolveAudio] - it finds the music video
      * for a catalogue track. Returns null when no video version is found.
      */
-    suspend fun resolveVideo(song: Song): Song? {
+    suspend fun resolveVideo(song: Song): Song? = withContext(Dispatchers.IO) {
+        resolveVideoOnIo(song)
+    }
+
+    private suspend fun resolveVideoOnIo(song: Song): Song? {
         if (song.isVideo) return null
         videoVersionCache[song.videoId]?.let { return it }
         officialVersion(song, wantAudio = false)?.let { video ->
@@ -471,12 +484,19 @@ object YtMusicRepository {
             return video
         }
         val target = TrackMatcher.targetOf(song)
-        for (query in TrackMatcher.queries(target)) {
-            val candidates = search(query, SearchFilter.VIDEOS)
-                .getOrNull()
-                ?.filterIsInstance<SearchResult.Track>()
-                ?.map { it.song }
-                .orEmpty()
+        val queries = TrackMatcher.queries(target)
+        val searchResults = coroutineScope {
+            queries.map { query ->
+                async(Dispatchers.IO) {
+                    query to search(query, SearchFilter.VIDEOS)
+                        .getOrNull()
+                        ?.filterIsInstance<SearchResult.Track>()
+                        ?.map { it.song }
+                        .orEmpty()
+                }
+            }.awaitAll()
+        }
+        for ((query, candidates) in searchResults) {
             TrackMatcher.best(candidates, target)?.let { match ->
                 Log.d(TAG, "video switch: '${song.title}' -> '${match.title}' ($query)")
                 videoVersionCache[song.videoId] = match

@@ -31,8 +31,10 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.metrolist.innertubex.extraction.StreamResolveException
 import com.music.bitchord.data.Http
 import com.music.bitchord.data.TrackLog
@@ -43,9 +45,12 @@ import com.music.bitchord.playback.ChunkedDataSource
 import com.music.bitchord.playback.toSong
 import com.music.bitchord.ui.rememberIsForeground
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -56,6 +61,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * A music video's picture, the way the web player's videoDeck plays one: a
@@ -89,24 +95,30 @@ object MusicVideoEngine {
     private const val RELEASE_GRACE_MS = 4_000L
 
     /** Bounded ranges, for the same reason as the audio — see [ChunkedDataSource]. */
-    private const val CHUNK_BYTES = 1L * 1024 * 1024
+    private const val CHUNK_BYTES = 256L * 1024
 
     /** A googlevideo URL lives about six hours; a resolved stream is reused well inside that. */
     private const val STREAM_TTL_MS = 60 * 60 * 1000L
 
     private val scope = MainScope()
+    private val resolutionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val resolving = ConcurrentHashMap<String, CompletableDeferred<InnerTubeXResolver.VideoStream?>>()
+    private var appContext: Context? = null
 
     private var controller: Player? = null
     private var player: ExoPlayer? = null
+    private var trackSelector: DefaultTrackSelector? = null
     private class Surface(val view: TextureView, val priority: Int)
 
     private val surfaces = ArrayList<Surface>()
+    private var attachedSurface: TextureView? = null
 
     /** The surface in front: the highest priority, the latest of equals. */
     private fun top(): TextureView? = surfaces.lastOrNull { s -> surfaces.none { it.priority > s.priority } }?.view
 
     /** The video loaded (or loading) into [player]. */
     private var loadedId: String? = null
+    private var activeStreamUrl: String? = null
     private var loadJob: Job? = null
     private var syncJob: Job? = null
     private var releaseJob: Job? = null
@@ -117,7 +129,7 @@ object MusicVideoEngine {
     private var seekLeadMs = 250L
 
     /** Resolved streams by video: the stream, the height it was asked at, and when. */
-    private val streams = LinkedHashMap<String, Triple<InnerTubeXResolver.VideoStream, Int, Long>>()
+    private val streams = ConcurrentHashMap<String, Triple<InnerTubeXResolver.VideoStream, Int, Long>>()
 
     /**
      * Tracks with no picture to show, so a track change back to one doesn't ask
@@ -126,7 +138,7 @@ object MusicVideoEngine {
     private val noPicture = HashSet<String>()
 
     /** Videos the age gate stopped, asked as age-restricted from the start. */
-    private val ageGated = HashSet<String>()
+    private val ageGated = ConcurrentHashMap.newKeySet<String>()
 
     /** Clients whose picture googlevideo refused mid-playback, by video. */
     private val refused = HashMap<String, MutableSet<String>>()
@@ -200,8 +212,13 @@ object MusicVideoEngine {
 
     private val playerListener = object : Player.Listener {
         override fun onRenderedFirstFrame() {
-            _frameOn.value = top()
-            _shownVideoId.value = loadedId
+            val id = loadedId ?: return
+            val url = activeStreamUrl ?: return
+            val renderedUrl = player?.currentMediaItem?.localConfiguration?.uri?.toString() ?: return
+            val surface = top() ?: return
+            if (renderedUrl != url || attachedSurface !== surface) return
+            _frameOn.value = surface
+            _shownVideoId.value = id
         }
 
         override fun onVideoSizeChanged(videoSize: VideoSize) {
@@ -257,6 +274,29 @@ object MusicVideoEngine {
         refresh()
     }
 
+    /** Stops the current video load before the now-playing surface navigates away. */
+    fun deactivate() {
+        releaseJob?.cancel()
+        releaseJob = null
+        unload()
+    }
+
+    /** Resolves a future video stream into cache without touching the active player. */
+    fun prefetch(videoId: String) {
+        val cap = capFor(videoId)
+        if (cachedStream(videoId, cap) != null) return
+        resolutionScope.launch {
+            try {
+                (appContext as? com.music.bitchord.BitChordApplication)?.awaitInnerTube()
+                resolve(videoId, cap)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                TrackLog.d(TAG, "video prefetch skipped: ${error.message}", about = videoId)
+            }
+        }
+    }
+
     /**
      * Puts the picture on [view] until the returned release is called, unless
      * a surface of higher [priority] holds it — the full player's outranks the
@@ -276,7 +316,7 @@ object MusicVideoEngine {
         val exo = ensurePlayer(app)
         if (top() === view) {
             _frameOn.value = null
-            exo.setVideoTextureView(view)
+            bindTopSurface()
             repaint()
         }
         refresh()
@@ -286,11 +326,10 @@ object MusicVideoEngine {
             if (!wasTop) return@release
             if (_frameOn.value === view) _frameOn.value = null
             val next = top()
+            bindTopSurface()
             if (next != null) {
-                exo.setVideoTextureView(next)
                 repaint()
             } else {
-                exo.clearVideoTextureView(view)
                 releaseJob = scope.launch {
                     delay(RELEASE_GRACE_MS)
                     if (surfaces.isEmpty()) unload()
@@ -299,16 +338,42 @@ object MusicVideoEngine {
         }
     }
 
-    private fun ensurePlayer(context: Context): ExoPlayer = player ?: ExoPlayer.Builder(context)
-        .build()
-        .apply {
-            volume = 0f
-            trackSelectionParameters = trackSelectionParameters.buildUpon()
-                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
-                .build()
-            addListener(playerListener)
-        }
-        .also { player = it }
+    /** Rebinds after AndroidView updates or recreates its TextureView surface. */
+    internal fun updateSurface(view: TextureView) {
+        if (top() === view) bindTopSurface()
+    }
+
+    private fun bindTopSurface() {
+        val exo = player ?: return
+        val next = top()
+        if (attachedSurface === next) return
+        attachedSurface?.let { old -> runCatching { exo.clearVideoTextureView(old) } }
+        attachedSurface = next
+        if (next != null) runCatching { exo.setVideoTextureView(next) }
+    }
+
+    private fun ensurePlayer(context: Context): ExoPlayer {
+        appContext = context.applicationContext
+        val selector = trackSelector ?: DefaultTrackSelector(context).apply {
+            parameters = buildUponParameters().setMaxVideoSize(1280, AUTO_HEIGHT).build()
+        }.also { trackSelector = it }
+        return player ?: ExoPlayer.Builder(context)
+            .setTrackSelector(selector)
+            .setLoadControl(
+                DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(15_000, 30_000, 1_500, 2_500)
+                    .build(),
+            )
+            .build()
+            .apply {
+                volume = 0f
+                trackSelectionParameters = trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                    .build()
+                addListener(playerListener)
+            }
+            .also { player = it }
+    }
 
     /** A paused decoder handed a new surface draws nothing until asked to. */
     private fun repaint() {
@@ -349,6 +414,7 @@ object MusicVideoEngine {
             if (height == null) remove(KEY_QUALITY) else putInt(KEY_QUALITY, height)
         }?.apply()
         _quality.value = _quality.value.copy(held = height)
+        applyVideoSizeLimit(height)
         val id = loadedId ?: return
         streams.remove(id)
         stepDown.remove(id)
@@ -369,28 +435,65 @@ object MusicVideoEngine {
             .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
             .any { it.responseCode in REFUSAL_CODES }
 
-    /**
-     * [videoId]'s picture, asked plainly and then — when that found nothing —
-     * as age-restricted, which InnerTubeX needs told: see
-     * [InnerTubeXResolver.extractVideo]. A video that needed it is asked that
-     * way from the start next time.
-     */
+    /** Uses the age-restricted client path only after an explicit age/login gate. */
     private suspend fun resolve(videoId: String, cap: Int): InnerTubeXResolver.VideoStream? {
+        cachedStream(videoId, cap)?.let { return it }
+        val key = "$videoId:$cap"
+        val created = CompletableDeferred<InnerTubeXResolver.VideoStream?>()
+        val pending = resolving.putIfAbsent(key, created)
+        if (pending != null) return pending.await()
+        cachedStream(videoId, cap)?.let {
+            resolving.remove(key, created)
+            return it
+        }
+
         val skip = refused[videoId].orEmpty().toSet()
-        if (videoId !in ageGated) {
+        resolutionScope.launch {
+            try {
+                val stream = resolveUncached(videoId, cap, skip)
+                if (stream != null) {
+                    streams[videoId] = Triple(stream, cap, System.currentTimeMillis())
+                    trimStreamCache()
+                }
+                created.complete(stream)
+            } catch (cancelled: CancellationException) {
+                created.cancel(cancelled)
+            } catch (error: Exception) {
+                created.completeExceptionally(error)
+            } finally {
+                resolving.remove(key, created)
+            }
+        }
+        return created.await()
+    }
+
+    private suspend fun resolveUncached(
+        videoId: String,
+        cap: Int,
+        skip: Set<String>,
+    ): InnerTubeXResolver.VideoStream? {
+        var requiresAgeRestrictedRequest = videoId in ageGated
+        if (!requiresAgeRestrictedRequest) {
             val plain = try {
                 withContext(Dispatchers.IO) { InnerTubeXResolver.extractVideo(videoId, cap, skip) }
-            } catch (e: StreamResolveException) {
-                if (e.reason !in ESCALATED_REASONS) throw e
+            } catch (error: StreamResolveException) {
+                if (!isExplicitAgeRestriction(error)) throw error
+                requiresAgeRestrictedRequest = true
                 null
             }
             if (plain != null) return plain
-            TrackLog.d(TAG, "video: nothing asked plainly; asking as age-restricted", about = videoId)
+            if (!requiresAgeRestrictedRequest) return null
         }
         return withContext(Dispatchers.IO) {
             InnerTubeXResolver.extractVideo(videoId, cap, skip, ageRestricted = true)
         }?.also { ageGated += videoId }
     }
+
+    private fun isExplicitAgeRestriction(error: StreamResolveException): Boolean =
+        error.reason == StreamResolveException.Reason.AGE_RESTRICTED ||
+            listOf("LOGIN_REQUIRED", "AGE_VERIFICATION").any { marker ->
+                error.message?.contains(marker, ignoreCase = true) == true
+            }
 
     private fun load(videoId: String) {
         unload()
@@ -400,7 +503,10 @@ object MusicVideoEngine {
         loadJob = scope.launch {
             val stream = try {
                 cachedStream(videoId, cap)
-                    ?: resolve(videoId, cap)?.also { streams[videoId] = Triple(it, cap, System.currentTimeMillis()) }
+                    ?: run {
+                        (appContext as? com.music.bitchord.BitChordApplication)?.awaitInnerTube()
+                        resolve(videoId, cap)
+                    }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: StreamResolveException) {
@@ -435,7 +541,14 @@ object MusicVideoEngine {
             _quality.value = _quality.value.copy(heights = stream.heights, activeHeight = stream.height)
             loadedProfile = stream.profileId
             val start = controller?.currentPosition?.coerceAtLeast(0L) ?: 0L
-            exo.setMediaSource(source, start + seekLeadMs)
+            applyVideoSizeLimit(cap)
+            // Start at the audio clock position before prepare; no second
+            // post-ready seek (and no extra buffering pass) is needed.
+            exo.setMediaSource(source, start)
+            activeStreamUrl = stream.url
+            // Attach the currently composed surface before prepare so the
+            // decoder's first frame is delivered to the visible TextureView.
+            bindTopSurface()
             exo.playWhenReady = controller?.isPlaying == true
             exo.prepare()
             lastSeekAt = System.currentTimeMillis()
@@ -453,21 +566,45 @@ object MusicVideoEngine {
         return stream
     }
 
+    private fun applyVideoSizeLimit(height: Int?) {
+        val maxHeight = height ?: AUTO_HEIGHT
+        val maxWidth = when {
+            maxHeight <= 720 -> 1280
+            maxHeight <= 1080 -> 1920
+            else -> 3840
+        }
+        trackSelector?.let { selector ->
+            selector.parameters = selector.buildUponParameters()
+                .setMaxVideoSize(maxWidth, maxHeight)
+                .build()
+        }
+    }
+
+    private fun trimStreamCache() {
+        while (streams.size > 8) streams.keys.firstOrNull()?.let(streams::remove) ?: break
+    }
+
     private fun unload() {
         loadJob?.cancel()
         loadJob = null
         syncJob?.cancel()
         syncJob = null
         loadedId = null
+        activeStreamUrl = null
         loadedProfile = null
         _shownVideoId.value = null
         _frameOn.value = null
         _quality.value = _quality.value.copy(heights = emptyList(), activeHeight = null)
         player?.let {
-            it.stop()
-            it.clearMediaItems()
+            // Drop the old Surface before stopping/replacing its MediaSource.
+            // A late MediaCodec callback must not target a released TextureView.
+            attachedSurface?.let { view -> runCatching { it.clearVideoTextureView(view) } }
+            attachedSurface = null
+            runCatching { it.clearVideoSurface() }
+            runCatching { it.stop() }
+            runCatching { it.clearMediaItems() }
         }
-        while (streams.size > 8) streams.remove(streams.keys.first())
+        while (streams.size > 8) streams.keys.firstOrNull()?.let(streams::remove) ?: break
     }
 
     private fun startSync() {
@@ -523,7 +660,7 @@ object MusicVideoEngine {
     private const val MIN_VIDEO_ASPECT = 1.2f
 
     /** Where Auto opens, as on the web player: the top of YouTube's H.264 ladder. */
-    private const val AUTO_HEIGHT = 1080
+    private const val AUTO_HEIGHT = 720
     private const val METERED_HEIGHT = 480
     private const val KEY_QUALITY = "quality"
 
@@ -533,15 +670,6 @@ object MusicVideoEngine {
     /** How many refused clients a picture is worth before it's given up — the audio's three. */
     private const val MAX_REFUSED_CLIENTS = 3
 
-    /**
-     * What the plain ask fails with when the age gate is why: InnerTubeX names
-     * the gate only when no client answered at all, and otherwise reports the
-     * clients that answered without a picture as no playable stream.
-     */
-    private val ESCALATED_REASONS = setOf(
-        StreamResolveException.Reason.AGE_RESTRICTED,
-        StreamResolveException.Reason.NO_PLAYABLE_STREAM,
-    )
 }
 
 /**
@@ -604,7 +732,10 @@ internal fun AndroidMusicVideo(
                     view = this
                 }
             },
-            update = { it.alpha = alpha },
+            update = {
+                it.alpha = alpha
+                MusicVideoEngine.updateSurface(it)
+            },
             onRelease = { if (view === it) view = null },
             // The picture at its own shape: letterboxed into the bounds, or
             // overflowing them and cropped by the clip above.

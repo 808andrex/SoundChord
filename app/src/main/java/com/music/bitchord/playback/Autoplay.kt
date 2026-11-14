@@ -9,7 +9,6 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.sources.SourceRegistry
 import com.music.bitchord.data.sources.TrackMatcher
 import com.music.bitchord.playback.QueueCoordinator.asQueueEntry
-import kotlinx.coroutines.CancellationException
 
 /** Most AutoPlay-suggested tracks kept queued ahead of the current one at once. */
 const val MAX_QUEUED_AUTOPLAY = 10
@@ -103,9 +102,28 @@ suspend fun loadAutoplayTracks(
 ): Result<List<Song>> {
     val seed = youtubeSeedFor(seedSong) ?: return Result.success(emptyList())
     // A music video plays on with music videos, as YouTube Music does.
-    val videos = seedSong.isVideo && seed == seedSong.videoId
+    val videos = seedSong.isVideoOrigin && seed == seedSong.videoId
     val related = YtMusicRepository.radio(seed, preferVideo = videos).getOrElse { return Result.failure(it) }
-    val extra = QueueBuilder.extend(existing, related, limit, preferVideos = videos)
+    val candidates = if (!videos) {
+        related
+    } else {
+        val videoCandidates = related.filter { it.isVideo }
+        val missing = (limit - videoCandidates.size).coerceAtLeast(0)
+        val toResolve = related.asSequence().filterNot { it.isVideo }.take(missing * 2).toList()
+        // Pair only as many upcoming items as the queue still needs, in order.
+        // Resolution fills the repository's version cache; it must never make
+        // a future item current or ask a player to replace its active source.
+        val resolvedVideos = buildList<Song> {
+            for (song in toResolve) {
+                if (size >= missing) break
+                YtMusicRepository.resolveVideo(song)?.let { add(it) }
+            }
+        }
+        (videoCandidates + resolvedVideos)
+            .distinctBy { it.videoId }
+            .map { it.copy(isVideo = true, isVideoOrigin = true) }
+    }
+    val extra = QueueBuilder.extend(existing, candidates, limit, preferVideos = videos)
     if (extra.isEmpty()) return Result.success(emptyList())
 
     return Result.success(extra.map {
@@ -115,6 +133,7 @@ suspend fun loadAutoplayTracks(
             playbackSourceType = seedSong.playbackSourceType,
             playbackSourceId = seedSong.playbackSourceId,
             isLiveRadioStream = seedSong.isLiveRadioStream,
+            isVideoOrigin = it.isVideoOrigin || seedSong.isVideoOrigin,
         ).asQueueEntry(QueueTier.AUTOPLAY)
     })
 }

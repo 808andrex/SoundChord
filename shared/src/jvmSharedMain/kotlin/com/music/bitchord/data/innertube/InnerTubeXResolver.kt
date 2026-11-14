@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 /** YouTube stream extraction through InnerTubeX's live-benchmarked client catalog and cipher tiers. */
 object InnerTubeXResolver {
@@ -77,6 +78,7 @@ object InnerTubeXResolver {
     private var poTokens: TokenProvider? = null
     private var playerDir: File? = null
     private var warmup: Job? = null
+    private val activeVideoExtractions = AtomicInteger(0)
 
     /**
      * @param filesDir where the preprocessed EJS players are kept.
@@ -104,6 +106,9 @@ object InnerTubeXResolver {
         warmup?.cancel()
         warmup = scope.launch {
             delay(delayMs)
+            // The active extraction is already doing the work that a prewarm
+            // would compete for; never start a delayed warmup over playback.
+            if (activeVideoExtractions.get() > 0) return@launch
             val start = MonotonicClock.nowMs()
             runCatching {
                 innerTube.cookie = Innertube.cookie
@@ -302,20 +307,82 @@ object InnerTubeXResolver {
         skipClients: Set<String> = emptySet(),
         ageRestricted: Boolean = false,
     ): VideoStream? {
+        activeVideoExtractions.incrementAndGet()
+        return try {
+            extractVideoNow(videoId, maxHeight, skipClients, ageRestricted)
+        } finally {
+            activeVideoExtractions.decrementAndGet()
+        }
+    }
+
+    private suspend fun extractVideoNow(
+        videoId: String,
+        maxHeight: Int,
+        skipClients: Set<String>,
+        ageRestricted: Boolean,
+    ): VideoStream? {
         innerTube.cookie = Innertube.cookie
         innerTube.visitorData = Innertube.ensureVisitorData()
         innerTube.locale = YouTubeLocale(gl = Innertube.currentRegion, hl = Innertube.currentLanguage)
-        val stream = extractor.extract(
-            videoId = videoId,
-            hints = ContentHints(
-                isAgeRestricted = true.takeIf { ageRestricted },
-                wantVideo = true,
-                maxVideoHeight = maxHeight,
-            ).withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = true),
-            excludedClients = excludedFor(videoId) + skipClients,
-            audioQuality = AudioQuality.LOW,
-            clientPlaybackNonce = generateClientPlaybackNonce(),
-        ) ?: return null
+        val excludedVideoClients = excludedFor(videoId) + skipClients + "WEB_EMBEDDED_PLAYER"
+        val preferredExcluded = excludedVideoClients
+        var preferredFailure: Exception? = null
+        val preferred = try {
+            if ("WEB_REMIX" in preferredExcluded) null else extractor.extract(
+                videoId = videoId,
+                hints = ContentHints(
+                    isAgeRestricted = true.takeIf { ageRestricted },
+                    wantVideo = true,
+                    maxVideoHeight = maxHeight,
+                    // Prefer the known-good Music web client for video; only
+                    // this video-only extraction is pinned.
+                    playbackClientOverrideId = "WEB_REMIX",
+                ).withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = true),
+                excludedClients = preferredExcluded,
+                audioQuality = AudioQuality.LOW,
+                clientPlaybackNonce = generateClientPlaybackNonce(),
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            preferredFailure = error
+            null
+        }
+        val preferredUrl = preferred?.takeIf { candidate ->
+            candidate.videoWidth != null && candidate.videoHeight != null &&
+                candidate.videoUrl?.takeUnless(StreamResolver::isLiveUrl) != null
+        }?.videoUrl
+        val stream = if (preferredUrl != null) {
+            preferred
+        } else {
+            // WEB_REMIX can be denied by a missing Po-token or lack a usable
+            // format. Retry through the remaining video-capable catalog.
+            val fallbackExcluded = preferredExcluded + "WEB_REMIX"
+            val fallback = try {
+                extractor.extract(
+                    videoId = videoId,
+                    hints = ContentHints(
+                        isAgeRestricted = true.takeIf { ageRestricted },
+                        wantVideo = true,
+                        maxVideoHeight = maxHeight,
+                    ).withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = true),
+                    excludedClients = fallbackExcluded,
+                    audioQuality = AudioQuality.LOW,
+                    clientPlaybackNonce = generateClientPlaybackNonce(),
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            }
+            val fallbackUrl = fallback?.takeIf { candidate ->
+                candidate.videoWidth != null && candidate.videoHeight != null &&
+                    candidate.videoUrl?.takeUnless(StreamResolver::isLiveUrl) != null
+            }?.videoUrl
+            if (fallbackUrl == null) {
+                preferredFailure?.let { throw it }
+                return null
+            }
+            fallback
+        }
         // A live broadcast's video-only URL is a window that ends in seconds,
         // like its audio one; no picture beats a frozen one.
         val url = stream.videoUrl?.takeUnless(StreamResolver::isLiveUrl) ?: return null
