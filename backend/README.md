@@ -169,7 +169,7 @@ A `bye` frame carries a `reason`: `left` when a member gives up their own slot,
 device may rejoin immediately as far as it is concerned — but the reason lets a
 client shut its own door, which is what the Android app does for 24 hours.
 
-A `track` is `{videoId, title, artist, thumbnailUrl, durationMs, fromAutoplay}` — enough to
+A `track` is `{videoId, title, artist, thumbnailUrl, durationMs, fromAutoplay, isVideo, isVideoOrigin}` — enough to
 identify and to *show* a song, and nothing more. Stream URLs, sources, quality
 and download state stay each device's own business, so two people in a party can
 be on different sources at different bitrates and still be in the same place.

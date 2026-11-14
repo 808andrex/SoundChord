@@ -1458,6 +1458,12 @@ class PlaybackService : MediaLibraryService() {
             }
             val videoId = dataSpec.uri.getQueryParameter("v")
                 ?: return@Resolver dataSpec
+            // The application no longer blocks Activity startup on this
+            // resolver's background initialization; wait only on the loader
+            // thread that is about to request a YouTube stream.
+            runBlocking(about) {
+                (application as? com.music.bitchord.BitChordApplication)?.awaitInnerTube()
+            }
             // Direct Source Stream holds every playback open of a track that
             // is neither playing nor next inside the window: read-ahead and
             // ExoPlayer's own early preparation of the next item alike. Not
@@ -5526,6 +5532,7 @@ class PlaybackService : MediaLibraryService() {
         videoId: String,
         target: TrackMatcher.Target,
     ): Resolved {
+        (application as? com.music.bitchord.BitChordApplication)?.awaitSourceRegistry()
         // A substitute already broke this track once — see
         // [StreamChoice.refuseSubstitutes]. Racing the modules again would find
         // the same catalogue holding the same unplayable URL, so there is

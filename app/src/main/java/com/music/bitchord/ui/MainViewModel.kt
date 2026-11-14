@@ -1,6 +1,7 @@
 package com.music.bitchord.ui
 
 import android.app.Application
+import android.content.pm.PackageManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.music.bitchord.R
@@ -1469,17 +1470,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     init {
+        // Give TV's Home feed the first opportunity to schedule network work.
+        loadHome()
         startSearchPipeline()
         startSuggestPipeline()
         startTypeaheadMediaPipeline()
-        loadHome()
         // Explore waits for its tab (see [onExploreShown]): its category list
         // and the dozen-odd artwork browses after it went out at launch with
         // Home's own requests, to the same host, for a page not yet opened.
-        if (_signedIn.value) {
-            loadLibrary()
-            loadAccount()
-            loadPlaylists()
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            val isTv = app.packageManager
+                .hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+            if (isTv) {
+                // Continue on Home's first usable emission, or after 2.5s if
+                // the network has not answered yet.
+                withTimeoutOrNull(2_500L) { _home.first { it !is UiState.Loading } }
+            }
+            if (_signedIn.value) {
+                loadLibrary()
+                loadAccount()
+                loadPlaylists()
+            }
+            if (isTv) (app as? com.music.bitchord.BitChordApplication)?.initializePlaylistSync()
+            AppUpdateChecker.clearCache(getApplication())
+            AppUpdateChecker.check()
         }
         viewModelScope.launch {
             // drop(1): the current value is just the count so far, not a play.
@@ -1521,12 +1536,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 .drop(1)
                 .debounce(300)
                 .collect { reloadRemoteDetail(com.music.bitchord.data.smb.SmbConfig.BROWSE_ID) }
-        }
-        viewModelScope.launch {
-            // A leftover APK only means "Install Now" for the session that
-            // downloaded it — see AppUpdateChecker.clearCache.
-            AppUpdateChecker.clearCache(getApplication())
-            AppUpdateChecker.check()
         }
     }
 
@@ -2503,6 +2512,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         filter: SearchFilter,
     ): Pair<List<SearchResult>, List<SearchResult>> = coroutineScope {
         if (filter != SearchFilter.SONGS) return@coroutineScope emptyList<SearchResult>() to emptyList()
+        (getApplication<Application>() as? com.music.bitchord.BitChordApplication)?.awaitSourceRegistry()
         val active = SourceRegistry.activeForPlayback()
         val youtubeRank = active.indexOfFirst { it.kind == SourceKind.YOUTUBE }
             .let { if (it < 0) active.size else it }
@@ -2578,6 +2588,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 // Disabled, or hasn't got it: the tap path falls back to
                 // YouTube, so that is what is worth having ready.
+                (getApplication<Application>() as? com.music.bitchord.BitChordApplication)?.awaitInnerTube()
                 StreamResolver.resolve(audio.videoId)
             }
         }

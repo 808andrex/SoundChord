@@ -32,6 +32,10 @@ data class PartyTrack(
     val durationMs: Long? = null,
     /** Preserves the queue's shared manual/AutoPlay section boundary. */
     val fromAutoplay: Boolean = false,
+    /** Preserve whether playback must use the music-video surface on each client. */
+    val isVideo: Boolean = false,
+    /** Preserve video-origin policy when the track is a converted catalogue match. */
+    val isVideoOrigin: Boolean = isVideo,
 )
 
 /** One signed-in device in the party, as every other device sees it. */

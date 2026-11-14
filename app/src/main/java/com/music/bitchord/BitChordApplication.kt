@@ -45,10 +45,16 @@ import com.music.bitchord.download.PlaylistSync
 import androidx.work.Configuration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import kotlin.concurrent.thread
+import java.util.concurrent.atomic.AtomicBoolean
 
 class BitChordApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
+
+    private val sourceRegistryReady = CompletableDeferred<Unit>()
+    private val innerTubeReady = CompletableDeferred<Unit>()
+    private val playlistSyncStarted = AtomicBoolean(false)
 
     /** Asked for on first use rather than at launch; see [PlaylistSync.init]. */
     override val workManagerConfiguration: Configuration
@@ -103,22 +109,32 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         // PlaybackService shares this process, so seeding the cookie here means
         // stream resolution is authenticated from the first play onwards.
         authStore = AuthStore(this)
-        // Opened off the main thread, alongside everything below: none of these
-        // reads a setting or the session, and between them they are the slowest
-        // opens at startup — SourceRegistry's encrypted store most of all.
-        // Started only once [AuthStore] exists, because both encrypted stores
-        // share one keystore master key and a first launch must not have two
-        // threads racing to create it. Joined before onCreate returns, so
-        // nothing that runs after startup can see any of them half open.
-        val backgroundInit = thread(name = "startup-init") {
-            SourceRegistry.init(this)
-            AndroidStreamHooks.initInnerTubeX(this)
+        // Open these stores and caches away from the main thread. AuthStore is
+        // ready first because its encrypted preferences share the keystore
+        // master key; operations that need SourceRegistry or InnerTubeX await
+        // their individual readiness signals instead of blocking Activity launch.
+        thread(name = "startup-init") {
+            try {
+                SourceRegistry.init(this)
+            } catch (error: Exception) {
+                android.util.Log.e("BitChord", "Source registry initialization failed", error)
+            } finally {
+                sourceRegistryReady.complete(Unit)
+            }
+            try {
+                AndroidStreamHooks.initInnerTubeX(this)
+            } catch (error: Exception) {
+                android.util.Log.e("BitChord", "InnerTubeX initialization failed", error)
+            } finally {
+                innerTubeReady.complete(Unit)
+            }
             // Its own directory: canvas clips are looping video, not audio, and
             // belong in a cache AudioCache's own limit and eviction policy were
             // never sized for. See CanvasCache's doc for why this one exists at
             // all — it is the fix for canvas clips re-fetching the same few
             // seconds of video from the network on every loop.
-            CanvasCache.init(this)
+            runCatching { CanvasCache.init(this) }
+                .onFailure { android.util.Log.e("BitChord", "Canvas cache initialization failed", it) }
         }
         // Migration-safe: an old single cookie becomes the first encrypted
         // session, while newer installs restore the profile the listener chose.
@@ -162,7 +178,9 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         // without a media-store query per row.
         Downloads.init(this)
         // After both of the things a check reads: the setting and the record.
-        PlaylistSync.init(this)
+        if (!packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)) {
+            initializePlaylistSync()
+        }
         // The device's own listening record. Opened here rather than in
         // PlaybackService because the Replay page reads it from the UI side and
         // both live in this process — one owner, one directory.
@@ -197,7 +215,15 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         initLastfm()
         // The public "apps open right now" count; see Presence.
         com.music.bitchord.data.presence.AndroidPresence.install(this)
-        backgroundInit.join()
+    }
+
+    suspend fun awaitSourceRegistry() = sourceRegistryReady.await()
+
+    suspend fun awaitInnerTube() = innerTubeReady.await()
+
+    /** TV defers WorkManager setup until Home has had its first chance to render. */
+    fun initializePlaylistSync() {
+        if (playlistSyncStarted.compareAndSet(false, true)) PlaylistSync.init(this)
     }
 
     /**

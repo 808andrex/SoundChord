@@ -1535,6 +1535,10 @@ private fun BitChordApp(
                 playbackSourceType = song.playbackSourceType,
                 playbackSourceId = song.playbackSourceId,
             )
+            // Begin resolving this video-only stream while the queue version
+            // handoff/alignment is being committed; prefetch never switches
+            // the surface or replaces the audio player's active item.
+            MusicVideoEngine.prefetch(target.videoId)
             // Not while an alignment is still owed: claiming the video here
             // would show a version the player is not playing yet, and would
             // make the switch look finished before it had begun.
