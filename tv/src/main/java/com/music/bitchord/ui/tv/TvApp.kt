@@ -32,6 +32,7 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -63,6 +64,7 @@ import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.settings.TvSettings
 import com.music.bitchord.playback.PlayerState
 import com.music.bitchord.ui.MainViewModel
+import com.music.bitchord.ui.player.MusicVideoEngine
 import com.music.bitchord.ui.tv.components.LocalTvChrome
 import com.music.bitchord.ui.tv.components.LocalTvTabBarHasFocus
 import com.music.bitchord.ui.tv.components.TvArtwork
@@ -114,6 +116,12 @@ fun TvApp(
     playerState: PlayerState,
     modifier: Modifier = Modifier,
 ) {
+    // Keep the video resolver subscribed for the whole TV session. This lets
+    // it resolve a selected video's stream while the Now Playing surface mounts.
+    DisposableEffect(mediaController) {
+        MusicVideoEngine.attach(mediaController)
+        onDispose { MusicVideoEngine.attach(null) }
+    }
     val setupVersionCompleted by TvSettings.tvSetupVersionCompleted.collectAsState()
     var isRunningSetup by remember(setupVersionCompleted) { mutableStateOf(setupVersionCompleted == 0) }
     var isNowPlayingOpen by remember { mutableStateOf(false) }

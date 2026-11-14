@@ -181,7 +181,9 @@ internal fun TvNowPlayingStage(
     val underControls by animateFloatAsState(if (controlsVisible) 1f else 0f, tween(320), label = "lyricsFade")
     val canvasEnabled by AppSettings.animatedCanvas.collectAsState()
     var canvas by remember(song.videoId) { mutableStateOf<CanvasArtwork?>(null) }
-    var videoRendered by remember(song.videoId) { mutableStateOf(false) }
+    var renderedVideoId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(song.videoId) { renderedVideoId = null }
+    val videoRendered = renderedVideoId == song.videoId
     val canShowMusicVideo = song.isVideo && PlayerPlatform.host.musicVideoSupported
     LaunchedEffect(song.videoId, canvasEnabled, song.isVideo) {
         canvas = if (canvasEnabled && !song.isVideo) CanvasRepository.canvasFor(song) else null
@@ -193,7 +195,13 @@ internal fun TvNowPlayingStage(
             PlayerPlatform.host.MusicVideo(
                 videoId = song.videoId,
                 fit = false,
-                onRenderedChanged = { videoRendered = it },
+                onRenderedChanged = { rendered ->
+                    if (rendered) {
+                        renderedVideoId = song.videoId
+                    } else if (renderedVideoId == song.videoId) {
+                        renderedVideoId = null
+                    }
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -774,6 +782,7 @@ private fun khz(hz: Int): String {
 internal fun TvUpNext(
     queue: List<Song>,
     currentIndex: Int,
+    videoSession: Boolean,
     shuffle: Boolean,
     repeatMode: Int,
     autoplay: Boolean,
@@ -842,11 +851,15 @@ internal fun TvUpNext(
                 top = 13.dp,
                 bottom = 5.dp,
             ) { i, entry ->
+                val videoCard = videoSession || entry.value.isVideo || entry.value.isVideoOrigin
                 TvLockup(
                     title = entry.value.title,
                     subtitle = entry.value.artist,
                     artworkUrl = entry.value.thumbnailUrl,
-                    width = 99.dp,
+                    // Keep the artwork at the same 99dp height as audio covers;
+                    // video cards use the wider 16:9 footprint.
+                    width = if (videoCard) 176.dp else 99.dp,
+                    aspectRatio = if (videoCard) 16f / 9f else 1f,
                     onClick = { onJump(currentIndex + 1 + i) },
                     modifier = if (i == 0) Modifier.focusRequester(firstCardFocus) else Modifier,
                 )

@@ -20,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -107,14 +106,6 @@ fun TvNowPlayingScreen(
 
     val scope = rememberCoroutineScope()
     val isPlaying = playerState.isPlaying
-
-    // The shared Android video surface follows this MediaController's clock.
-    // MainActivity already attaches its own controller; TvActivity needs the
-    // same connection for the silent video decoder to know which item to load.
-    DisposableEffect(mediaController) {
-        MusicVideoEngine.attach(mediaController)
-        onDispose { MusicVideoEngine.attach(null) }
-    }
 
     // Keep the TV awake (no screensaver) while a song plays on this screen.
     val view = androidx.compose.ui.platform.LocalView.current
@@ -255,7 +246,12 @@ fun TvNowPlayingScreen(
         when {
             upNextOpen -> upNextOpen = false
             controlsVisible -> hideControls()
-            else -> onBack()
+            else -> {
+                // Stop pending stream resolution before navigation disposes
+                // the TextureView surface.
+                runCatching { MusicVideoEngine.deactivate() }
+                onBack()
+            }
         }
     }
 
@@ -352,6 +348,7 @@ fun TvNowPlayingScreen(
                     TvUpNext(
                         queue = playerState.queue,
                         currentIndex = playerState.queueIndex,
+                        videoSession = song.isVideo || song.isVideoOrigin,
                         shuffle = shuffle,
                         repeatMode = playerState.repeatMode,
                         autoplay = autoplay,
