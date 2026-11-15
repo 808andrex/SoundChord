@@ -743,31 +743,25 @@ internal fun PlayerActionRow(
     }
 }
 
-/** How much more of the ink [CircleGlyph]'s disc takes than its plain white — 0.45 at rest, 0.85 lit. */
+/** How much more of the ink [CircleGlyph]'s disc takes than its plain white — 0.45 at rest. */
 private const val CIRCLE_DISC_DODGE_GAIN = 2.5f
 
 /**
  * Translucent circular button used for the track menu and the like control.
  *
- * [active] brightens the disc rather than only the glyph: this sits on album
- * artwork of any colour, and a white icon on a white-ish sleeve has no tint
- * change left to make. The filled star carries the state as a shape too —
- * see [BitChordIcons.StarFilled].
+ * The selected icon shape represents a liked track. The disc is identical for
+ * the like and menu buttons so neither changes the artwork's contrast.
  */
 @Composable
 internal fun CircleGlyph(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
-    active: Boolean = false,
     haptic: Haptic = Haptic.Tap,
     modifier: Modifier = Modifier,
 ) {
     val haptics = rememberHaptics()
-    val discAlpha by animateFloatAsState(
-        targetValue = if (active) 0.34f else 0.18f,
-        label = "glyphDisc",
-    )
+    val discAlpha = 0.18f
     val chrome = LocalPlayerChrome.current
     Box(
         modifier = modifier

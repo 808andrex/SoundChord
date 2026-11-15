@@ -938,6 +938,10 @@ fun NowPlayingScreen(
     // track" check lives.
     val spotifyCanvasAutoHide by PlayerSettings.spotifyCanvasAutoHide.collectAsStateWithLifecycle()
     val mixing by PlayerSettings.smartMixInProgress.collectAsStateWithLifecycle()
+    val crossfading by PlayerSettings.crossfadeRunning.collectAsStateWithLifecycle()
+    val skipCrossfadeMs by PlayerSettings.skipCrossfadeMs.collectAsStateWithLifecycle()
+    val mixFadeMs by PlayerSettings.mixFadeMs.collectAsStateWithLifecycle()
+    val mixIncomingArt by PlayerSettings.mixIncomingArtworkUrl.collectAsStateWithLifecycle()
     // A music video plays its own picture where the sleeve is — see
     // [MusicVideoSurface] — and takes the place of any animated cover.
     val videoMode = showsMusicVideo(song)
@@ -1425,7 +1429,15 @@ fun NowPlayingScreen(
     // had and never re-emits, so the `onState` that is the sole writer here
     // never fires again. Keyed on the cover there is nothing to reset: the
     // bitmap really is still loaded, so the state stays true.
-    val art = rememberPlayerArtwork(remoteArt)
+    val art = rememberPlayerArtwork(mixIncomingArt ?: remoteArt)
+    PrefetchNeighbourArtwork(queue, queueIndex)
+    val dissolve = rememberArtworkDissolve(
+        art = art,
+        mixing = mixing || crossfading,
+        queueIndex = queueIndex,
+        skipFadeMs = skipCrossfadeMs,
+        mixFadeMs = mixFadeMs,
+    )
     // Sticky, unlike [PlayerArtwork.loaded]: the banner is the shape of the player rather
     // than a property of the track in it. Waiting on each new cover would
     // collapse the banner into a card and blow it back out on every skip —
@@ -3433,6 +3445,17 @@ fun NowPlayingScreen(
                                 // [PlayerArtwork.loaded] still flips the moment it does.
                                 modifier = Modifier
                                     .fillMaxSize()
+                                    .graphicsLayer {
+                                        val left = 1f - dissolve.progress
+                                        val eased = left * left
+                                        val fluid = dissolve.fluid && !dissolve.light && dissolve.outgoing != null
+                                        scaleX = 1f + (if (fluid) 0.045f else 0.12f) * dissolve.punch * eased
+                                        scaleY = 1f + (if (fluid) 0.045f else 0.12f) * dissolve.punch * eased
+                                        translationX = if (dissolve.outgoing != null && !fluid && !dissolve.light) {
+                                            dissolve.direction * dissolve.punch * size.width * 0.05f * eased
+                                        } else 0f
+                                        renderEffect = if (fluid) dissolve.shaderIn.effect(true, dissolve.progress, dissolve.direction, dissolve.punch, dissolve.seed, size.width, size.height) else null
+                                    }
                                     .drawWithContent {
                                         val frame = still()
                                         if (frame == null) {
@@ -3447,6 +3470,54 @@ fun NowPlayingScreen(
                                             drawCropped(frame.image)
                                         }
                                     },
+                            )
+
+                            // The retained outgoing art sits above the incoming
+                            // cover and is progressively dissolved to reveal it.
+                            AsyncImage(
+                                model = dissolve.held.request,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                onState = dissolve.held::onState,
+                                modifier = Modifier.fillMaxSize().graphicsLayer {
+                                    val active = dissolve.outgoing != null
+                                    val t = dissolve.progress
+                                    val fluid = active && dissolve.fluid && !dissolve.light
+                                    alpha = when {
+                                        active && fluid -> 1f
+                                        active && dissolve.light -> 1f - smootherStep(t)
+                                        active -> 1f - smootherStep(((t - 0.62f) / 0.38f).coerceIn(0f, 1f))
+                                        dissolve.cutHold -> 1f
+                                        else -> 0f
+                                    }
+                                    translationX = if (active && !fluid && !dissolve.light) -dissolve.direction * size.width * 0.30f * t else 0f
+                                    scaleX = if (active) 1f - 0.08f * t else 1f
+                                    scaleY = if (active) 1f - 0.08f * t else 1f
+                                    renderEffect = if (fluid) dissolve.shaderOut.effect(false, t, dissolve.direction, dissolve.punch, dissolve.seed, size.width, size.height) else null
+                                    compositingStrategy = if (active) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+                                }.drawWithContent {
+                                    drawContent()
+                                    if (dissolve.outgoing != null && !dissolve.fluid && !dissolve.light) {
+                                        val edge = size.width * if (dissolve.direction > 0f) {
+                                            1f - dissolve.progress
+                                        } else {
+                                            dissolve.progress
+                                        }
+                                        val stops = if (dissolve.direction > 0f) {
+                                            arrayOf(0f to Color.Black, 0.65f to Color.Black, 1f to Color.Transparent)
+                                        } else {
+                                            arrayOf(0f to Color.Transparent, 0.35f to Color.Black, 1f to Color.Black)
+                                        }
+                                        drawRect(
+                                            brush = Brush.horizontalGradient(
+                                                colorStops = stops,
+                                                startX = edge - size.width * 0.35f,
+                                                endX = edge + size.width * 0.35f,
+                                            ),
+                                            blendMode = BlendMode.DstIn,
+                                        )
+                                    }
+                                },
                             )
 
                             // Where the clip plays when it can't have the banner:
@@ -3806,7 +3877,6 @@ fun NowPlayingScreen(
                                         if (liked) Res.string.remove_from_liked else Res.string.like,
                                     ),
                                     onClick = onToggleLike,
-                                    active = liked,
                                     haptic = if (liked) Haptic.ToggleOff else Haptic.ToggleOn,
                                 )
                                 Spacer(Modifier.width(8.dp))

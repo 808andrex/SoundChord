@@ -5,6 +5,9 @@ import androidx.compose.runtime.snapshotFlow
 import com.music.bitchord.playback.PlaybackPosition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -19,11 +22,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.rememberUpdatedState
 import coil3.PlatformContext
 import coil3.compose.LocalPlatformContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImagePainter
+import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.music.bitchord.data.canvas.CanvasArtwork
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.artworkAt
@@ -32,6 +39,11 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.takeWhile
+import androidx.compose.runtime.withFrameNanos
 
 /**
  * The looping clip some releases publish alongside their cover, for [song], or
@@ -183,6 +195,179 @@ internal fun rememberPlayerArtwork(remoteArt: String?): PlayerArtwork {
     }
     return art
 }
+
+/** Warm nearby queue artwork in Coil's cache before a likely manual skip. */
+@Composable
+internal fun PrefetchNeighbourArtwork(queue: List<Song>, queueIndex: Int) {
+    val context = LocalPlatformContext.current
+    val urls = remember(queue, queueIndex) {
+        listOf(queueIndex + 1, queueIndex - 1, queueIndex + 2)
+            .mapNotNull { index -> queue.getOrNull(index)?.thumbnailUrl.artworkAt(ART_PX) }
+            .distinct()
+    }
+    LaunchedEffect(urls) {
+        delay(400L)
+        val loader = SingletonImageLoader.get(context)
+        urls.forEach { url ->
+            loader.enqueue(
+                ImageRequest.Builder(context)
+                    .data(url)
+                    .size(ART_PX)
+                    .crossfade(false)
+                    .build(),
+            )
+        }
+    }
+}
+
+/** Holds the previous still artwork until the new request is ready, then transitions two mounted layers. */
+@Stable
+internal class ArtworkDissolve(first: PlayerArtwork) {
+    private var current = first
+    var direction by mutableFloatStateOf(1f)
+        private set
+    var punch by mutableFloatStateOf(1f)
+    var fluidWanted = false
+    var light = false
+    val fluid get() = fluidWanted && fluidArtworkSupported
+    var seed = 0f
+    val shaderIn by lazy(LazyThreadSafetyMode.NONE) { FluidArtworkShader() }
+    val shaderOut by lazy(LazyThreadSafetyMode.NONE) { FluidArtworkShader() }
+    var outgoing by mutableStateOf<PlayerArtwork?>(null)
+        private set
+    var held by mutableStateOf(first)
+        private set
+    var progress by mutableFloatStateOf(1f)
+    var cutHold by mutableStateOf(false)
+        private set
+    var lastQueueIndex = -1
+
+    fun retarget(next: PlayerArtwork, enabled: Boolean, queueIndex: Int, holdOld: Boolean) {
+        val old = current
+        if (old === next) return
+        current = next
+        seed = (((next.url?.hashCode() ?: 0) and Int.MAX_VALUE) % 1000) / 100f
+        direction = if (queueIndex >= 0 && lastQueueIndex >= 0 && queueIndex < lastQueueIndex) -1f else 1f
+        val inFlight = outgoing
+        val visible = if (inFlight != null && progress < RETARGET_KEEP_PROGRESS) inFlight else old
+        val onScreen = if (cutHold) held else old
+        if (enabled && next.url != null && visible.url != null) {
+            held = visible
+            outgoing = visible
+            progress = 0f
+            cutHold = false
+        } else if (holdOld && next.url != null && onScreen.url != null) {
+            held = onScreen
+            outgoing = null
+            progress = 1f
+            cutHold = true
+        } else {
+            held = next
+            outgoing = null
+            progress = 1f
+            cutHold = false
+        }
+    }
+
+    fun finish() {
+        cutHold = false
+        progress = 1f
+        outgoing = null
+        held = current
+    }
+}
+
+@Composable
+internal fun rememberArtworkDissolve(
+    art: PlayerArtwork,
+    mixing: Boolean,
+    queueIndex: Int,
+    skipFadeMs: Long,
+    mixFadeMs: Long,
+): ArtworkDissolve {
+    val reduceAnimation by PlayerSettings.reduceAnimation.collectAsStateWithLifecycle()
+    val coverSlide by PlayerSettings.coverSlideAnimation.collectAsStateWithLifecycle()
+    val coverFluid by PlayerSettings.coverFluidAnimation.collectAsStateWithLifecycle()
+    val coverMixOnly by PlayerSettings.coverMixOnlyEffects.collectAsStateWithLifecycle()
+    val dissolve = remember { ArtworkDissolve(art) }
+    dissolve.fluidWanted = coverFluid
+    remember(art) {
+        dissolve.punch = if (mixing && skipFadeMs <= 0L) 0.35f else 1f
+        dissolve.light = coverMixOnly && (!mixing || skipFadeMs > 0L)
+        dissolve.retarget(
+            next = art,
+            enabled = !reduceAnimation && coverSlide,
+            queueIndex = queueIndex,
+            holdOld = reduceAnimation || !coverSlide,
+        )
+    }
+    SideEffect { dissolve.lastQueueIndex = queueIndex }
+    val mixingNow by rememberUpdatedState(mixing)
+    val skipFadeNow by rememberUpdatedState(skipFadeMs)
+    val mixFadeNow by rememberUpdatedState(mixFadeMs)
+    val mixOnlyNow by rememberUpdatedState(coverMixOnly)
+    LaunchedEffect(dissolve, art) {
+        if (dissolve.outgoing == null) {
+            if (dissolve.cutHold) {
+                withTimeoutOrNull(ART_DISSOLVE_WAIT_MS) { snapshotFlow { art.loaded || art.failed }.first { it } }
+                withFrameNanos { }
+                dissolve.finish()
+            }
+            return@LaunchedEffect
+        }
+        withTimeoutOrNull(ART_DISSOLVE_WAIT_MS) { snapshotFlow { art.loaded }.first { it } }
+        withFrameNanos { }
+        withFrameNanos { }
+        dissolve.light = mixOnlyNow && (!mixingNow || skipFadeNow > 0L)
+        val duration = when {
+            // A manual next/previous cover follows the audio fade duration.
+            mixingNow && skipFadeNow > 0L -> skipFadeNow.toInt().coerceIn(400, 6_000)
+            // Keep automatic cover changes aligned with the actual audio mix.
+            mixingNow && mixFadeNow > 0L -> mixFadeNow.toInt().coerceIn(400, 60_000)
+            mixingNow -> MIX_DISSOLVE_MS
+            dissolve.light -> LIGHT_DISSOLVE_MS
+            dissolve.fluid -> FLUID_DISSOLVE_MS
+            else -> SKIP_DISSOLVE_MS
+        }
+        if (mixingNow && skipFadeNow <= 0L && PlayerSettings.smartMixView.value != null) {
+            combine(
+                PlayerSettings.smartMixProgress,
+                snapshotFlow { mixingNow },
+            ) { progress, active -> progress to active }
+                .takeWhile { (_, active) -> active }
+                .collectLatest { (target, _) ->
+                    // Progress is published on the audio loop (~30 ms). Interpolate
+                    // each interval so the shader still advances on display frames.
+                    animate(
+                        dissolve.progress,
+                        target.coerceIn(0f, 1f),
+                        animationSpec = tween(durationMillis = 30, easing = LinearEasing),
+                    ) { value, _ -> dissolve.progress = value }
+                }
+            dissolve.finish()
+            return@LaunchedEffect
+        } else if (mixingNow && skipFadeNow <= 0L) {
+            animate(
+                0f,
+                1f,
+                animationSpec = tween(duration, easing = if (dissolve.fluid) FLUID_EASING else ARTWORK_FLOW_EASING),
+            ) { value, _ -> dissolve.progress = value }
+        } else {
+            animate(0f, 1f, animationSpec = tween(duration, easing = if (dissolve.fluid) FLUID_EASING else ARTWORK_FLOW_EASING)) { value, _ -> dissolve.progress = value }
+        }
+        dissolve.finish()
+    }
+    return dissolve
+}
+
+private const val ART_DISSOLVE_WAIT_MS = 2_500L
+private const val MIX_DISSOLVE_MS = 1_800
+private const val SKIP_DISSOLVE_MS = 950
+private const val FLUID_DISSOLVE_MS = 1_000
+private const val LIGHT_DISSOLVE_MS = 450
+private const val RETARGET_KEEP_PROGRESS = 0.3f
+private val ARTWORK_FLOW_EASING = CubicBezierEasing(0.32f, 0.08f, 0.14f, 1f)
+private val FLUID_EASING = CubicBezierEasing(0.45f, 0f, 0.2f, 1f)
 
 /**
  * The seek bar's own state: a drag in progress, and where the handle was

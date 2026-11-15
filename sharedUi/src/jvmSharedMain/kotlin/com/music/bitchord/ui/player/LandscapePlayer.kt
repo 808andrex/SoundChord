@@ -475,7 +475,6 @@ internal fun LandscapeCredits(
                     if (liked) Res.string.remove_from_liked else Res.string.like,
                 ),
                 onClick = onToggleLike,
-                active = liked,
                 haptic = if (liked) Haptic.ToggleOff else Haptic.ToggleOn,
             )
             Spacer(Modifier.width(8.dp))
