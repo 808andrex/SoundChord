@@ -256,6 +256,9 @@ interface PlayerSettingsSource {
     val preferUsbDac: StateFlow<Boolean>
     val prioritizeSpotifyCanvas: StateFlow<Boolean>
     val reduceAnimation: StateFlow<Boolean>
+    val coverSlideAnimation: StateFlow<Boolean>
+    val coverFluidAnimation: StateFlow<Boolean>
+    val coverMixOnlyEffects: StateFlow<Boolean>
     val reduceDynamicBlur: StateFlow<Boolean>
     /** Turns [LocalPlayerChrome] off: glyphs and text over the artwork in plain white. */
     val disableBlendEffects: StateFlow<Boolean>
@@ -278,6 +281,11 @@ interface PlayerSettingsSource {
     val smartMixView: StateFlow<MixTransitionView?>
     /** Progress through [smartMixView]'s blend, 0..1. */
     val smartMixProgress: StateFlow<Float>
+    val crossfadeRunning: StateFlow<Boolean>
+    val crossfadeProgress: StateFlow<Float>
+    val skipCrossfadeMs: StateFlow<Long>
+    val mixFadeMs: StateFlow<Long>
+    val mixIncomingArtworkUrl: StateFlow<String?>
     /** The next transition as planned, while the mix popup is open between blends; null otherwise. */
     val smartMixPreview: StateFlow<MixTransitionView?>
     val smartTransitionWindow: StateFlow<TransitionWindow?>

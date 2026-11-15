@@ -3571,8 +3571,12 @@ class PlaybackService : MediaLibraryService() {
         // "sleep after this song" and stop reading ahead.
         onTrackBecameCurrent(
             incoming.currentMediaItem,
-            previousEnded = true,
-            reason = Player.MEDIA_ITEM_TRANSITION_REASON_AUTO,
+            previousEnded = crossfade?.skipFadeInFlight != true,
+            reason = if (crossfade?.skipFadeInFlight == true) {
+                Player.MEDIA_ITEM_TRANSITION_REASON_SEEK
+            } else {
+                Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
+            },
             alreadyAudible = true,
         )
 
@@ -8723,6 +8727,7 @@ class PlaybackService : MediaLibraryService() {
                 castPrevious()
                 return
             }
+            if (crossfade.trySkipWithCrossfade(forward = false)) return
             wrappedPlayer.seekToPrevious()
         }
 
@@ -8730,6 +8735,7 @@ class PlaybackService : MediaLibraryService() {
             if (locked()) return
             onUserIntent()
             crossfade.onSkipRequested()
+            if (crossfade.trySkipWithCrossfade(forward = true)) return
             wrappedPlayer.seekToNextMediaItem()
         }
 
@@ -8737,6 +8743,7 @@ class PlaybackService : MediaLibraryService() {
             if (locked()) return
             onUserIntent()
             crossfade.onSkipRequested()
+            if (crossfade.trySkipWithCrossfade(forward = true)) return
             wrappedPlayer.seekToNext()
         }
     }

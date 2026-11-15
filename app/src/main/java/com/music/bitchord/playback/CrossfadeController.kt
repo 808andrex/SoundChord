@@ -516,6 +516,9 @@ class CrossfadeController(
     private var incomingAnalysis = TrackAnalysis()
     private var bailStartedAt = 0L
     private var armDeadline = 0L
+    /** A next/previous transition armed directly by the listener. */
+    private var manualFade = false
+    private var manualForward = true
 
     /** Length of the fade-out driven by [Phase.SLEEP_FADE], in ms. Fixed when it begins. */
     private var sleepFadeMs = 0L
@@ -802,7 +805,13 @@ class CrossfadeController(
         listeningTo?.removeListener(listener)
         listeningTo = null
         active().volume = 1f
+        manualFade = false
         AppSettings.smartMixInProgress.value = false
+        AppSettings.crossfadeRunning.value = false
+        AppSettings.skipCrossfadeMs.value = 0L
+        AppSettings.mixFadeMs.value = 0L
+        AppSettings.mixIncomingArtworkUrl.value = null
+        AppSettings.crossfadeProgress.value = 0f
         AppSettings.smartMixBlend.value = null
         clearMixView()
         AppSettings.smartMixPreview.value = null
@@ -828,7 +837,69 @@ class CrossfadeController(
      * player this class has finished with.
      */
     fun onSkipRequested() {
+        if (manualFade && phase == Phase.ARMING) {
+            abandonManual()
+            return
+        }
         if (phase != Phase.IDLE) bail()
+    }
+
+    /** True while the session handoff belongs to a listener-requested skip. */
+    val skipFadeInFlight: Boolean get() = manualFade
+
+    /**
+     * Arm a next/previous crossfade on the standby player. False leaves the
+     * caller responsible for performing its ordinary seek.
+     */
+    fun trySkipWithCrossfade(forward: Boolean): Boolean {
+        if (phase != Phase.IDLE) {
+            onSkipRequested()
+            return false
+        }
+        if (!AppSettings.crossfadeOnSkip.value) return false
+        if (versionSwapActive() || ListenTogether.state.value.inParty) return false
+        if (BitPerfectOutput.status.value.active) return false
+        val out = active()
+        if (!out.isPlaying) return false
+        val target = if (forward) {
+            out.nextMediaItemIndex
+        } else {
+            if (out.currentPosition > out.maxSeekToPreviousPosition) return false
+            out.previousMediaItemIndex
+        }
+        if (target == C.INDEX_UNSET) return false
+        val duration = out.duration
+        if (duration == C.TIME_UNSET || duration <= 0L) return false
+        val left = duration - out.currentPosition
+        val fade = minOf(skipFadeMs(), left / 2, duration / 3)
+        if (fade < SKIP_FADE_MIN_MS) return false
+        if (!begin(fade = fade, endMs = out.currentPosition + fade, smart = false, targetIndex = target)) return false
+        manualFade = true
+        manualForward = forward
+        armDeadline = SystemClock.elapsedRealtime() + SKIP_ARM_TIMEOUT_MS
+        AppSettings.skipCrossfadeMs.value = fade
+        return true
+    }
+
+    private fun skipFadeMs(): Long = configuredFadeMs()
+        .takeIf { it > 0L }
+        ?.coerceAtMost(SKIP_FADE_MAX_MS)
+        ?: SKIP_FADE_DEFAULT_MS
+
+    private fun driveManualArming() {
+        val out = outgoing ?: return abandonManual()
+        val into = incoming ?: return abandonManual()
+        if (!AppSettings.crossfadeOnSkip.value || !out.playWhenReady) return abandonManual()
+        val ready = into.playbackState == Player.STATE_READY
+        if (!ready && SystemClock.elapsedRealtime() > armDeadline) return abandonManual()
+        if (ready) startFade()
+    }
+
+    private fun abandonManual() {
+        val forward = manualForward
+        finish()
+        val player = active()
+        if (forward) player.seekToNextMediaItem() else player.seekToPreviousMediaItem()
     }
 
     // ---- Ticker -------------------------------------------------------------
@@ -863,7 +934,7 @@ class CrossfadeController(
 
         when (phase) {
             Phase.IDLE -> considerAutoTransition()
-            Phase.ARMING -> driveArming()
+            Phase.ARMING -> if (manualFade) driveManualArming() else driveArming()
             Phase.FADING -> driveFade()
             Phase.SLEEP_FADE -> driveSleepFade()
             Phase.BAILING -> driveBail()
@@ -1408,6 +1479,7 @@ class CrossfadeController(
         fade: Long,
         endMs: Long,
         smart: Boolean,
+        targetIndex: Int? = null,
         cueTimeMs: Long = 0L,
         playbackRate: Double = 1.0,
         outgoingRate: Double = 1.0,
@@ -1418,8 +1490,11 @@ class CrossfadeController(
         val out = active()
         val into = standby()
         if (out === into) return false
-        val nextIndex = out.nextMediaItemIndex
+        val nextIndex = targetIndex ?: out.nextMediaItemIndex
         if (nextIndex == C.INDEX_UNSET) return false
+        // The explicit index is supplied only by next/previous skip requests.
+        // Keep AutoMix's existing nextMediaItemIndex path unchanged.
+        if (targetIndex != null && targetIndex !in 0 until out.mediaItemCount) return false
         // The last blend's stretch, if it is somehow still easing off: this
         // player is about to be the outgoing side of a new one.
         endEase(clickless = false)
@@ -1687,6 +1762,10 @@ class CrossfadeController(
         // it for a frame otherwise.
         publishBlend(out, into, force = true)
         AppSettings.smartMixInProgress.value = isRealMix()
+        AppSettings.crossfadeRunning.value = true
+        AppSettings.crossfadeProgress.value = 0f
+        AppSettings.mixFadeMs.value = (fadeMs * if (render.advanced) mediaRatio else 1.0).toLong()
+        AppSettings.mixIncomingArtworkUrl.value = into.currentMediaItem?.mediaMetadata?.artworkUri?.toString()
         if (isRealMix()) publishMixView(out, into)
         // The bar fills to the end through the first half of the blend, which
         // would run straight over the marker for the transition now under way.
@@ -1838,11 +1917,12 @@ class CrossfadeController(
         // from under it: until the handoff its queue still runs on past the
         // track, and reaching the end would start the next item — the very
         // song fading in — a second time on the player that is leaving.
-        if (!handedOff && (progress >= render.handoffAt || (outRemaining != null && outRemaining <= HANDOFF_GUARD_MS))) {
+        if (!handedOff && (manualFade || progress >= render.handoffAt || (outRemaining != null && outRemaining <= HANDOFF_GUARD_MS))) {
             handOff(out, player)
         }
         publishBlend(out, player)
         if (AppSettings.smartMixView.value != null) AppSettings.smartMixProgress.value = progress
+        AppSettings.crossfadeProgress.value = progress
         rideFilters(incomingAt, outgoingAt)
 
         // Finish when the fade runs its course or its setting is switched off.
@@ -1852,7 +1932,9 @@ class CrossfadeController(
         // setting that actually started it — a Automix normally runs with
         // [configuredFadeMs] at zero, and reading that as "turned off" would
         // end every Automix on its first tick.
-        val settingSwitchedOff = if (smartFadeActive) {
+        val settingSwitchedOff = if (manualFade) {
+            !AppSettings.crossfadeOnSkip.value
+        } else if (smartFadeActive) {
             !AppSettings.smartFadeEnabled.value
         } else {
             configuredFadeMs() <= 0L
@@ -2351,6 +2433,11 @@ class CrossfadeController(
         SleepTimer.cancel()
         outgoing = null
         phase = Phase.IDLE
+        AppSettings.crossfadeRunning.value = false
+        AppSettings.skipCrossfadeMs.value = 0L
+        AppSettings.mixFadeMs.value = 0L
+        AppSettings.mixIncomingArtworkUrl.value = null
+        AppSettings.crossfadeProgress.value = 0f
     }
 
     /** Ramps the outgoing track away rather than cutting it, so an interruption has no click in it. */
@@ -3021,6 +3108,11 @@ class CrossfadeController(
         outgoing = null
         incoming = null
         handedOff = false
+        manualFade = false
+        AppSettings.skipCrossfadeMs.value = 0L
+        AppSettings.mixFadeMs.value = 0L
+        AppSettings.mixIncomingArtworkUrl.value = null
+        AppSettings.crossfadeProgress.value = 0f
         outgoingItemIndex = C.INDEX_UNSET
         queuedItemCount = 0
         incomingCueTimeMs = 0L
@@ -3030,11 +3122,17 @@ class CrossfadeController(
         outgoingAnalysis = TrackAnalysis()
         incomingAnalysis = TrackAnalysis()
         phase = Phase.IDLE
+        AppSettings.crossfadeRunning.value = false
+        AppSettings.skipCrossfadeMs.value = 0L
+        AppSettings.mixFadeMs.value = 0L
+        AppSettings.mixIncomingArtworkUrl.value = null
+        AppSettings.crossfadeProgress.value = 0f
         if (wasTransitioning) onSettled()
     }
 
     /** Still a next track, still playing, still switched on — by whichever setting armed this one. */
     private fun stillWorthFading(): Boolean {
+        if (manualFade) return AppSettings.crossfadeOnSkip.value
         val stillOn = if (smartFadeActive) AppSettings.smartFadeEnabled.value else configuredFadeMs() > 0L
         return stillOn && (outgoing ?: active()).hasNextMediaItem()
     }
@@ -3828,6 +3926,10 @@ class CrossfadeController(
     // equal-power is right everywhere.
 
     private companion object {
+        const val SKIP_FADE_DEFAULT_MS = 2_000L
+        const val SKIP_FADE_MAX_MS = 5_000L
+        const val SKIP_FADE_MIN_MS = 400L
+        const val SKIP_ARM_TIMEOUT_MS = 1_800L
         /** How much of each track either side of the overlap the mix popup shows, as a fraction of the overlap. */
         const val MIX_VIEW_CONTEXT = 0.24
 

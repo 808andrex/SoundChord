@@ -79,6 +79,9 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         override val preferUsbDac get() = AppSettings.preferUsbDac
         override val prioritizeSpotifyCanvas get() = AppSettings.prioritizeSpotifyCanvas
         override val reduceAnimation get() = AppSettings.reduceAnimation
+        override val coverSlideAnimation get() = AppSettings.coverSlideAnimation
+        override val coverFluidAnimation get() = AppSettings.coverFluidAnimation
+        override val coverMixOnlyEffects get() = AppSettings.coverMixOnlyEffects
         override val reduceDynamicBlur get() = AppSettings.reduceDynamicBlur
         override val disableBlendEffects get() = AppSettings.disableBlendEffects
         override val showNerdStats get() = AppSettings.showNerdStats
@@ -90,6 +93,11 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         override val smartMixBlend get() = AppSettings.smartMixBlend
         override val smartMixView get() = AppSettings.smartMixView
         override val smartMixProgress get() = AppSettings.smartMixProgress
+        override val crossfadeRunning get() = AppSettings.crossfadeRunning
+        override val crossfadeProgress get() = AppSettings.crossfadeProgress
+        override val skipCrossfadeMs get() = AppSettings.skipCrossfadeMs
+        override val mixFadeMs get() = AppSettings.mixFadeMs
+        override val mixIncomingArtworkUrl get() = AppSettings.mixIncomingArtworkUrl
         override val smartMixPreview get() = AppSettings.smartMixPreview
         override val smartTransitionWindow get() = AppSettings.smartTransitionWindow
         override val spotifyCanvasAutoHide get() = AppSettings.spotifyCanvasAutoHide
