@@ -20,14 +20,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,12 +43,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
+import com.music.bitchord.ui.components.AlertAction
+import com.music.bitchord.ui.components.AlertRule
+import com.music.bitchord.ui.components.AlertScaffold
 import com.soundchord.features.recognition.data.RecognitionHistoryEntry
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import dev.chrisbanes.haze.HazeState
 
 @Composable
 fun RecognitionHistoryScreen(
@@ -61,6 +63,7 @@ fun RecognitionHistoryScreen(
     showClearConfirmation: Boolean,
     onDismissClearConfirmation: () -> Unit,
     contentPadding: PaddingValues,
+    hazeState: HazeState,
     modifier: Modifier = Modifier,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -138,19 +141,33 @@ fun RecognitionHistoryScreen(
     }
 
     if (showClearConfirmation) {
-        AlertDialog(
-            onDismissRequest = onDismissClearConfirmation,
-            title = { Text(stringResource(R.string.recognition_history_clear_title)) },
-            text = { Text(stringResource(R.string.recognition_history_clear_message)) },
-            confirmButton = {
-                TextButton(onClick = { onClear(); onDismissClearConfirmation() }) {
-                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = onDismissClearConfirmation) { Text(stringResource(R.string.cancel)) }
-            },
-        )
+        AlertScaffold(hazeState = hazeState, onDismiss = onDismissClearConfirmation) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = stringResource(R.string.recognition_history_clear_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+                )
+                Text(
+                    text = stringResource(R.string.recognition_history_clear_message),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 18.dp),
+                )
+                AlertRule()
+                AlertAction(stringResource(R.string.cancel), emphasised = false, onClick = onDismissClearConfirmation)
+                AlertRule()
+                AlertAction(
+                    stringResource(R.string.delete),
+                    emphasised = true,
+                    destructive = true,
+                    onClick = { onClear(); onDismissClearConfirmation() },
+                )
+            }
+        }
     }
 }
 

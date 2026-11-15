@@ -262,6 +262,8 @@ object AppSettings {
     // which now reads [effectiveAudioQuality] and nothing else.
 
     val crossfadeSeconds = MutableStateFlow(0)
+    /** Blend manually requested next/previous track changes, when possible. */
+    val crossfadeOnSkip = MutableStateFlow(true)
 
     /**
      * Lets Automix's analyzer decide the transition's timing and length
@@ -429,6 +431,11 @@ object AppSettings {
 
     /** Freezes the main player's mesh gradient instead of letting it drift/crossfade. */
     val reduceAnimation = MutableStateFlow(false)
+
+    /** Cover-to-cover transition preference and its scope. */
+    val coverSlideAnimation = MutableStateFlow(true)
+    val coverFluidAnimation = MutableStateFlow(false)
+    val coverMixOnlyEffects = MutableStateFlow(false)
 
     /**
      * Whether the welcome pages (party name, then YouTube sign-in) have been
@@ -835,6 +842,12 @@ object AppSettings {
 
     /** How far through [smartMixView]'s blend playback is, 0..1. Read it in draw. */
     val smartMixProgress = MutableStateFlow(0f)
+    /** Active crossfade metadata consumed by the cover transition UI. */
+    val crossfadeRunning = MutableStateFlow(false)
+    val skipCrossfadeMs = MutableStateFlow(0L)
+    val mixFadeMs = MutableStateFlow(0L)
+    val mixIncomingArtworkUrl = MutableStateFlow<String?>(null)
+    val crossfadeProgress = MutableStateFlow(0f)
 
     /**
      * The *next* Automix transition laid out for the mix popup, as the plan
@@ -973,6 +986,7 @@ object AppSettings {
         exportDownloads.value = prefs.getBoolean(KEY_EXPORT_DOWNLOADS, false)
         syncDownloadedPlaylists.value = prefs.getBoolean(KEY_SYNC_DOWNLOADED_PLAYLISTS, false)
         crossfadeSeconds.value = prefs.getInt(KEY_CROSSFADE, 0)
+        crossfadeOnSkip.value = prefs.getBoolean(KEY_CROSSFADE_ON_SKIP, true)
         smartFadeEnabled.value = prefs.getBoolean(KEY_SMART_FADE, false)
         automixPerformanceMode.value = runCatching {
             AutomixPerformanceMode.valueOf(
@@ -1020,6 +1034,9 @@ object AppSettings {
         showNerdStats.value = prefs.getBoolean(KEY_NERD_STATS, false)
         showListenTogetherButton.value = prefs.getBoolean(KEY_LISTEN_TOGETHER_BUTTON, false)
         reduceAnimation.value = prefs.getBoolean(KEY_REDUCE_ANIMATION, false)
+        coverSlideAnimation.value = prefs.getBoolean(KEY_COVER_SLIDE_ANIMATION, true)
+        coverFluidAnimation.value = prefs.getBoolean(KEY_COVER_FLUID_ANIMATION, false)
+        coverMixOnlyEffects.value = prefs.getBoolean(KEY_COVER_MIX_ONLY_EFFECTS, false)
         onboardingComplete.value = prefs.getBoolean(KEY_ONBOARDING_COMPLETE, false)
         diwaliGreetingShown.value = prefs.getBoolean(KEY_DIWALI_GREETING_SHOWN, false)
         highPerformanceMode.value = prefs.getBoolean(KEY_HIGH_PERFORMANCE_MODE, false)
@@ -1292,6 +1309,11 @@ object AppSettings {
         prefs.edit().putInt(KEY_CROSSFADE, value).apply()
     }
 
+    fun setCrossfadeOnSkip(value: Boolean) {
+        crossfadeOnSkip.value = value
+        prefs.edit().putBoolean(KEY_CROSSFADE_ON_SKIP, value).apply()
+    }
+
     fun setSmartFadeEnabled(value: Boolean) {
         smartFadeEnabled.value = value
         prefs.edit().putBoolean(KEY_SMART_FADE, value).apply()
@@ -1417,6 +1439,21 @@ object AppSettings {
         val editor = prefs.edit().putBoolean(KEY_REDUCE_ANIMATION, value)
         if (value) editor.putBoolean(KEY_HIGH_PERFORMANCE_MODE, false)
         editor.apply()
+    }
+
+    fun setCoverSlideAnimation(value: Boolean) {
+        coverSlideAnimation.value = value
+        prefs.edit().putBoolean(KEY_COVER_SLIDE_ANIMATION, value).apply()
+    }
+
+    fun setCoverFluidAnimation(value: Boolean) {
+        coverFluidAnimation.value = value
+        prefs.edit().putBoolean(KEY_COVER_FLUID_ANIMATION, value).apply()
+    }
+
+    fun setCoverMixOnlyEffects(value: Boolean) {
+        coverMixOnlyEffects.value = value
+        prefs.edit().putBoolean(KEY_COVER_MIX_ONLY_EFFECTS, value).apply()
     }
 
     fun setOnboardingComplete() {
@@ -2256,6 +2293,7 @@ object AppSettings {
     private const val KEY_EXPORT_DOWNLOADS = "export_downloads"
     private const val KEY_SYNC_DOWNLOADED_PLAYLISTS = "sync_downloaded_playlists"
     private const val KEY_CROSSFADE = "crossfade_seconds"
+    private const val KEY_CROSSFADE_ON_SKIP = "crossfade_on_skip"
     private const val KEY_SMART_FADE = "smart_fade_enabled"
     private const val KEY_AUTOMIX_PERFORMANCE_MODE = "automix_performance_mode"
     private const val KEY_SKIP_SILENCE = "skip_silence"
@@ -2286,6 +2324,9 @@ object AppSettings {
     private const val KEY_LISTEN_TOGETHER_BUTTON = "show_listen_together_button"
     private const val KEY_CACHE_LIMIT = "audio_cache_limit_bytes"
     private const val KEY_REDUCE_ANIMATION = "reduce_animation"
+    private const val KEY_COVER_SLIDE_ANIMATION = "cover_slide_animation"
+    private const val KEY_COVER_FLUID_ANIMATION = "cover_fluid_animation"
+    private const val KEY_COVER_MIX_ONLY_EFFECTS = "cover_mix_only_effects"
     private const val KEY_ONBOARDING_COMPLETE = "onboarding_complete"
     private const val KEY_DIWALI_GREETING_SHOWN = "diwali_greeting_2026_shown"
     private const val KEY_HIGH_PERFORMANCE_MODE = "high_performance_mode"

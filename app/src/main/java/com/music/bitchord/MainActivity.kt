@@ -3088,6 +3088,7 @@ private fun BitChordApp(
                                     showRecognitionHistoryClearConfirmation = false
                                 },
                                 contentPadding = listPadding,
+                                hazeState = hazeState,
                             )
                         } else if (pageRoute == AppRoute.History) {
                             HistoryScreen(
@@ -3250,6 +3251,7 @@ private fun BitChordApp(
                                 onChosen = { navigator.pop() },
                                 onConfirmBitPerfect = { confirmBitPerfect = it },
                                 contentPadding = listPadding,
+                                onSpotifyCanvasAuth = { showSpotifyCanvasAuth = true },
                             )
                         } else if (pageRoute == AppRoute.Settings || pageRoute is AppRoute.SettingsSection) {
                             // The main page and every category's page are the
@@ -3277,7 +3279,6 @@ private fun BitChordApp(
                                 onSources = { navigator.push(AppRoute.Sources) },
                                 onListenTogether = { navigator.push(AppRoute.ListenTogether) },
                                 onWearOs = { navigator.push(AppRoute.WearOs) },
-                                onSpotifyCanvasAuth = { showSpotifyCanvasAuth = true },
                                 onAppLanguage = { showAppLanguage = true },
                                 onEditSignatureApi = { editingSignatureApi = true },
                                 onConfirmBitPerfect = { confirmBitPerfect = it },

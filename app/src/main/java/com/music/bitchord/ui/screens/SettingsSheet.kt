@@ -38,7 +38,6 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Notes
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
-import androidx.compose.material.icons.rounded.Animation
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -201,7 +200,6 @@ fun SettingsScreen(
     onSources: () -> Unit,
     onListenTogether: () -> Unit,
     onWearOs: () -> Unit,
-    onSpotifyCanvasAuth: () -> Unit,
     onAppLanguage: () -> Unit,
     onEditSignatureApi: () -> Unit,
     /**
@@ -230,6 +228,7 @@ fun SettingsScreen(
     val cellularQuality by AppSettings.audioQualityCellular.collectAsStateWithLifecycle()
     val metered by AppSettings.meteredConnection.collectAsStateWithLifecycle()
     val crossfade by AppSettings.crossfadeSeconds.collectAsStateWithLifecycle()
+    val crossfadeOnSkip by AppSettings.crossfadeOnSkip.collectAsStateWithLifecycle()
     val smartFade by AppSettings.smartFadeEnabled.collectAsStateWithLifecycle()
     val automixPerformance by AppSettings.automixPerformanceMode.collectAsStateWithLifecycle()
     val skipSilence by AppSettings.skipSilence.collectAsStateWithLifecycle()
@@ -250,8 +249,8 @@ fun SettingsScreen(
     val progressiveBlur by AppSettings.progressiveBlur.collectAsStateWithLifecycle()
     val liquidGlassSupported = isGlassSupported()
     val lyricsBlur by AppSettings.lyricsBlur.collectAsStateWithLifecycle()
-    val animatedCanvas by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
-    val canvasOverCellular by AppSettings.canvasOverCellular.collectAsStateWithLifecycle()
+    val coverSlide by AppSettings.coverSlideAnimation.collectAsStateWithLifecycle()
+    val coverFluid by AppSettings.coverFluidAnimation.collectAsStateWithLifecycle()
     val signatureApiEnabled by AppSettings.signatureApiEnabled.collectAsStateWithLifecycle()
     val signatureApiUrl by AppSettings.signatureApiUrl.collectAsStateWithLifecycle()
     val fullBleedArtwork by AppSettings.fullBleedArtwork.collectAsStateWithLifecycle()
@@ -410,7 +409,7 @@ fun SettingsScreen(
     val version = remember(context) {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        }.getOrNull() ?: "1.0"
+        }.getOrNull()?.substringBefore('-')?.removeSuffix(".0") ?: "1.1"
     }
 
     // Made fresh on every pass rather than remembered: it tallies the rows
@@ -801,6 +800,23 @@ fun SettingsScreen(
                     }
                 }
             }
+            val crossfadeOnSkipTitle = stringResource(R.string.crossfade_on_skip)
+            row(crossfadeOnSkipTitle, "crossfade", "skip", "next", "previous") {
+                BypassedByBitPerfect(bitPerfectReady) {
+                    SettingsRow(
+                        icon = SfIcons.Waves,
+                        title = crossfadeOnSkipTitle,
+                        subtitle = stringResource(R.string.crossfade_on_skip_subtitle),
+                        trailing = {
+                            IosSwitch(
+                                checked = crossfadeOnSkip,
+                                onCheckedChange = AppSettings::setCrossfadeOnSkip,
+                            )
+                        },
+                        onClick = { AppSettings.setCrossfadeOnSkip(!crossfadeOnSkip) },
+                    )
+                }
+            }
             val automixTitle = stringResource(R.string.automix)
             row(automixTitle, "crossfade", "smart fade", "mix") {
                 BypassedByBitPerfect(bitPerfectReady) {
@@ -1034,6 +1050,22 @@ fun SettingsScreen(
                     onClick = { AppSettings.setReduceAnimation(!reduceAnimation) },
                 )
             }
+            val coverAnimationTitle = stringResource(R.string.cover_animation)
+            val coverAnimationValue = stringResource(
+                when {
+                    !coverSlide -> R.string.cover_animation_disabled
+                    coverFluid && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> R.string.cover_animation_fluid
+                    else -> R.string.cover_animation_slide
+                },
+            )
+            row(coverAnimationTitle, "cover", "transition", "fluid", "slide", "motion", "canvas", "video", "spotify", "cellular", "sampul", "cair", "animada", "seluler") {
+                SettingsRow(
+                    icon = SfIcons.Animation,
+                    title = coverAnimationTitle,
+                    value = coverAnimationValue,
+                    onClick = { onOpenChoice(SettingsChoiceKind.COVER_ANIMATION) },
+                )
+            }
             val reduceDynamicBlurTitle = stringResource(R.string.reduce_dynamic_blur)
             row(reduceDynamicBlurTitle, "blur", "performance") {
                 SettingsRow(
@@ -1161,59 +1193,6 @@ fun SettingsScreen(
                     onSelect = { AppSettings.setPlayerTheme(PlayerTheme.entries[it]) },
                     modifier = Modifier.padding(start = ROW_INSET, end = ROW_INSET, bottom = 14.dp),
                 )
-            }
-            val animatedCoverArtTitle = stringResource(R.string.animated_cover_art)
-            // Carries the keywords of the rows that only appear once it is on,
-            // so searching "spotify" with animated covers switched off turns up
-            // the switch that brings the Spotify row back rather than nothing.
-            row(animatedCoverArtTitle, "canvas", "video", "spotify") {
-                SettingsRow(
-                    icon = SfIcons.Animation,
-                    title = animatedCoverArtTitle,
-                    subtitle = stringResource(R.string.animated_cover_art_subtitle),
-                    trailing = {
-                        IosSwitch(
-                            checked = animatedCanvas,
-                            onCheckedChange = AppSettings::setAnimatedCanvas,
-                        )
-                    },
-                    onClick = { AppSettings.setAnimatedCanvas(!animatedCanvas) },
-                )
-            }
-            // Reads as part of the Animated cover art option above it, not
-            // as a separate setting. Nothing to narrow while the clip itself
-            // is off. Defaults to off: a clip loops for as long as its track
-            // plays, so on cellular this is not a one-time video cost but
-            // that cost repeated on every loop — see AppSettings.canvasOverCellular.
-            if (animatedCanvas) {
-                val coverCellularTitle = stringResource(R.string.animated_cover_cellular)
-                row(coverCellularTitle, "canvas", "cellular", divided = false) {
-                    SettingsSubRow(
-                        title = coverCellularTitle,
-                        checked = canvasOverCellular,
-                        onCheckedChange = AppSettings::setCanvasOverCellular,
-                    )
-                }
-                val spotifyCanvasTitle = stringResource(R.string.integrate_spotify_canvas)
-                row(spotifyCanvasTitle, "spotify", "canvas", divided = false) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = onSpotifyCanvasAuth)
-                            .padding(start = ROW_INSET, end = ROW_INSET, top = 4.dp, bottom = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = spotifyCanvasTitle,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Chevron()
-                    }
-                }
             }
             val artistSignaturesTitle = stringResource(R.string.artist_signatures)
             row(artistSignaturesTitle, "signature", "artist", "logo") {
@@ -1788,39 +1767,39 @@ fun SettingsScreen(
         // The version line is the page's colophon, not a setting: it belongs to
         // the whole list, so it goes when the list is narrowed to a few rows.
         if (section == null && searchQuery.isBlank()) {
-        Text(
-            text = buildAnnotatedString {
-                append("SoundChord $version  ")
-                val linkStyles = TextLinkStyles(
-                    style = SpanStyle(
-                        color = MaterialTheme.colorScheme.primary,
-                        textDecoration = TextDecoration.Underline,
-                    ),
-                )
-                withLink(LinkAnnotation.Url("https://github.com/808andrex/SoundChord", linkStyles)) {
-                    append("GitHub")
-                }
-                append("  ")
-                withLink(LinkAnnotation.Url("https://github.com/808andrex", linkStyles)) {
-                    append("Developer")
-                }
-                append("  ")
-                withLink(LinkAnnotation.Url("https://discord.gg/pDdKfrdHY6", linkStyles)) {
-                    append("Discord")
-                }
-                append("  ")
-                withLink(LinkAnnotation.Url("https://bitchord.kushagrasingh.in/", linkStyles)) {
-                    append("Website")
-                }
-                append("\n~YouTube Music & Listen Together Backend")
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 24.dp, bottom = 8.dp),
-        )
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = buildAnnotatedString {
+                    append("SoundChord $version  ")
+                    val linkStyles = TextLinkStyles(
+                        style = SpanStyle(
+                            color = MaterialTheme.colorScheme.primary,
+                            textDecoration = TextDecoration.Underline,
+                        ),
+                    )
+                    withLink(LinkAnnotation.Url("https://github.com/808andrex/SoundChord", linkStyles)) {
+                        append("GitHub")
+                    }
+                    append("  ")
+                    withLink(LinkAnnotation.Url("https://github.com/808andrex", linkStyles)) {
+                        append("Developer")
+                    }
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = "Made in 808andrex",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
         }
     }
 
@@ -2627,6 +2606,25 @@ internal fun SettingsRow(
     }
 }
 
+@Composable
+private fun CoverAnimationToggle(
+    icon: ImageVector,
+    title: Int,
+    subtitle: Int,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onChange: (Boolean) -> Unit,
+) {
+    SettingsRow(
+        icon = icon,
+        title = stringResource(title),
+        subtitle = stringResource(subtitle),
+        enabled = enabled,
+        trailing = { IosSwitch(checked = checked, onCheckedChange = onChange, enabled = enabled) },
+        onClick = { onChange(!checked) },
+    )
+}
+
 /**
  * A toggle that reads as part of the option above it rather than a setting
  * of its own: no icon, no divider, and pulled up close against its parent
@@ -2853,6 +2851,7 @@ enum class SettingsChoiceKind(@param:StringRes val title: Int) {
     AUTOMIX_PERFORMANCE(R.string.automix_performance),
     BIT_PERFECT(R.string.bit_perfect_output),
     FONT(R.string.font),
+    COVER_ANIMATION(R.string.cover_animation),
 }
 
 /** The main page's list of categories: a glyph and a name each, and a chevron into it. */
@@ -2884,6 +2883,7 @@ fun SettingsChoicePage(
     onConfirmBitPerfect: (BitPerfectMode) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
+    onSpotifyCanvasAuth: () -> Unit = {},
 ) {
     Column(
         modifier
@@ -2983,6 +2983,71 @@ fun SettingsChoicePage(
                 ) { font ->
                     AppSettings.setAppFont(font)
                     onChosen()
+                }
+            }
+
+            SettingsChoiceKind.COVER_ANIMATION -> {
+                val slide by AppSettings.coverSlideAnimation.collectAsStateWithLifecycle()
+                val fluid by AppSettings.coverFluidAnimation.collectAsStateWithLifecycle()
+                val mixOnly by AppSettings.coverMixOnlyEffects.collectAsStateWithLifecycle()
+                val animated by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
+                val cellular by AppSettings.canvasOverCellular.collectAsStateWithLifecycle()
+                SettingsGroup(header = stringResource(R.string.cover_transition_section), topSpacing = 0.dp) {
+                    CoverAnimationToggle(
+                        icon = SfIcons.Animation,
+                        title = R.string.cover_animation_enabled,
+                        subtitle = R.string.cover_animation_enabled_subtitle,
+                        checked = slide,
+                        onChange = AppSettings::setCoverSlideAnimation,
+                    )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        RowDivider()
+                        CoverAnimationToggle(
+                            icon = SfIcons.Waves,
+                            title = R.string.fluid_cover_effect,
+                            subtitle = if (slide) R.string.fluid_cover_effect_subtitle else R.string.cover_fluid_locked,
+                            checked = fluid,
+                            enabled = slide,
+                            onChange = AppSettings::setCoverFluidAnimation,
+                        )
+                    }
+                    RowDivider()
+                    CoverAnimationToggle(
+                        icon = SfIcons.AutoAwesome,
+                        title = R.string.animate_only_during_mix,
+                        subtitle = if (slide) R.string.animate_only_during_mix_subtitle else R.string.cover_fluid_locked,
+                        checked = mixOnly,
+                        enabled = slide,
+                        onChange = AppSettings::setCoverMixOnlyEffects,
+                    )
+                }
+                SettingsGroup(header = stringResource(R.string.animated_cover_section)) {
+                    CoverAnimationToggle(
+                        icon = SfIcons.Video,
+                        title = R.string.animated_cover_art,
+                        subtitle = R.string.animated_cover_art_subtitle,
+                        checked = animated,
+                        onChange = AppSettings::setAnimatedCanvas,
+                    )
+                    RowDivider()
+                    CoverAnimationToggle(
+                        icon = SfIcons.SignalCellularAlt,
+                        title = R.string.play_animated_cover_over_cellular,
+                        subtitle = if (animated) R.string.play_animated_cover_over_cellular_subtitle else R.string.animated_cover_locked,
+                        checked = cellular,
+                        enabled = animated,
+                        onChange = AppSettings::setCanvasOverCellular,
+                    )
+                }
+                SettingsGroup(header = stringResource(R.string.spotify_canvas_section)) {
+                    SettingsRow(
+                        icon = SfIcons.Key,
+                        title = stringResource(R.string.integrate_spotify_canvas),
+                        subtitle = stringResource(if (animated) R.string.spotify_canvas_settings_subtitle else R.string.animated_cover_locked),
+                        enabled = animated,
+                        trailing = { Chevron() },
+                        onClick = onSpotifyCanvasAuth,
+                    )
                 }
             }
         }
