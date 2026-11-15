@@ -70,6 +70,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Person
@@ -180,6 +181,7 @@ import com.music.bitchord.ui.screens.DiscordDialogHost
 import com.music.bitchord.ui.screens.DiscordScreen
 import com.music.bitchord.ui.screens.EqualizerScreen
 import com.music.bitchord.ui.screens.HistoryScreen
+import com.music.bitchord.ui.screens.RecognitionHistoryScreen
 import com.music.bitchord.ui.screens.LibraryReplayEntry
 import com.music.bitchord.ui.screens.libraryDeviceItems
 import com.music.bitchord.ui.screens.SPOTIFY_BROWSE_ID
@@ -381,6 +383,8 @@ import com.soundchord.features.radio.ui.RadioScreen
 import com.soundchord.features.recognition.RecognitionFab
 import com.soundchord.features.recognition.RecognitionScreen
 import com.soundchord.features.recognition.data.MusicRecognitionService
+import com.soundchord.features.recognition.data.RecognitionHistoryStore
+import com.soundchord.features.recognition.data.RecognitionHistoryEntry
 import com.soundchord.features.recognition.model.RecognitionResult
 
 /** A full first screen of a native YouTube Music radio before AutoPlay tops it up. */
@@ -558,6 +562,7 @@ private fun BitChordApp(
     val navBarScroll = rememberFloatingTabBarScrollConnection()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var recognitionOpen by rememberSaveable { mutableStateOf(false) }
+    var showRecognitionHistoryClearConfirmation by remember { mutableStateOf(false) }
     var recognitionFabVisible by rememberSaveable { mutableStateOf(true) }
     // Explore loads the first time it's shown, not at launch beside Home.
     LaunchedEffect(selectedTab) {
@@ -950,6 +955,7 @@ private fun BitChordApp(
     val activeAccountId by viewModel.activeAccountId.collectAsStateWithLifecycle()
     val activeProfileId by viewModel.activeProfileId.collectAsStateWithLifecycle()
     val historyState by viewModel.history.collectAsStateWithLifecycle()
+    val recognitionHistory by RecognitionHistoryStore.entries.collectAsStateWithLifecycle()
     val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
     val lyricsSource by viewModel.lyricsSource.collectAsStateWithLifecycle()
     val lyricsChecked by viewModel.lyricsChecked.collectAsStateWithLifecycle()
@@ -1738,6 +1744,29 @@ private fun BitChordApp(
             selectedTab = TAB_SEARCH
             viewModel.setSearchSource(SearchSource.YOUTUBE)
             viewModel.onQueryChange(listOf(result.title, result.artist).filter(String::isNotBlank).joinToString(" "))
+            viewModel.submitSearch()
+        }
+    }
+
+    val playRecognitionHistoryEntry: (RecognitionHistoryEntry) -> Unit = { entry ->
+        navigator.clear()
+        showRecognitionHistoryClearConfirmation = false
+        val videoId = entry.videoId
+        if (!videoId.isNullOrBlank()) {
+            selectedTab = TAB_HOME
+            playRadio(
+                Song(
+                    videoId = videoId,
+                    title = entry.title,
+                    artist = entry.artist,
+                    thumbnailUrl = entry.artworkUrl,
+                ),
+                QueueSource(searchLabel, PlaybackSourceType.SEARCH),
+            )
+        } else {
+            selectedTab = TAB_SEARCH
+            viewModel.setSearchSource(SearchSource.YOUTUBE)
+            viewModel.onQueryChange(listOf(entry.title, entry.artist).filter(String::isNotBlank).joinToString(" "))
             viewModel.submitSearch()
         }
     }
@@ -3048,7 +3077,19 @@ private fun BitChordApp(
                         detailListStates.getOrPut(key) { LazyListState() }
                     }
                     val pageContent: @Composable () -> Unit = {
-                        if (pageRoute == AppRoute.History) {
+                        if (pageRoute == AppRoute.RecognitionHistory) {
+                            RecognitionHistoryScreen(
+                                entries = recognitionHistory,
+                                onPlay = playRecognitionHistoryEntry,
+                                onRemove = RecognitionHistoryStore::remove,
+                                onClear = RecognitionHistoryStore::clear,
+                                showClearConfirmation = showRecognitionHistoryClearConfirmation,
+                                onDismissClearConfirmation = {
+                                    showRecognitionHistoryClearConfirmation = false
+                                },
+                                contentPadding = listPadding,
+                            )
+                        } else if (pageRoute == AppRoute.History) {
                             HistoryScreen(
                                 state = historyState,
                                 listState = historyListState,
@@ -3936,6 +3977,7 @@ private fun BitChordApp(
                         AppRoute.Downloads -> stringResource(R.string.downloads)
                         AppRoute.Discord -> "Discord"
                         AppRoute.History -> stringResource(R.string.history)
+                        AppRoute.RecognitionHistory -> stringResource(R.string.recognition_history_title)
                         is AppRoute.LibraryShowAll -> route.shelf.title
                         is AppRoute.ArtistShelf -> route.shelf.title
                         AppRoute.Moods -> stringResource(R.string.find_your_mood)
@@ -3963,7 +4005,8 @@ private fun BitChordApp(
                     transparentBackdrop = true,
                     artworkPageChrome = true,
                     backButtonHazeState = hazeState,
-                    centeredTitle = recognitionOpen,
+                    centeredTitle = recognitionOpen || route == AppRoute.History ||
+                        route == AppRoute.RecognitionHistory,
                     trailingTitle = if (detail != null && detailActiveShelf != null) detail.title else null,
                     // Search has no large in-list header to hand the title back to —
                     // the field takes that space — so its bar title is always up.
@@ -4085,7 +4128,7 @@ private fun BitChordApp(
                         }
                         // Only worth surfacing where there's room for it and it won't
                         // be mistaken for a per-page action — Home, at rest.
-                        if (route == null && detail == null && selectedTab == TAB_HOME) {
+                        if (!recognitionOpen && route == null && detail == null && selectedTab == TAB_HOME) {
                             updateNotice?.let { update ->
                                 IconButton(onClick = { showUpdateDialog = true }) {
                                     Icon(
@@ -4104,6 +4147,21 @@ private fun BitChordApp(
                         // None on Settings or the pages opened from it: those are
                         // about the account, and the photo would only reopen them.
                         if (!(route != null && AppRoute.Settings in navigator)) {
+                            if (recognitionOpen) {
+                                IconButton(
+                                    onClick = {
+                                        recognitionOpen = false
+                                        MusicRecognitionService.reset()
+                                        navigator.push(AppRoute.RecognitionHistory)
+                                    },
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.History,
+                                        contentDescription = stringResource(R.string.recognition_history_title),
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+                            }
                             // Left of the account photo, and only on Library itself:
                             // a history is a record of what was played, which reads
                             // as that tab's business rather than every tab's.
@@ -4259,13 +4317,25 @@ private fun BitChordApp(
                             // [TopBarDownloadButton], which decides that for
                             // itself rather than being told. Not on the page it
                             // opens, where it would only lead back to itself.
-                            if (route != AppRoute.Downloads) {
+                            if (route == AppRoute.RecognitionHistory) {
+                                IconButton(
+                                    onClick = { showRecognitionHistoryClearConfirmation = true },
+                                    enabled = recognitionHistory.isNotEmpty(),
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Delete,
+                                        contentDescription = stringResource(R.string.delete),
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+                            }
+                            if (route != AppRoute.Downloads && !recognitionOpen) {
                                 TopBarDownloadButton(onClick = { navigator.push(AppRoute.Downloads) })
                             }
                             // Not on a release page, whose pill already carries
                             // three of its own controls — Apple Music leaves the
                             // profile off its album pages too.
-                            if (!isReleaseDetail) TopBarAccountButton(
+                            if (!isReleaseDetail && route != AppRoute.RecognitionHistory) TopBarAccountButton(
                                 account = account,
                                 onClick = {
                                     if (signedIn) {

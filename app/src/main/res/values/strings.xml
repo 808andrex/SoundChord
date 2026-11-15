@@ -544,6 +544,11 @@
     <string name="mono">Mono</string>
     <string name="stereo">Stereo</string>
     <string name="history">History</string>
+    <string name="recognition_history_title">Recognition history</string>
+    <string name="recognition_history_empty">Songs you identify will appear here</string>
+    <string name="recognition_history_no_matches">No recognized songs match your search</string>
+    <string name="recognition_history_clear_title">Clear recognition history?</string>
+    <string name="recognition_history_clear_message">This will permanently remove all recognized songs from this device.</string>
     <string name="sources">Sources</string>
     <string name="wifi">Wi-Fi</string>
     <string name="mobile_data">Mobile data</string>

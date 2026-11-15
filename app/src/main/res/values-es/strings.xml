@@ -332,6 +332,11 @@
     <string name="mono">Mono</string>
     <string name="stereo">Estéreo</string>
     <string name="history">Historial</string>
+    <string name="recognition_history_title">Historial de reconocimiento</string>
+    <string name="recognition_history_empty">Las canciones que identifiques aparecerán aquí</string>
+    <string name="recognition_history_no_matches">No hay canciones reconocidas que coincidan con la búsqueda</string>
+    <string name="recognition_history_clear_title">¿Borrar el historial de reconocimiento?</string>
+    <string name="recognition_history_clear_message">Se eliminarán definitivamente todas las canciones reconocidas en este dispositivo.</string>
     <string name="sources">Fuentes</string>
     <string name="wifi">Wi-Fi</string>
     <string name="mobile_data">Datos móviles</string>
