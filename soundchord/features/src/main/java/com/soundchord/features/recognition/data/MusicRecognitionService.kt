@@ -58,7 +58,10 @@ object MusicRecognitionService {
                 result = recognizeAudio(firstSample + extension)
             }
             _status.value = result.fold(
-                onSuccess = { RecognitionStatus.Success(it) },
+                onSuccess = {
+                    RecognitionHistoryStore.record(context, it)
+                    RecognitionStatus.Success(it)
+                },
                 onFailure = { error ->
                     val message = error.message ?: "Recognition failed"
                     when {
