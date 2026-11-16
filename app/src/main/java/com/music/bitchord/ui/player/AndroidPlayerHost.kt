@@ -98,6 +98,8 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         override val skipCrossfadeMs get() = AppSettings.skipCrossfadeMs
         override val mixFadeMs get() = AppSettings.mixFadeMs
         override val mixIncomingArtworkUrl get() = AppSettings.mixIncomingArtworkUrl
+        override val mixIncomingArtworkMediaId get() = AppSettings.mixIncomingArtworkMediaId
+        override val mixIncomingArtworkDirection get() = AppSettings.mixIncomingArtworkDirection
         override val smartMixPreview get() = AppSettings.smartMixPreview
         override val smartTransitionWindow get() = AppSettings.smartTransitionWindow
         override val spotifyCanvasAutoHide get() = AppSettings.spotifyCanvasAutoHide

@@ -730,6 +730,7 @@ class PlaybackService : MediaLibraryService() {
 
     private var boundedContextWindow: QueueWindow? = null
     private var boundedContextToken: String? = null
+    private var boundedContextCrossfadePending = false
     private var boundedContextSource: QueueSource? = null
     private var boundedContextRequest: BoundedContextRequests.Request? = null
     private var boundedCanonicalJob: Job? = null
@@ -2696,6 +2697,7 @@ class PlaybackService : MediaLibraryService() {
             reason = Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED,
             alreadyAudible = true,
         )
+
     }
 
     /** Reopens the current song through YouTube and remembers that choice. */
@@ -2931,15 +2933,31 @@ class PlaybackService : MediaLibraryService() {
 
         val items = boundedMediaItems(plan, window)
         val start = plan.history.size
-        exoPlayer.setMediaItems(items, start.coerceIn(items.indices), 0L)
-        saveBoundedContextSnapshot(exoPlayer)
-        exoPlayer.prepare()
-        exoPlayer.play()
-        startBoundedContinuationLoading(contextToken)
+        val startIndex = start.coerceIn(items.indices)
+        boundedContextCrossfadePending = true
+        val crossfadeStarted = crossfade?.tryQueueSelectionWithCrossfade(
+            items = items,
+            targetIndex = startIndex,
+            positionMs = 0L,
+            onFallback = {
+                boundedContextCrossfadePending = false
+                player?.let(::saveBoundedContextSnapshot)
+                startBoundedContinuationLoading(contextToken)
+            },
+        ) == true
+        if (!crossfadeStarted) {
+            boundedContextCrossfadePending = false
+            exoPlayer.setMediaItems(items, startIndex, 0L)
+            saveBoundedContextSnapshot(exoPlayer)
+            exoPlayer.prepare()
+            exoPlayer.play()
+            startBoundedContinuationLoading(contextToken)
+        }
     }
 
     /** Clears local bounded state before a non-context queue replaces the player. */
     private fun clearBoundedContext() {
+        boundedContextCrossfadePending = false
         boundedEditState = BoundedQueueEdits.invalidateContext(boundedEditState)
         boundedContextRequest?.handoffToken?.let(BoundedContextRequests::discard)
         boundedCanonicalJob?.cancel()
@@ -3579,6 +3597,17 @@ class PlaybackService : MediaLibraryService() {
             },
             alreadyAudible = true,
         )
+
+        // Bounded album/playlist starts use a session command rather than
+        // SessionPlayer.setMediaItems. Persist and refill the new context once
+        // its standby player becomes the session owner.
+        if (boundedContextCrossfadePending && crossfade?.manualQueueSelectionInFlight == true) {
+            boundedContextCrossfadePending = false
+            boundedContextToken?.let { token ->
+                saveBoundedContextSnapshot(incoming)
+                startBoundedContinuationLoading(token)
+            }
+        }
 
         // A crossfade starts the incoming item on the player that was idle, so
         // it never delivers onMediaItemTransition to playbackListener. Keep
@@ -8158,11 +8187,11 @@ class PlaybackService : MediaLibraryService() {
      * that command is redirected rather than left to behave differently
      * depending on which back button was pressed.
      *
-     * **A skip cancels the crossfade.** Blending is for a track running out,
-     * not for one being changed: told to move on, the listener wants the song
-     * they were on to stop, not to keep playing over the one they asked for.
-     * So every skip tells [CrossfadeController] to drop whatever is in flight
-     * and then moves the queue plainly.
+     * **Next, previous, and direct song selections can crossfade.** The
+     * [CrossfadeController] arms the selected item on its standby player and
+     * falls back to the ordinary queue operation if that transition cannot
+     * start. A new selection supersedes a manual transition that is still
+     * arming, so a stale request cannot briefly become the displayed track.
      *
      * Command availability is deliberately untouched — mutating it through a
      * [ForwardingPlayer] means intercepting listener callbacks too. The one
@@ -8501,6 +8530,7 @@ class PlaybackService : MediaLibraryService() {
             // this device rejoins it wherever it has got to. See
             // [PartySync.onLockedTransport], which owns that catch-up.
             if (lockedTransport(true)) return
+            if (crossfade.manualQueueSelectionInFlight) return
             onUserIntent()
             // Held back only when a party will schedule the start for everyone
             // at once — see [PartySync.shouldDeferPlay], which starts the player
@@ -8512,6 +8542,11 @@ class PlaybackService : MediaLibraryService() {
                 return
             }
             super.play()
+        }
+
+        override fun prepare() {
+            if (crossfade.manualQueueSelectionInFlight) return
+            super.prepare()
         }
 
         override fun pause() {
@@ -8584,6 +8619,8 @@ class PlaybackService : MediaLibraryService() {
                 castPrevious()
                 return
             }
+            crossfade.onSkipRequested()
+            if (crossfade.trySkipWithCrossfade(forward = false)) return
             super.seekToPrevious()
         }
 
@@ -8606,6 +8643,9 @@ class PlaybackService : MediaLibraryService() {
         override fun setMediaItems(mediaItems: List<MediaItem>, resetPosition: Boolean) {
             if (locked()) return
             onUserIntent()
+            if (resetPosition && mediaItems.isNotEmpty() &&
+                crossfade.tryQueueSelectionWithCrossfade(mediaItems, 0, 0L)
+            ) return
             super.setMediaItems(mediaItems, resetPosition)
         }
 
@@ -8616,6 +8656,9 @@ class PlaybackService : MediaLibraryService() {
         ) {
             if (locked()) return
             onUserIntent()
+            if (mediaItems.isNotEmpty() && startIndex in mediaItems.indices &&
+                crossfade.tryQueueSelectionWithCrossfade(mediaItems, startIndex, startPositionMs)
+            ) return
             super.setMediaItems(mediaItems, startIndex, startPositionMs)
         }
 
@@ -8691,7 +8734,6 @@ class PlaybackService : MediaLibraryService() {
         override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
             if (locked()) return
             onUserIntent()
-            crossfade.onSkipRequested()
             if (mediaItemIndex !in 0 until wrappedPlayer.mediaItemCount) return
             // The track already on the receiver: a position in it is the
             // receiver's to seek, not the paused phone's.
@@ -8699,6 +8741,23 @@ class PlaybackService : MediaLibraryService() {
                 cast.seekTo(positionMs)
                 return
             }
+            val tiers = (0 until wrappedPlayer.mediaItemCount).map { wrappedPlayer.getMediaItemAt(it).queueTier }
+            val jump = QueueTimeline.computeJumpOrder(
+                tiers,
+                wrappedPlayer.currentMediaItemIndex,
+                mediaItemIndex,
+            )
+            if (jump != null) {
+                val originalItems = (0 until wrappedPlayer.mediaItemCount).map(wrappedPlayer::getMediaItemAt)
+                val selectedItems = jump.newOrderIndices.map { index ->
+                    val item = originalItems[index]
+                    if (index == mediaItemIndex && jump.promoteTargetToContext) {
+                        QueueShuffle.withQueueMetadata(item, newTier = QueueTier.CONTEXT)
+                    } else item
+                }
+                if (crossfade.tryQueueSelectionWithCrossfade(selectedItems, jump.newTargetIndex, positionMs)) return
+            }
+            crossfade.onSkipRequested()
             if (mediaItemIndex <= wrappedPlayer.currentMediaItemIndex) {
                 wrappedPlayer.seekTo(mediaItemIndex, positionMs)
                 return

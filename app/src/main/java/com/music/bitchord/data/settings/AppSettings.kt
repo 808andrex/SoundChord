@@ -847,6 +847,8 @@ object AppSettings {
     val skipCrossfadeMs = MutableStateFlow(0L)
     val mixFadeMs = MutableStateFlow(0L)
     val mixIncomingArtworkUrl = MutableStateFlow<String?>(null)
+    val mixIncomingArtworkMediaId = MutableStateFlow<String?>(null)
+    val mixIncomingArtworkDirection = MutableStateFlow(1f)
     val crossfadeProgress = MutableStateFlow(0f)
 
     /**

@@ -286,6 +286,8 @@ interface PlayerSettingsSource {
     val skipCrossfadeMs: StateFlow<Long>
     val mixFadeMs: StateFlow<Long>
     val mixIncomingArtworkUrl: StateFlow<String?>
+    val mixIncomingArtworkMediaId: StateFlow<String?>
+    val mixIncomingArtworkDirection: StateFlow<Float>
     /** The next transition as planned, while the mix popup is open between blends; null otherwise. */
     val smartMixPreview: StateFlow<MixTransitionView?>
     val smartTransitionWindow: StateFlow<TransitionWindow?>
