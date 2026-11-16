@@ -7,7 +7,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -40,10 +39,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.takeWhile
 import androidx.compose.runtime.withFrameNanos
 
 /**
@@ -310,7 +307,6 @@ internal fun rememberArtworkDissolve(
     SideEffect { dissolve.lastQueueIndex = queueIndex }
     val mixingNow by rememberUpdatedState(mixing)
     val skipFadeNow by rememberUpdatedState(skipFadeMs)
-    val mixFadeNow by rememberUpdatedState(mixFadeMs)
     val mixOnlyNow by rememberUpdatedState(coverMixOnly)
     val mixArtworkProgress = remember(dissolve) { Animatable(0f) }
     LaunchedEffect(dissolve, mixArtworkProgress) {
@@ -328,6 +324,15 @@ internal fun rememberArtworkDissolve(
         withTimeoutOrNull(ART_DISSOLVE_WAIT_MS) { snapshotFlow { art.loaded }.first { it } }
         withFrameNanos { }
         withFrameNanos { }
+        if (mixingNow && skipFadeNow <= 0L) {
+            // Keep the outgoing sleeve in place until the mixer reaches its
+            // midpoint, then begin the still-art dissolve for the second half.
+            combine(
+                PlayerSettings.crossfadeProgress,
+                snapshotFlow { mixingNow },
+            ) { progress, active -> progress to active }
+                .first { (progress, active) -> progress >= 0.5f || !active }
+        }
         dissolve.light = mixOnlyNow && (!mixingNow || skipFadeNow > 0L)
         val duration = when {
             // A manual next/previous cover follows the audio fade duration.
@@ -335,38 +340,24 @@ internal fun rememberArtworkDissolve(
                 val manualDuration = skipFadeNow.toFloat() * if (transitionDirection < 0f) 1.15f else 1f
                 manualDuration.toInt().coerceIn(400, 6_000)
             }
-            // Keep automatic cover changes aligned with the actual audio mix.
-            mixingNow && mixFadeNow > 0L -> mixFadeNow.toInt().coerceIn(400, 60_000)
+            mixingNow && mixFadeMs > 0L -> (mixFadeMs / 2L).coerceAtMost(3_200L).coerceAtLeast(2_400L).toInt()
             mixingNow -> MIX_DISSOLVE_MS
             dissolve.light -> LIGHT_DISSOLVE_MS
             dissolve.fluid -> FLUID_DISSOLVE_MS
             else -> SKIP_DISSOLVE_MS
         }
         if (mixingNow && skipFadeNow <= 0L) {
-            // Artwork follows the audio transition itself. smartMixProgress is
-            // only published while the optional mix-view model is mounted;
-            // crossfadeProgress is published for every active AutoMix blend.
-            mixArtworkProgress.snapTo(PlayerSettings.crossfadeProgress.value.coerceIn(0f, 1f))
-            dissolve.progress = mixArtworkProgress.value
-            combine(
-                PlayerSettings.crossfadeProgress,
-                snapshotFlow { mixingNow },
-            ) { progress, active -> progress to active }
-                .takeWhile { (_, active) -> active }
-                .collectLatest { (target, _) ->
-                    // Retarget a continuous Compose animation at audio progress
-                    // updates; spring carries velocity across updates and avoids
-                    // the visible 30 ms stepping on either transition direction.
-                    // finish() resets the published audio progress for the next
-                    // track before the active flag reaches Compose; never let
-                    // that cleanup tick run the artwork mask backwards.
-                    val monotonicTarget = target.coerceIn(0f, 1f).coerceAtLeast(mixArtworkProgress.value)
-                    mixArtworkProgress.animateTo(
-                        monotonicTarget,
-                        animationSpec = spring(dampingRatio = 1f, stiffness = 900f),
-                    )
-                }
-            mixArtworkProgress.animateTo(1f, animationSpec = tween(durationMillis = 100))
+            // Keep the cover motion continuous and independent from the mixer's
+            // periodic progress ticks. The audio blend and its indicator retain
+            // their own timing; this visual dissolve gets a slightly longer pace.
+            mixArtworkProgress.snapTo(0f)
+            mixArtworkProgress.animateTo(
+                1f,
+                animationSpec = tween(
+                    durationMillis = duration,
+                    easing = if (dissolve.fluid) FLUID_EASING else ARTWORK_FLOW_EASING,
+                ),
+            )
             dissolve.finish()
             return@LaunchedEffect
         } else {
