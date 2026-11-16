@@ -246,6 +246,8 @@ import com.music.bitchord.ui.components.MenuAnchor
 import com.music.bitchord.ui.components.menuAnchor
 import com.music.bitchord.ui.components.IosMenuPopover
 import com.music.bitchord.ui.components.SongActionsMenu
+import com.music.bitchord.ui.components.StationActionsMenu
+import com.music.bitchord.ui.components.StationMenuTarget
 import com.music.bitchord.ui.components.HeldContextMenu
 import com.music.bitchord.ui.components.HeldItem
 import androidx.media3.session.MediaController
@@ -693,6 +695,7 @@ private fun BitChordApp(
     var showSpotifyLogin by remember { mutableStateOf(false) }
     var discordDialog by remember { mutableStateOf<DiscordDialog?>(null) }
     var songActions by remember { mutableStateOf<Song?>(null) }
+    var stationActions by remember { mutableStateOf<StationMenuTarget?>(null) }
     var showLyricsOffset by remember { mutableStateOf(false) }
     /**
      * Whether the track menu that is up was opened from the player.
@@ -3657,6 +3660,9 @@ private fun BitChordApp(
                                     )
                                 },
                                 onStartStation = startRadio,
+                                onStationLongPress = { station, isFavorite, anchor, toggleFavorite ->
+                                    stationActions = StationMenuTarget(station, isFavorite, anchor, toggleFavorite)
+                                },
                             )
                             TAB_SEARCH -> SearchScreen(
                                 query = query,
@@ -3808,9 +3814,15 @@ private fun BitChordApp(
                                 searchingRadio = searchSource == SearchSource.RADIO,
                                 radioContent = if (searchSource == SearchSource.RADIO) {
                                     {
-                                        RadioScreen(searchQuery = query, onPlayStation = { song ->
-                                            playRadio(song, QueueSource(radioLabel, PlaybackSourceType.QUEUE, id = song.playbackSourceId))
-                                        })
+                                        RadioScreen(
+                                            searchQuery = query,
+                                            onPlayStation = { song ->
+                                                playRadio(song, QueueSource(radioLabel, PlaybackSourceType.QUEUE, id = song.playbackSourceId))
+                                            },
+                                            onStationLongPress = { station, isFavorite, anchor, toggleFavorite ->
+                                                stationActions = StationMenuTarget(station, isFavorite, anchor, toggleFavorite)
+                                            },
+                                        )
                                     }
                                 } else null,
                                 libraryResults = libraryResults,
@@ -5099,6 +5111,11 @@ private fun BitChordApp(
         // on the frame the menu starts to grow — the stutter at the start of
         // its spring, blur or no blur.
         Isolated {
+            StationActionsMenu(
+                target = stationActions,
+                hazeState = hazeState,
+                onDismiss = { stationActions = null },
+            )
             // Drawn over everything, tab bar and mini player included, and kept
             // composed through its own exit — so it is not gated on songActions.
             HeldContextMenu(

@@ -1357,4 +1357,13 @@
     <string name="diwali_title">BitChord wishes you a Happy Diwali</string>
     <string name="diwali_subtitle">May this festival of lights fill your home with joy and your days with music.</string>
     <string name="diwali_cta">Let\'s Celebrate</string>
+    <string name="station_action_share">Share</string>
+    <string name="station_action_info">Station info</string>
+    <string name="station_action_name">Name</string>
+    <string name="station_action_country">Country / region</string>
+    <string name="station_action_genres">Tags / genres</string>
+    <string name="station_action_codec">Codec</string>
+    <string name="station_action_bitrate">Bitrate</string>
+    <string name="station_action_stream_url">Stream URL</string>
+    <string name="station_action_copy">Copy stream URL</string>
 </resources>

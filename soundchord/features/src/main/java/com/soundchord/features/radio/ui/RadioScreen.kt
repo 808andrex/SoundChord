@@ -8,8 +8,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +52,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -121,6 +128,7 @@ fun RadioScreen(
     viewModel: RadioViewModel? = null,
     stationsViewModel: PersonalStationsViewModel? = null,
     searchQuery: String? = null,
+    onStationLongPress: (RadioStation, Boolean, Rect, () -> Unit) -> Unit = { _, _, _, _ -> },
 ) {
     val context = LocalContext.current
     val vm = viewModel ?: composeViewModel(factory = remember(context) { RadioViewModel.Factory(context) })
@@ -206,6 +214,8 @@ fun RadioScreen(
                     StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
                         vm.setCurrentlyPlayingStation(station)
                         onPlayStation(station.toSong(context))
+                    }, onLongPress = { bounds ->
+                        onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
                     })
                 }
             }
@@ -225,6 +235,8 @@ fun RadioScreen(
                     StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
                         vm.setCurrentlyPlayingStation(station)
                         onPlayStation(station.toSong(context))
+                    }, onLongPress = { bounds ->
+                        onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
                     })
                 }
             }
@@ -244,6 +256,8 @@ fun RadioScreen(
                     items(stations, key = { "detail_${it.uuid}" }) { station ->
                         StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
                             vm.setCurrentlyPlayingStation(station); onPlayStation(station.toSong(context))
+                        }, onLongPress = { bounds ->
+                            onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
                         })
                     }
                 }
@@ -270,6 +284,9 @@ fun RadioScreen(
                                     isFavorite = station.uuid in favoriteUuids,
                                     onFavorite = { vm.toggleFavorite(station) },
                                     onPlay = { vm.setCurrentlyPlayingStation(station); onPlayStation(station.toSong(context)) },
+                                    onLongPress = { bounds ->
+                                        onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
+                                    },
                                 )
                             }
                         }
@@ -321,6 +338,8 @@ fun RadioScreen(
                     items(nearby, key = { "nearby_${it.uuid}" }) { station ->
                         StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
                             vm.setCurrentlyPlayingStation(station); onPlayStation(station.toSong(context))
+                        }, onLongPress = { bounds ->
+                            onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
                         })
                     }
                 }
@@ -378,9 +397,12 @@ private fun SectionTitle(title: String, prominent: Boolean = false, modifier: Mo
 }
 
 @Composable
-private fun FavoriteStationCard(station: RadioStation, isFavorite: Boolean, onFavorite: () -> Unit, onPlay: () -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun FavoriteStationCard(station: RadioStation, isFavorite: Boolean, onFavorite: () -> Unit, onPlay: () -> Unit, onLongPress: (Rect) -> Unit) {
     val gradient = favoriteStationGradients[(station.uuid.hashCode().and(Int.MAX_VALUE)) % favoriteStationGradients.size]
     var artworkFailed by remember(station.uuid) { mutableStateOf(false) }
+    var cardBounds by remember(station.uuid) { mutableStateOf<Rect?>(null) }
+    val haptics = LocalHapticFeedback.current
     Column(Modifier.width(250.dp)) {
         Card(
             modifier = Modifier.fillMaxWidth().aspectRatio(1f),
@@ -391,7 +413,14 @@ private fun FavoriteStationCard(station: RadioStation, isFavorite: Boolean, onFa
                 Box(
                     Modifier.fillMaxSize()
                         .clip(RoundedCornerShape(22.dp))
-                        .clickable(onClick = onPlay)
+                        .onGloballyPositioned { cardBounds = it.boundsInWindow() }
+                        .combinedClickable(
+                            onClick = onPlay,
+                            onLongClick = {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                cardBounds?.let(onLongPress)
+                            },
+                        )
                         .background(Brush.verticalGradient(listOf(Color(0xFF101114), gradient.first(), Color(0xFF101114)))),
                 ) {
                     if (!station.favicon.isNullOrBlank() && !artworkFailed) {
@@ -444,8 +473,11 @@ private fun CategoryGridRow(categories: List<CategoryOption>, onClick: (Int) -> 
 }
 
 @Composable
-private fun StationRow(station: RadioStation, isPlaying: Boolean, isFavorite: Boolean, onFavorite: () -> Unit, onClick: () -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun StationRow(station: RadioStation, isPlaying: Boolean, isFavorite: Boolean, onFavorite: () -> Unit, onClick: () -> Unit, onLongPress: (Rect) -> Unit) {
     var artworkFailed by remember(station.uuid) { mutableStateOf(false) }
+    var rowBounds by remember(station.uuid) { mutableStateOf<Rect?>(null) }
+    val haptics = LocalHapticFeedback.current
     Surface(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         shape = RoundedCornerShape(18.dp),
@@ -454,7 +486,17 @@ private fun StationRow(station: RadioStation, isPlaying: Boolean, isFavorite: Bo
     ) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(
-                modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .onGloballyPositioned { rowBounds = it.boundsInWindow() }
+                    .combinedClickable(
+                        onClick = onClick,
+                        onLongClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            rowBounds?.let(onLongPress)
+                        },
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Surface(Modifier.size(52.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {

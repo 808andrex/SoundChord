@@ -78,6 +78,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.ui.components.backdrop.backdrops.SnapshotBackdrop
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
@@ -427,6 +429,7 @@ fun IosMenuRow(
  * same arrangement [HeldContextMenu] uses.
  */
 @Composable
+@OptIn(ExperimentalHazeMaterialsApi::class)
 fun <T : Any> IosMenuPopover(
     item: T?,
     anchor: Rect?,
@@ -434,6 +437,8 @@ fun <T : Any> IosMenuPopover(
     backdrop: Backdrop? = null,
     hazeState: HazeState? = null,
     centerOnAnchor: Boolean = false,
+    /** Frost the page behind the popover too, as held-item menus do. */
+    blurBackground: Boolean = false,
     content: @Composable (T) -> Unit,
 ) {
     var last by remember { mutableStateOf<Pair<T, Rect?>?>(null) }
@@ -495,6 +500,7 @@ fun <T : Any> IosMenuPopover(
 
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val plain by AppSettings.disableBlendEffects.collectAsStateWithLifecycle()
+    val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
     val scrim = Color.Black.copy(alpha = if (dark) 0.30f else 0.14f)
     val insets = WindowInsets.safeDrawing
     var overlayOffset by remember { mutableStateOf(Offset.Zero) }
@@ -511,6 +517,16 @@ fun <T : Any> IosMenuPopover(
             Box(
                 Modifier
                     .fillMaxSize()
+                    .then(
+                        if (blurBackground && !reduceDynamicBlur && hazeState != null) {
+                            Modifier.optimizedHazeEffect(
+                                state = hazeState,
+                                style = HazeMaterials.ultraThin(MaterialTheme.colorScheme.background),
+                            ) { alpha = progress.value.coerceIn(0f, 1f) }
+                        } else {
+                            Modifier
+                        },
+                    )
                     .graphicsLayer { alpha = progress.value.coerceIn(0f, 1f) }
                     .background(scrim)
                     .clickable(

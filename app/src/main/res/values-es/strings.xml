@@ -1454,4 +1454,13 @@
     <string name="bit_perfect_status_inexact">%1$s · no exacto: esta fuente no es PCM lossless</string>
     <string name="bit_perfect_status_waiting">Esperando una pista lossless en una salida compatible</string>
     <string name="bit_perfect_status_unavailable">No disponible para esta pista (%1$s)</string>
+    <string name="station_action_share">Compartir</string>
+    <string name="station_action_info">Información de la emisora</string>
+    <string name="station_action_name">Nombre</string>
+    <string name="station_action_country">País / región</string>
+    <string name="station_action_genres">Etiquetas / géneros</string>
+    <string name="station_action_codec">Códec</string>
+    <string name="station_action_bitrate">Tasa de bits</string>
+    <string name="station_action_stream_url">URL de emisión</string>
+    <string name="station_action_copy">Copiar URL de emisión</string>
 </resources>
