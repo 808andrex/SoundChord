@@ -6,8 +6,8 @@ import com.music.bitchord.playback.PlaybackPosition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -41,6 +41,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.takeWhile
 import androidx.compose.runtime.withFrameNanos
@@ -206,7 +207,6 @@ internal fun PrefetchNeighbourArtwork(queue: List<Song>, queueIndex: Int) {
             .distinct()
     }
     LaunchedEffect(urls) {
-        delay(400L)
         val loader = SingletonImageLoader.get(context)
         urls.forEach { url ->
             loader.enqueue(
@@ -269,6 +269,10 @@ internal class ArtworkDissolve(first: PlayerArtwork) {
         }
     }
 
+    fun setTransitionDirection(value: Float) {
+        direction = if (value < 0f) -1f else 1f
+    }
+
     fun finish() {
         cutHold = false
         progress = 1f
@@ -284,6 +288,7 @@ internal fun rememberArtworkDissolve(
     queueIndex: Int,
     skipFadeMs: Long,
     mixFadeMs: Long,
+    transitionDirection: Float,
 ): ArtworkDissolve {
     val reduceAnimation by PlayerSettings.reduceAnimation.collectAsStateWithLifecycle()
     val coverSlide by PlayerSettings.coverSlideAnimation.collectAsStateWithLifecycle()
@@ -301,11 +306,16 @@ internal fun rememberArtworkDissolve(
             holdOld = reduceAnimation || !coverSlide,
         )
     }
+    if (mixing && skipFadeMs > 0L) dissolve.setTransitionDirection(transitionDirection)
     SideEffect { dissolve.lastQueueIndex = queueIndex }
     val mixingNow by rememberUpdatedState(mixing)
     val skipFadeNow by rememberUpdatedState(skipFadeMs)
     val mixFadeNow by rememberUpdatedState(mixFadeMs)
     val mixOnlyNow by rememberUpdatedState(coverMixOnly)
+    val mixArtworkProgress = remember(dissolve) { Animatable(0f) }
+    LaunchedEffect(dissolve, mixArtworkProgress) {
+        snapshotFlow { mixArtworkProgress.value }.collect { dissolve.progress = it }
+    }
     LaunchedEffect(dissolve, art) {
         if (dissolve.outgoing == null) {
             if (dissolve.cutHold) {
@@ -321,7 +331,10 @@ internal fun rememberArtworkDissolve(
         dissolve.light = mixOnlyNow && (!mixingNow || skipFadeNow > 0L)
         val duration = when {
             // A manual next/previous cover follows the audio fade duration.
-            mixingNow && skipFadeNow > 0L -> skipFadeNow.toInt().coerceIn(400, 6_000)
+            mixingNow && skipFadeNow > 0L -> {
+                val manualDuration = skipFadeNow.toFloat() * if (transitionDirection < 0f) 1.15f else 1f
+                manualDuration.toInt().coerceIn(400, 6_000)
+            }
             // Keep automatic cover changes aligned with the actual audio mix.
             mixingNow && mixFadeNow > 0L -> mixFadeNow.toInt().coerceIn(400, 60_000)
             mixingNow -> MIX_DISSOLVE_MS
@@ -329,29 +342,33 @@ internal fun rememberArtworkDissolve(
             dissolve.fluid -> FLUID_DISSOLVE_MS
             else -> SKIP_DISSOLVE_MS
         }
-        if (mixingNow && skipFadeNow <= 0L && PlayerSettings.smartMixView.value != null) {
+        if (mixingNow && skipFadeNow <= 0L) {
+            // Artwork follows the audio transition itself. smartMixProgress is
+            // only published while the optional mix-view model is mounted;
+            // crossfadeProgress is published for every active AutoMix blend.
+            mixArtworkProgress.snapTo(PlayerSettings.crossfadeProgress.value.coerceIn(0f, 1f))
+            dissolve.progress = mixArtworkProgress.value
             combine(
-                PlayerSettings.smartMixProgress,
+                PlayerSettings.crossfadeProgress,
                 snapshotFlow { mixingNow },
             ) { progress, active -> progress to active }
                 .takeWhile { (_, active) -> active }
                 .collectLatest { (target, _) ->
-                    // Progress is published on the audio loop (~30 ms). Interpolate
-                    // each interval so the shader still advances on display frames.
-                    animate(
-                        dissolve.progress,
-                        target.coerceIn(0f, 1f),
-                        animationSpec = tween(durationMillis = 30, easing = LinearEasing),
-                    ) { value, _ -> dissolve.progress = value }
+                    // Retarget a continuous Compose animation at audio progress
+                    // updates; spring carries velocity across updates and avoids
+                    // the visible 30 ms stepping on either transition direction.
+                    // finish() resets the published audio progress for the next
+                    // track before the active flag reaches Compose; never let
+                    // that cleanup tick run the artwork mask backwards.
+                    val monotonicTarget = target.coerceIn(0f, 1f).coerceAtLeast(mixArtworkProgress.value)
+                    mixArtworkProgress.animateTo(
+                        monotonicTarget,
+                        animationSpec = spring(dampingRatio = 1f, stiffness = 900f),
+                    )
                 }
+            mixArtworkProgress.animateTo(1f, animationSpec = tween(durationMillis = 100))
             dissolve.finish()
             return@LaunchedEffect
-        } else if (mixingNow && skipFadeNow <= 0L) {
-            animate(
-                0f,
-                1f,
-                animationSpec = tween(duration, easing = if (dissolve.fluid) FLUID_EASING else ARTWORK_FLOW_EASING),
-            ) { value, _ -> dissolve.progress = value }
         } else {
             animate(0f, 1f, animationSpec = tween(duration, easing = if (dissolve.fluid) FLUID_EASING else ARTWORK_FLOW_EASING)) { value, _ -> dissolve.progress = value }
         }

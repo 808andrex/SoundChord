@@ -942,6 +942,8 @@ fun NowPlayingScreen(
     val skipCrossfadeMs by PlayerSettings.skipCrossfadeMs.collectAsStateWithLifecycle()
     val mixFadeMs by PlayerSettings.mixFadeMs.collectAsStateWithLifecycle()
     val mixIncomingArt by PlayerSettings.mixIncomingArtworkUrl.collectAsStateWithLifecycle()
+    val mixIncomingArtId by PlayerSettings.mixIncomingArtworkMediaId.collectAsStateWithLifecycle()
+    val mixIncomingArtDirection by PlayerSettings.mixIncomingArtworkDirection.collectAsStateWithLifecycle()
     // A music video plays its own picture where the sleeve is — see
     // [MusicVideoSurface] — and takes the place of any animated cover.
     val videoMode = showsMusicVideo(song)
@@ -1429,7 +1431,38 @@ fun NowPlayingScreen(
     // had and never re-emits, so the `onState` that is the sole writer here
     // never fires again. Keyed on the cover there is nothing to reset: the
     // bitmap really is still loaded, so the state stays true.
-    val art = rememberPlayerArtwork(mixIncomingArt ?: remoteArt)
+    var heldIncomingArtworkId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(crossfading, mixIncomingArtId, song.videoId) {
+        if (crossfading) {
+            mixIncomingArtId?.let { incomingId ->
+                heldIncomingArtworkId = incomingId
+            }
+        } else {
+            val heldId = heldIncomingArtworkId
+            when {
+                heldId == null -> Unit
+                mixIncomingArtId == null -> {
+                    // An armed transition was abandoned before handoff.
+                    heldIncomingArtworkId = null
+                }
+                song.videoId != heldId -> {
+                    // Player metadata and the artwork model can cross briefly
+                    // during handoff. Wait for the new identity to settle;
+                    // the effect is cancelled if it catches up in the meantime.
+                    delay(120L)
+                    if (heldIncomingArtworkId == heldId && mixIncomingArtId == heldId && song.videoId != heldId) {
+                        heldIncomingArtworkId = null
+                    }
+                }
+            }
+        }
+    }
+    val keepHandedOffArtwork = heldIncomingArtworkId != null &&
+        mixIncomingArtId == heldIncomingArtworkId
+    val incomingArtForCurrentTransition = mixIncomingArt?.takeIf {
+        crossfading || keepHandedOffArtwork || (mixIncomingArtId != null && mixIncomingArtId == song.videoId)
+    }
+    val art = rememberPlayerArtwork(incomingArtForCurrentTransition ?: remoteArt)
     PrefetchNeighbourArtwork(queue, queueIndex)
     val dissolve = rememberArtworkDissolve(
         art = art,
@@ -1437,6 +1470,7 @@ fun NowPlayingScreen(
         queueIndex = queueIndex,
         skipFadeMs = skipCrossfadeMs,
         mixFadeMs = mixFadeMs,
+        transitionDirection = mixIncomingArtDirection,
     )
     // Sticky, unlike [PlayerArtwork.loaded]: the banner is the shape of the player rather
     // than a property of the track in it. Waiting on each new cover would

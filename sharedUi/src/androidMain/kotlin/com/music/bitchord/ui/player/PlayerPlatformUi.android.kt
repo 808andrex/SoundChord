@@ -88,6 +88,9 @@ float fbm(float2 p) {
 half4 main(float2 fragCoord) {
     float2 uv = fragCoord / size;
     float2 p = (uv - 0.5) * float2(size.x / size.y, 1.0);
+    // Mirror the dissolve field for reverse skips so both directions use the
+    // same reveal speed and shape, just moving from the opposite edge.
+    p.x *= dir;
     float t = clamp(progress, 0.0, 1.0), flow = seed + t * 1.4;
     float2 q = float2(fbm(p * 1.7 + float2(flow, -flow * 0.6)), fbm(p * 1.7 + float2(-flow * 0.7, flow) + 8.3)) - 0.5;
     float r = length(p);
@@ -98,7 +101,7 @@ half4 main(float2 fragCoord) {
     float4 col = float4(content.eval(sc));
     if (incoming > 0.5) return half4(col);
     float n = fbm(p * 1.3 + float2(seed * 1.7, -seed) + q * 1.2);
-    float f = 0.55 * n + 0.45 * smoothstep(0.0, 0.85, r) + dir * p.x * 0.18;
+    float f = 0.55 * n + 0.45 * smoothstep(0.0, 0.85, r) + p.x * 0.18;
     float th = mix(-0.4, 1.45, t), a = smoothstep(th - 0.2, th + 0.2, f);
     float lift = 4.0 * a * (1.0 - a) * 0.14 * amp, alpha = col.a * a;
     float3 rgb = col.rgb * a + float3(lift) * alpha;
