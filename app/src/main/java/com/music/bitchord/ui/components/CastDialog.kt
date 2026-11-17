@@ -68,10 +68,6 @@ fun CastDialog(
         val stop = CastController.discover(active = true)
         onDispose(stop)
     }
-    LaunchedEffect(cast.connectedName, picked) {
-        if (picked && cast.connectedName != null) onDismiss()
-    }
-
     AudioPopupCard(
         hazeState = hazeState,
         title = stringResource(R.string.cast_dialog_title),
@@ -80,6 +76,10 @@ fun CastDialog(
         onDismiss = onDismiss,
         modifier = modifier,
     ) {
+        val dismissPopup = LocalAudioPopupDismiss.current
+        LaunchedEffect(cast.connectedName, picked) {
+            if (picked && cast.connectedName != null) dismissPopup()
+        }
         Column(Modifier.fillMaxWidth()) {
             PipelineRule(Modifier)
             if (cast.devices.isEmpty()) {
@@ -107,7 +107,7 @@ fun CastDialog(
                     onClick = {
                         haptics.play(Haptic.Select)
                         CastController.disconnect(resumeHere = true)
-                        onDismiss()
+                        dismissPopup()
                     },
                 )
             }

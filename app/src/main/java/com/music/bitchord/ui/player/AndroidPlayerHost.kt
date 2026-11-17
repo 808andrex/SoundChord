@@ -89,6 +89,7 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         override val smartAnalysis get() = AppSettings.smartAnalysis
         override val automixDetail get() = AppSettings.automixDetail
         override val smartFadeEnabled get() = AppSettings.smartFadeEnabled
+        override fun setSmartFadeEnabled(value: Boolean) = AppSettings.setSmartFadeEnabled(value)
         override val smartMixInProgress get() = AppSettings.smartMixInProgress
         override val smartMixBlend get() = AppSettings.smartMixBlend
         override val smartMixView get() = AppSettings.smartMixView
@@ -163,6 +164,20 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         AudioRouting.select(id)
         WearBridge.leaveWatchOutput()
     }
+
+    @Composable
+    override fun AudioOutputOverlay(
+        hazeState: HazeState,
+        song: Song,
+        artworkUrl: String?,
+        accountName: String?,
+        nestedOverlayOpen: Boolean,
+        onDismiss: () -> Unit,
+        onOpenPipeline: () -> Unit,
+        onOpenCast: () -> Unit,
+    ) = com.soundchord.features.player.SoundChordAudioOutputSheet(
+        hazeState, song, artworkUrl, accountName, nestedOverlayOpen, onDismiss, onOpenPipeline, onOpenCast,
+    )
 
     override val watchOutput: StateFlow<WatchOutputUi> by lazy {
         WearBridge.watchOutput

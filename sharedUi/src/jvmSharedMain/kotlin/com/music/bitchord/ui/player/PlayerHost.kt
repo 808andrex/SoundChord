@@ -93,6 +93,19 @@ interface PlayerHost {
 
     fun selectAudioOutput(id: Int?)
 
+    /** Optional application-owned floating output panel. */
+    @Composable
+    fun AudioOutputOverlay(
+        hazeState: HazeState,
+        song: Song,
+        artworkUrl: String?,
+        accountName: String?,
+        nestedOverlayOpen: Boolean,
+        onDismiss: () -> Unit,
+        onOpenPipeline: () -> Unit,
+        onOpenCast: () -> Unit,
+    ) = Unit
+
     /** The negotiated output format, as the pipeline row and the hi-res shine read it. */
     val outputFormat: StateFlow<OutputFormatUi>
 
@@ -298,6 +311,7 @@ interface PlayerSettingsSource {
 
     fun setLastPlayerScreen(value: LastPlayerScreen)
     fun setLyricsOffsetMs(value: Int)
+    fun setSmartFadeEnabled(value: Boolean)
     /** Whether the mix popup is up, so the host lays out [smartMixPreview] for it. */
     fun setMixViewOpen(open: Boolean)
 }
