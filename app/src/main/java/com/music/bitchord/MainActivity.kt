@@ -117,6 +117,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -4379,14 +4380,22 @@ private fun BitChordApp(
                     },
                 )
 
+                // Includes the floating bars' system navigation inset and lift,
+                // so the recognition control tracks their actual top edge on
+                // both gesture and three-button navigation.
+                val floatingBarsHeight = remember { mutableIntStateOf(0) }
+                val recognitionFabBottom = with(LocalDensity.current) {
+                    floatingBarsHeight.intValue.toDp() + 14.dp
+                }
+
                 if (!recognitionOpen && route == null && detail == null && selectedMoodGenre == null && selectedTab == TAB_HOME) {
                     RecognitionFab(
                         visible = recognitionFabVisible,
                         onClick = { recognitionOpen = true },
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(
-                            end = 24.dp,
-                            bottom = if (player.song != null) 140.dp else 104.dp,
-                        ),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .zIndex(2f)
+                            .padding(end = 24.dp, bottom = recognitionFabBottom),
                     )
                 }
 
@@ -4402,7 +4411,6 @@ private fun BitChordApp(
 
                 // Whichever bar is drawing reports its height here, for the
                 // guard to read at layout — never in composition, see the guard.
-                val floatingBarsHeight = remember { mutableIntStateOf(0) }
                 FloatingBarsTapGuard(
                     barsHeight = { floatingBarsHeight.intValue },
                     modifier = Modifier.align(Alignment.BottomCenter),
