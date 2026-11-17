@@ -674,6 +674,7 @@ private fun SlidingPlayerDeck(
     reveal: Animatable<Float, AnimationVector1D>,
     modifier: Modifier = Modifier,
     fadeIn: () -> Boolean = { false },
+    responsiveMotion: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     var mounted by remember { mutableStateOf(visible) }
@@ -699,19 +700,27 @@ private fun SlidingPlayerDeck(
                 mounted = true
                 reveal.animateTo(
                     1f,
-                    tween(
-                        SPOTIFY_CANVAS_CONTROLS_ANIMATION_MS,
-                        easing = FastOutSlowInEasing,
-                    ),
+                    if (responsiveMotion) {
+                        spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium)
+                    } else {
+                        tween(
+                            SPOTIFY_CANVAS_CONTROLS_ANIMATION_MS,
+                            easing = FastOutSlowInEasing,
+                        )
+                    },
                 )
             }
         } else {
             reveal.animateTo(
                 0f,
-                tween(
-                    SPOTIFY_CANVAS_CONTROLS_ANIMATION_MS,
-                    easing = FastOutSlowInEasing,
-                ),
+                if (responsiveMotion) {
+                    spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium)
+                } else {
+                    tween(
+                        SPOTIFY_CANVAS_CONTROLS_ANIMATION_MS,
+                        easing = FastOutSlowInEasing,
+                    )
+                },
             )
             mounted = false
         }
@@ -1663,8 +1672,7 @@ fun NowPlayingScreen(
     // screen, the landscape one on the sleeve alone — the right column there is
     // full of horizontal sliders and a lyric list that should not be one stray
     // sideways drag away from changing the song.
-    val skipSwipeGesture = Modifier.pointerInput(showAudioPipeline, showCast, panelScrolling, controlsLocked) {
-        if (showAudioPipeline || showCast || panelScrolling) return@pointerInput
+    val skipSwipeGesture = Modifier.pointerInput(showAudioPipeline, showCast, showAudioOutput, panelScrolling, controlsLocked) {
         var total = 0f
         detectHorizontalDragGestures(
             onDragStart = { total = 0f },
@@ -1719,14 +1727,9 @@ fun NowPlayingScreen(
             radioPlaying = radioPlaying,
             lyricsOpen = lyricsOpen,
             queueOpen = queueOpen,
-            shuffleEnabled = shuffleEnabled,
-            repeatMode = repeatMode,
-            autoplayEnabled = autoplayEnabled,
+            autoplayBadge = queueIndex in queue.indices && queue.drop(queueIndex + 1).any { it.fromAutoplay },
             onToggleLyrics = toggleLyrics,
             onToggleQueue = toggleQueue,
-            onToggleShuffle = onToggleShuffle,
-            onCycleRepeat = onCycleRepeat,
-            onToggleAutoplay = onToggleAutoplay,
             onOpenOutput = openAudioOutput,
             onListenTogether = onListenTogether,
             onOpenListenTogetherMembers = openListenTogetherMembers,
@@ -1762,9 +1765,12 @@ fun NowPlayingScreen(
             )
         }
         if (showAudioOutput) {
-            AudioOutputSheet(
+            PlayerPlatform.host.AudioOutputOverlay(
                 hazeState = playerHaze,
+                song = song,
+                artworkUrl = remoteArt,
                 accountName = accountName,
+                nestedOverlayOpen = showCast || showAudioPipeline,
                 onDismiss = { showAudioOutput = false },
                 onOpenPipeline = { showAudioPipeline = true },
                 onOpenCast = { showCast = true },
@@ -2394,6 +2400,11 @@ fun NowPlayingScreen(
                             queue = queue,
                             currentIndex = queueIndex,
                             autoplayEnabled = autoplayEnabled,
+                            shuffleEnabled = shuffleEnabled,
+                            repeatMode = repeatMode,
+                            onToggleShuffle = onToggleShuffle,
+                            onCycleRepeat = onCycleRepeat,
+                            onToggleAutoplay = onToggleAutoplay,
                             controlsLocked = controlsLocked,
                             onJumpTo = onJumpTo,
                             onRemove = onRemoveFromQueue,
@@ -2835,8 +2846,8 @@ fun NowPlayingScreen(
                             // half second lying across a list the finger was already
                             // scrolling.
                             .onGloballyPositioned { dismissBandSpace = it }
-                            .pointerInput(showAudioPipeline, showCast, panelScrolling) {
-                                if (showAudioPipeline || showCast || panelScrolling) return@pointerInput
+                            .pointerInput(showAudioPipeline, showCast, showAudioOutput, panelScrolling) {
+                                if (showAudioPipeline || showCast || showAudioOutput || panelScrolling) return@pointerInput
                                 awaitEachGesture {
                                     // Unconsumed on purpose, as the blanket version was:
                                     // the collapsed sleeve's own clickable — the way back
@@ -2849,7 +2860,7 @@ fun NowPlayingScreen(
                                     // A panel is up from the moment it is asked for to
                                     // the moment the sleeve has finished growing back —
                                     // never mind where the sleeve is in between.
-                                    val panelUp = queueOpen || lyricsOpen ||
+                                    val panelUp = showAudioOutput || showAudioPipeline || showCast || queueOpen || lyricsOpen ||
                                         queueSlide.floatValue > 0.01f
                                     val bandTop: Float
                                     val bandBottom: Float
@@ -4107,6 +4118,11 @@ fun NowPlayingScreen(
                                     queue = queue,
                                     currentIndex = queueIndex,
                                     autoplayEnabled = autoplayEnabled,
+                                    shuffleEnabled = shuffleEnabled,
+                                    repeatMode = repeatMode,
+                                    onToggleShuffle = onToggleShuffle,
+                                    onCycleRepeat = onCycleRepeat,
+                                    onToggleAutoplay = onToggleAutoplay,
                                     controlsLocked = controlsLocked,
                                     onJumpTo = onJumpTo,
                                     onRemove = onRemoveFromQueue,
@@ -4144,6 +4160,7 @@ fun NowPlayingScreen(
                         // Asked when the deck is shown rather than read here — [p]
                         // read in this scope recomposes the whole player with it.
                         fadeIn = { !lyricsOpen && !queueOpen && p() > 0f },
+                        responsiveMotion = !spotifyCanvasPresentation,
                     ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,

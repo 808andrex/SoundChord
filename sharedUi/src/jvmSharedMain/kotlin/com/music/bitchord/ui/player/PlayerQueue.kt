@@ -4,6 +4,7 @@ import com.music.bitchord.ui.components.trackArtSize
 import androidx.compose.ui.layout.ContentScale
 import com.music.bitchord.sharedui.resources.*
 import com.music.bitchord.ui.components.ExplicitSongTitle
+import com.music.bitchord.ui.graphics.fadingEdges
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -33,11 +34,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -56,13 +60,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -80,6 +79,10 @@ import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.data.model.QueueTier
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.playback.autoplaySectionStart
+import com.music.bitchord.ui.haptics.Haptic
+import com.music.bitchord.ui.haptics.rememberHaptics
+import androidx.compose.ui.graphics.vector.ImageVector
+import org.jetbrains.compose.resources.painterResource
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -123,30 +126,6 @@ internal fun keepScrollInList(listState: LazyListState) = object : NestedScrollC
  * spring is still visibly settling that trade long after the track changed.
  */
 private val QUEUE_ROW_MOTION = tween<IntOffset>(durationMillis = 200, easing = FastOutSlowInEasing)
-
-/** Softens the list where it meets the header and the scrubber. */
-internal fun Modifier.fadingEdges(): Modifier = this
-    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-    .drawWithContent {
-        drawContent()
-        val fade = 28.dp.toPx()
-        drawRect(
-            brush = Brush.verticalGradient(
-                colors = listOf(Color.Transparent, Color.Black),
-                startY = 0f,
-                endY = fade,
-            ),
-            blendMode = BlendMode.DstIn,
-        )
-        drawRect(
-            brush = Brush.verticalGradient(
-                colors = listOf(Color.Black, Color.Transparent),
-                startY = size.height - fade,
-                endY = size.height,
-            ),
-            blendMode = BlendMode.DstIn,
-        )
-    }
 
 /** One track in [InlineQueue], and where it sits in the player's timeline. */
 internal data class QueueTrack(val timelineIndex: Int, val song: Song, val key: String)
@@ -220,6 +199,11 @@ internal fun InlineQueue(
     queue: List<Song>,
     currentIndex: Int,
     autoplayEnabled: Boolean,
+    shuffleEnabled: Boolean = false,
+    repeatMode: Int = RepeatModes.OFF,
+    onToggleShuffle: () -> Unit = {},
+    onCycleRepeat: () -> Unit = {},
+    onToggleAutoplay: () -> Unit = {},
     /**
      * Read-only: the party's running order is the host's while this is set, so
      * the queue is here to be looked at and scrolled, not worked.
@@ -248,6 +232,7 @@ internal fun InlineQueue(
         onHide = onHidePlayer,
     )
     val showHistory by PlayerSettings.showQueueHistory.collectAsStateWithLifecycle()
+    val automixEnabled by PlayerSettings.smartFadeEnabled.collectAsStateWithLifecycle()
     val tracks = remember(queue, currentIndex, showHistory) { splitQueue(queue, currentIndex, showHistory) }
     val drag = rememberQueueDrag(listState, tracks, onMove, onDragActiveChange)
     val nowPlaying = tracks.nowPlaying
@@ -274,6 +259,17 @@ internal fun InlineQueue(
     }
 
     Column(modifier.fillMaxWidth()) {
+        QueueModeRow(
+            shuffleEnabled = shuffleEnabled,
+            repeatMode = repeatMode,
+            autoplayEnabled = autoplayEnabled,
+            automixEnabled = automixEnabled,
+            onToggleShuffle = onToggleShuffle,
+            onCycleRepeat = onCycleRepeat,
+            onToggleAutoplay = onToggleAutoplay,
+            onToggleAutomix = { PlayerSettings.setSmartFadeEnabled(!automixEnabled) },
+        )
+        Spacer(Modifier.height(14.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -292,8 +288,7 @@ internal fun InlineQueue(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .bleedHorizontally(PLAYER_GUTTER)
-                .fadingEdges(),
+            .bleedHorizontally(PLAYER_GUTTER),
         ) {
             LazyColumn(
                 state = listState,
@@ -351,6 +346,11 @@ internal fun InlineQueue(
                         }
                     }
                     queueSection(tracks.user, QueueSection.USER, drag, controlsLocked, onJumpTo, onRemove)
+                }
+                if (!controlsLocked) {
+                    item(key = "add-songs") {
+                        AddSongsRequestRow(modifier = queueMotion())
+                    }
                 }
                 if (tracks.context.isNotEmpty()) {
                     item(key = "header-context") {
@@ -456,6 +456,105 @@ private fun QueueClearButton(style: TextStyle, locked: Boolean, onClear: () -> U
             .clickable(enabled = !locked, onClick = onClear)
             .padding(horizontal = 8.dp, vertical = 4.dp),
     )
+}
+
+@Composable
+private fun QueueModeRow(
+    shuffleEnabled: Boolean,
+    repeatMode: Int,
+    autoplayEnabled: Boolean,
+    automixEnabled: Boolean,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeat: () -> Unit,
+    onToggleAutoplay: () -> Unit,
+    onToggleAutomix: () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        QueueModeButton(BitChordIcons.Shuffle, stringResource(if (shuffleEnabled) Res.string.shuffle_on else Res.string.shuffle_off), shuffleEnabled, if (shuffleEnabled) Haptic.ToggleOff else Haptic.ToggleOn, onToggleShuffle, Modifier.weight(1f), 400)
+        QueueModeButton(BitChordIcons.Repeat, stringResource(when (repeatMode) { RepeatModes.ONE -> Res.string.repeat_one; RepeatModes.ALL -> Res.string.repeat_all; else -> Res.string.repeat_off }), repeatMode != RepeatModes.OFF, Haptic.Select, onCycleRepeat, Modifier.weight(1f))
+        QueueModeButton(BitChordIcons.Infinity, stringResource(if (autoplayEnabled) Res.string.autoplay_on else Res.string.autoplay_off), autoplayEnabled, if (autoplayEnabled) Haptic.ToggleOff else Haptic.ToggleOn, onToggleAutoplay, Modifier.weight(1f), 700)
+        QueueModePainterButton(
+            painter = painterResource(Res.drawable.automix_icon),
+            description = stringResource(Res.string.automix),
+            selected = automixEnabled,
+            haptic = if (automixEnabled) Haptic.ToggleOff else Haptic.ToggleOn,
+            onClick = onToggleAutomix,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun QueueModeButton(
+    icon: ImageVector,
+    description: String,
+    selected: Boolean,
+    haptic: Haptic,
+    onClick: () -> Unit,
+    modifier: Modifier,
+    tapWindowMs: Long = 0,
+) = QueueModeButtonImpl(icon, description, selected, haptic, onClick, modifier, tapWindowMs)
+
+@Composable
+private fun QueueModeButtonImpl(
+    vector: ImageVector,
+    description: String,
+    selected: Boolean,
+    haptic: Haptic,
+    onClick: () -> Unit,
+    modifier: Modifier,
+    tapWindowMs: Long,
+) {
+    val haptics = rememberHaptics()
+    val lastTap = remember { longArrayOf(0L) }
+    val fill by androidx.compose.animation.animateColorAsState(if (selected) Color.White.copy(alpha = .9f) else Color.White.copy(alpha = .14f), label = "queueModeFill")
+    Box(modifier.height(40.dp).clip(RoundedCornerShape(14.dp)).background(fill)
+        .clickable {
+            val now = System.currentTimeMillis()
+            if (now - lastTap[0] >= tapWindowMs) { lastTap[0] = now; haptics.play(haptic); onClick() }
+        }.semantics { contentDescription = description }, contentAlignment = Alignment.Center) {
+        Icon(vector, null, tint = if (selected) Color.Black.copy(alpha=.82f) else Color.White.copy(alpha=.9f), modifier=Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun QueueModePainterButton(
+    painter: androidx.compose.ui.graphics.painter.Painter,
+    description: String,
+    selected: Boolean,
+    haptic: Haptic,
+    onClick: () -> Unit,
+    modifier: Modifier,
+) {
+    val haptics = rememberHaptics()
+    val fill by androidx.compose.animation.animateColorAsState(
+        if (selected) Color.White.copy(alpha = .9f) else Color.White.copy(alpha = .14f),
+        label = "queueModeFill",
+    )
+    Box(
+        modifier.height(40.dp).clip(RoundedCornerShape(14.dp)).background(fill)
+            .clickable { haptics.play(haptic); onClick() }
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painter,
+            contentDescription = null,
+            tint = if (selected) Color.Black.copy(alpha = .82f) else Color.White.copy(alpha = .9f),
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun AddSongsRequestRow(modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { AddSongsRequest.show() }.padding(vertical=6.dp), verticalAlignment=Alignment.CenterVertically) {
+        Box(Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha=.14f)), contentAlignment=Alignment.Center) {
+            Icon(Icons.Rounded.Add, null, tint=Color.White.copy(alpha=.9f), modifier=Modifier.size(24.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(stringResource(Res.string.add_songs_to_queue), style=MaterialTheme.typography.bodyLarge, color=Color.White)
+    }
 }
 
 @Composable

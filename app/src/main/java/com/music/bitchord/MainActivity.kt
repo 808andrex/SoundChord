@@ -335,6 +335,8 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.layout.onSizeChanged
 import com.music.bitchord.ui.player.LocalPlayerDock
 import com.music.bitchord.ui.player.PlayerDock
+import com.music.bitchord.ui.player.AddSongsRequest
+import com.music.bitchord.ui.components.AddSongsDialog
 import com.music.bitchord.ui.screens.DetailScreen
 import com.music.bitchord.ui.screens.sortedForDetail
 import com.music.bitchord.ui.screens.LocalFolder
@@ -5031,7 +5033,28 @@ private fun BitChordApp(
                     // sheet's own window, as the menu has to be to sit above
                     // the player. Not under "reduce dynamic blur": the panel
                     // is opaque then.
-                    val playerMenuUp = songActions != null && songMenuOrigin == null && menuFromPlayer
+                    val addSongsOpen by AddSongsRequest.open.collectAsStateWithLifecycle()
+                    val addSongsTypeahead by viewModel.typeaheadResults.collectAsStateWithLifecycle()
+                    var addSongsSuggestions by remember { mutableStateOf<List<Song>?>(null) }
+                    var addSongsPreviousFilter by remember { mutableStateOf<SearchFilter?>(null) }
+                    DisposableEffect(Unit) {
+                        AddSongsRequest.hide()
+                        onDispose { AddSongsRequest.hide() }
+                    }
+                    LaunchedEffect(addSongsOpen) {
+                        if (!addSongsOpen) return@LaunchedEffect
+                        if (!reduceDynamicBlur && !playerLiveCanvas) playerBackdrop.capture()
+                        viewModel.onQueryChange("")
+                        addSongsPreviousFilter = filter
+                        viewModel.onFilterChange(SearchFilter.ALL)
+                        addSongsSuggestions = null
+                        val seed = player.song
+                        addSongsSuggestions = if (seed == null) emptyList() else {
+                            loadAutoplayTracks(existing = player.queue, seedSong = seed, limit = 8)
+                                .getOrElse { emptyList() }
+                        }
+                    }
+                    val playerMenuUp = (songActions != null && songMenuOrigin == null && menuFromPlayer) || addSongsOpen
                     LaunchedEffect(playerMenuUp, reduceDynamicBlur) {
                         if (!playerMenuUp || reduceDynamicBlur) {
                             delay(SNAPSHOT_RELEASE_DELAY_MS)
@@ -5058,6 +5081,26 @@ private fun BitChordApp(
                     ) { song ->
                         songMenuBody(song)
                     }
+                    AddSongsDialog(
+                        open = addSongsOpen,
+                        query = query,
+                        onQueryChange = viewModel::onQueryChange,
+                        onSubmit = viewModel::submitSearch,
+                        results = results,
+                        typeahead = addSongsTypeahead,
+                        suggestions = addSongsSuggestions,
+                        filter = filter,
+                        onFilterChange = viewModel::onFilterChange,
+                        onLiveSearch = viewModel::searchQuiet,
+                        backdrop = if (playerLiveCanvas) livePlayerBackdrop else playerBackdrop,
+                        onAdd = { addToQueue(it) },
+                        onDismiss = {
+                            AddSongsRequest.hide()
+                            viewModel.onQueryChange("")
+                            addSongsPreviousFilter?.let(viewModel::onFilterChange)
+                            addSongsPreviousFilter = null
+                        },
+                    )
                 }
             }
         }

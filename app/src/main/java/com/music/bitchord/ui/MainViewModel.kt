@@ -2172,6 +2172,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         runSearch(anonymous = false)
     }
 
+    /** Search the current popup query without adding it to search history. */
+    fun searchQuiet() {
+        if (_query.value.isBlank() || _searchSource.value != SearchSource.YOUTUBE) return
+        searchSubmitted = true
+        _suggestions.value = emptyList()
+        _typeaheadResults.value = emptyList()
+        runSearch(anonymous = true)
+    }
+
     /**
      * Asks every enabled addon for [q] in parallel. A slow or failing addon
      * only costs its own rows; the list is the rest of them, round-robin so
