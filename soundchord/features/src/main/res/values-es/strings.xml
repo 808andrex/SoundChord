@@ -108,4 +108,17 @@
     <string name="party_remote_audio_title">Modo Control Remoto</string>
     <string name="party_remote_audio_subtitle">Silenciar el audio local sin perder el control de la sesión.</string>
     <string name="audio_quality_accept">Aceptar</string>
+    <string name="audio_output_title">Salida de audio</string>
+    <string name="add_songs_to_queue">Añadir canciones a la cola</string>
+    <string name="add_songs_done">Listo</string>
+    <string name="add_songs_suggested">Sugerencias para ti</string>
+    <string name="output_this_phone">Este teléfono</string>
+    <string name="output_personal_phone">Teléfono de %1$s</string>
+    <string name="output_wired_headphones">Auriculares con cable</string>
+    <string name="output_usb_audio">Audio USB</string>
+    <string name="output_hdmi">Salida HDMI</string>
+    <string name="output_watch">Reloj</string>
+    <string name="output_cast">Transmitir</string>
+    <string name="output_cast_subtitle">Chromecast y altavoces Google Cast</string>
+    <string name="output_audio_pipeline">Flujo de procesamiento de audio</string>
 </resources>

@@ -17,6 +17,10 @@
     <string name="autoplay_off">AutoPlay off</string>
     <string name="autoplay_on">AutoPlay on</string>
     <string name="autoplay_queue_description">Similar music, selected to play next</string>
+    <string name="add_songs_to_queue">Add Songs to Queue</string>
+    <string name="automix">AutoMix</string>
+    <string name="add_songs_done">Done</string>
+    <string name="add_songs_suggested">Suggested for you</string>
     <string name="bit_depth">%1$d-bit</string>
     <string name="cancel">Cancel</string>
     <string name="cast">Cast</string>

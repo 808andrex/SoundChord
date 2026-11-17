@@ -108,4 +108,17 @@
     <string name="party_remote_audio_title">Remote Control Mode</string>
     <string name="party_remote_audio_subtitle">Mute audio on this device while keeping control of the party.</string>
     <string name="audio_quality_accept">Accept</string>
+    <string name="audio_output_title">Audio output</string>
+    <string name="add_songs_to_queue">Add Songs to Queue</string>
+    <string name="add_songs_done">Done</string>
+    <string name="add_songs_suggested">Suggested for you</string>
+    <string name="output_this_phone">This phone</string>
+    <string name="output_personal_phone">%1$s’s Phone</string>
+    <string name="output_wired_headphones">Wired headphones</string>
+    <string name="output_usb_audio">USB audio</string>
+    <string name="output_hdmi">HDMI output</string>
+    <string name="output_watch">Watch</string>
+    <string name="output_cast">Cast</string>
+    <string name="output_cast_subtitle">Chromecast and Google Cast speakers</string>
+    <string name="output_audio_pipeline">Audio Pipeline</string>
 </resources>
