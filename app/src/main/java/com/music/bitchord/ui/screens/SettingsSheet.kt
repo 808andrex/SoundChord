@@ -821,7 +821,7 @@ fun SettingsScreen(
             row(automixTitle, "crossfade", "smart fade", "mix") {
                 BypassedByBitPerfect(bitPerfectReady) {
                     SettingsRow(
-                        iconPainter = painterResource(com.soundchord.features.R.drawable.automix_icon),
+                        iconPainter = painterResource(R.drawable.automix_icon),
                         title = automixTitle,
                         subtitle = if (smartFade) {
                             stringResource(R.string.automix_enabled_subtitle)

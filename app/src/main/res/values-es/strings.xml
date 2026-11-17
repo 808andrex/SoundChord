@@ -1,4 +1,9 @@
 <resources>
+    <string name="add_songs_to_playlist">Añadir canciones</string>
+    <string name="automix_overview">Resumen de Automix</string>
+    <string name="diwali_title">BitChord te desea un feliz Diwali</string>
+    <string name="diwali_subtitle">Que este festival de las luces llene tu hogar de alegría y tus días de música.</string>
+    <string name="diwali_cta">Celebremos</string>
     <string name="app_name">SoundChord</string>
     <string name="playback_channel_name">Reproduciendo</string>
     <string name="download_channel_name">Descargas</string>
@@ -1242,6 +1247,7 @@
 
     <string name="song_added_to_queue">Se ha añadido la canción a la lista de reproducción</string>
     <string name="song_added_to_playlist">Agregada a la playlist</string>
+    <string name="song_added_to_liked_music">Añadida a Me gusta</string>
     <string name="song_already_in_playlist">Ya está en la playlist</string>
     <plurals name="add_to_playlists_count">
         <item quantity="one">Añadir a %1$d playlist</item>
