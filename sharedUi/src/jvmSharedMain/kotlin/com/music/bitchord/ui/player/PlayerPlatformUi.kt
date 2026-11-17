@@ -2,12 +2,28 @@ package com.music.bitchord.ui.player
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.RenderEffect
 
 /** Milliseconds on the clock `SystemClock.uptimeMillis` reads on the phone. */
 internal expect fun uptimeMillis(): Long
 
 /** Whether `Modifier.blur` actually blurs here, rather than being a no-op. */
 internal expect val renderEffectBlurSupported: Boolean
+
+/** Whether the platform can run the AGSL fluid cover transition. */
+internal expect val fluidArtworkSupported: Boolean
+
+internal expect class FluidArtworkShader() {
+    fun effect(
+        incoming: Boolean,
+        progress: Float,
+        direction: Float,
+        punch: Float,
+        seed: Float,
+        width: Float,
+        height: Float,
+    ): RenderEffect?
+}
 
 /** Holds off the display's idle timeout for as long as [enabled]. */
 @Composable

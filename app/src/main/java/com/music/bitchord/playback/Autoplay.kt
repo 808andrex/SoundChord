@@ -102,8 +102,9 @@ suspend fun loadAutoplayTracks(
     limit: Int = MAX_QUEUED_AUTOPLAY,
 ): Result<List<Song>> {
     val seed = youtubeSeedFor(seedSong) ?: return Result.success(emptyList())
-    // A music video plays on with music videos, as YouTube Music does.
-    val videos = seedSong.isVideo && seed == seedSong.videoId
+    // A music video plays on with music videos, as YouTube Music does — unless
+    // they would only be converted again, when the station's songs are the answer.
+    val videos = seedSong.isVideo && seed == seedSong.videoId && !MusicOnlyPlayback.isActive()
     val related = YtMusicRepository.radio(seed, preferVideo = videos).getOrElse { return Result.failure(it) }
     val extra = QueueBuilder.extend(existing, related, limit, preferVideos = videos)
     if (extra.isEmpty()) return Result.success(emptyList())
@@ -117,4 +118,47 @@ suspend fun loadAutoplayTracks(
             isLiveRadioStream = seedSong.isLiveRadioStream,
         ).asQueueEntry(QueueTier.AUTOPLAY)
     })
+}
+
+/** Builds recommendations from a collection's own tracks, not the playing queue. */
+suspend fun loadPlaylistRecommendations(
+    collection: List<Song>,
+    preferred: List<Song> = emptyList(),
+    excludedVideoIds: Set<String> = emptySet(),
+    limit: Int = 12,
+    seedCount: Int = 4,
+): List<Song> {
+    if (limit <= 0) return emptyList()
+    val excluded = excludedVideoIds + collection.map { it.videoId }
+    val picks = linkedMapOf<String, Song>()
+    fun collect(rows: List<Song>) {
+        rows.forEach { song ->
+            if (song.videoId !in excluded && song.videoId !in picks) picks[song.videoId] = song
+        }
+    }
+    collect(preferred)
+    if (picks.size >= limit || collection.isEmpty()) return picks.values.take(limit)
+
+    val distinct = collection.distinctBy { it.videoId }
+    val count = seedCount.coerceAtLeast(1).coerceAtMost(distinct.size)
+    val seeds = if (distinct.size <= count) {
+        distinct
+    } else {
+        (0 until count).map { index ->
+            distinct[index * (distinct.lastIndex) / (count - 1).coerceAtLeast(1)]
+        }.distinctBy { it.videoId }
+    }
+
+    val batches = mutableListOf<List<Song>>()
+    for (song in seeds) {
+        val seed = youtubeSeedFor(song) ?: continue
+        val related = YtMusicRepository.radio(seed).getOrNull().orEmpty()
+        if (related.isNotEmpty()) batches += related
+    }
+    val maxRows = batches.maxOfOrNull { it.size } ?: 0
+    for (index in 0 until maxRows) {
+        batches.forEach { batch -> batch.getOrNull(index)?.let { collect(listOf(it)) } }
+        if (picks.size >= limit) break
+    }
+    return picks.values.take(limit)
 }

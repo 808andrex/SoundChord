@@ -23,6 +23,7 @@ import com.music.bitchord.data.lyrics.LyricsTranslation
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.LastPlayerScreen
+import com.music.bitchord.playback.MusicOnlyPlayback
 import com.music.bitchord.playback.AudioOutputStatus
 import com.music.bitchord.playback.AudioRouting
 import com.music.bitchord.playback.audio.bitperfect.BitPerfectOutput
@@ -69,7 +70,7 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         override val hideVolumeBar get() = AppSettings.hideVolumeBar
         override val hideStatusBar get() = AppSettings.hideStatusBarInPlayer
         override val lastPlayerScreen get() = AppSettings.lastPlayerScreen
-        override val legacyMeshGradient get() = AppSettings.legacyMeshGradient
+        override val playerTheme get() = AppSettings.playerTheme
         override val lyricsBlur get() = AppSettings.lyricsBlur
         override val lyricsOffsetMs get() = AppSettings.lyricsOffsetMs
         override val lyricsSourceOrder get() = AppSettings.lyricsSourceOrder
@@ -78,16 +79,29 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         override val preferUsbDac get() = AppSettings.preferUsbDac
         override val prioritizeSpotifyCanvas get() = AppSettings.prioritizeSpotifyCanvas
         override val reduceAnimation get() = AppSettings.reduceAnimation
+        override val coverSlideAnimation get() = AppSettings.coverSlideAnimation
+        override val coverFluidAnimation get() = AppSettings.coverFluidAnimation
+        override val coverMixOnlyEffects get() = AppSettings.coverMixOnlyEffects
         override val reduceDynamicBlur get() = AppSettings.reduceDynamicBlur
+        override val disableBlendEffects get() = AppSettings.disableBlendEffects
         override val showNerdStats get() = AppSettings.showNerdStats
         override val showListenTogetherButton get() = AppSettings.showListenTogetherButton
         override val smartAnalysis get() = AppSettings.smartAnalysis
         override val automixDetail get() = AppSettings.automixDetail
         override val smartFadeEnabled get() = AppSettings.smartFadeEnabled
+        override fun setSmartFadeEnabled(value: Boolean) = AppSettings.setSmartFadeEnabled(value)
         override val smartMixInProgress get() = AppSettings.smartMixInProgress
         override val smartMixBlend get() = AppSettings.smartMixBlend
         override val smartMixView get() = AppSettings.smartMixView
         override val smartMixProgress get() = AppSettings.smartMixProgress
+        override val crossfadeRunning get() = AppSettings.crossfadeRunning
+        override val crossfadeProgress get() = AppSettings.crossfadeProgress
+        override val skipCrossfadeMs get() = AppSettings.skipCrossfadeMs
+        override val mixFadeMs get() = AppSettings.mixFadeMs
+        override val mixIncomingArtworkUrl get() = AppSettings.mixIncomingArtworkUrl
+        override val mixIncomingArtworkMediaId get() = AppSettings.mixIncomingArtworkMediaId
+        override val mixIncomingArtworkDirection get() = AppSettings.mixIncomingArtworkDirection
+        override val smartMixPreview get() = AppSettings.smartMixPreview
         override val smartTransitionWindow get() = AppSettings.smartTransitionWindow
         override val spotifyCanvasAutoHide get() = AppSettings.spotifyCanvasAutoHide
         override val syncedLyrics get() = AppSettings.syncedLyrics
@@ -96,6 +110,9 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
 
         override fun setLastPlayerScreen(value: LastPlayerScreen) = AppSettings.setLastPlayerScreen(value)
         override fun setLyricsOffsetMs(value: Int) = AppSettings.setLyricsOffsetMs(value)
+        override fun setMixViewOpen(open: Boolean) {
+            AppSettings.mixViewOpen.value = open
+        }
     }
 
     override fun cachedCanvas(song: Song): CanvasArtwork? = CanvasRepository.cached(song)
@@ -110,6 +127,8 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
     @Composable
     override fun MusicVideo(videoId: String, fit: Boolean, onRenderedChanged: (Boolean) -> Unit, modifier: Modifier) =
         AndroidMusicVideo(videoId, fit, onRenderedChanged, modifier)
+
+    override fun showsMusicVideoPicture(videoId: String): Boolean = MusicOnlyPlayback.showsPicture(videoId)
 
     override val musicVideoAspect: StateFlow<Float> get() = MusicVideoEngine.aspect
 
@@ -145,6 +164,20 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         AudioRouting.select(id)
         WearBridge.leaveWatchOutput()
     }
+
+    @Composable
+    override fun AudioOutputOverlay(
+        hazeState: HazeState,
+        song: Song,
+        artworkUrl: String?,
+        accountName: String?,
+        nestedOverlayOpen: Boolean,
+        onDismiss: () -> Unit,
+        onOpenPipeline: () -> Unit,
+        onOpenCast: () -> Unit,
+    ) = com.soundchord.features.player.SoundChordAudioOutputSheet(
+        hazeState, song, artworkUrl, accountName, nestedOverlayOpen, onDismiss, onOpenPipeline, onOpenCast,
+    )
 
     override val watchOutput: StateFlow<WatchOutputUi> by lazy {
         WearBridge.watchOutput

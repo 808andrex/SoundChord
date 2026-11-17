@@ -330,6 +330,35 @@ object BitChordIcons {
         }.build()
     }
 
+    /** A compact four point sparkle for the AutoMix queue control. */
+    val Automix: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "bc_automix", defaultWidth = 24.dp, defaultHeight = 24.dp,
+            viewportWidth = 24f, viewportHeight = 24f,
+        ).apply {
+            path(fill = stroke) {
+                moveTo(12f, 2f)
+                lineTo(14.1f, 9.9f)
+                lineTo(22f, 12f)
+                lineTo(14.1f, 14.1f)
+                lineTo(12f, 22f)
+                lineTo(9.9f, 14.1f)
+                lineTo(2f, 12f)
+                lineTo(9.9f, 9.9f)
+                close()
+                moveTo(19f, 2f)
+                lineTo(19.8f, 4.2f)
+                lineTo(22f, 5f)
+                lineTo(19.8f, 5.8f)
+                lineTo(19f, 8f)
+                lineTo(18.2f, 5.8f)
+                lineTo(16f, 5f)
+                lineTo(18.2f, 4.2f)
+                close()
+            }
+        }.build()
+    }
+
     /** Beamed pair of notes, for instrumental stretches in the lyrics. */
     val MusicNote: ImageVector by lazy {
         ImageVector.Builder(

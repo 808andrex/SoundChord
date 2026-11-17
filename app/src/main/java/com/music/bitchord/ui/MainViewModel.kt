@@ -624,6 +624,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private val _detailStack = MutableStateFlow<List<DetailPage>>(emptyList())
     val detailStack: StateFlow<List<DetailPage>> = _detailStack.asStateFlow()
+    /** Liked tracks added while their page's first browse request is in flight. */
+    private val pendingLikedAdds = mutableMapOf<String, MutableMap<String, Song>>()
 
     /**
      * The app's back stack: the routes pushed over the tabs, interleaved with
@@ -775,6 +777,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * into a list that YouTube orders for itself; the next fetch places it.
      */
     private fun dropFromLikedLists(videoId: String) {
+        pendingLikedAdds[YtMusicRepository.LIKED_MUSIC]?.remove(videoId)
         val library = (_library.value as? UiState.Success)?.data
         if (library != null && library.likedSongs.any { it.videoId == videoId }) {
             _library.value = UiState.Success(
@@ -796,6 +799,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         videoId,
         if (likeStatusOf(videoId) == LikeStatus.LIKE) LikeStatus.INDIFFERENT else LikeStatus.LIKE,
     )
+
+    /** Likes a song from the Liked Music add dialog and updates its open page immediately. */
+    fun addSongToLikedMusic(song: Song, onResult: (Boolean) -> Unit = {}) {
+        if (!requireSignIn()) return onResult(false)
+        if (likeStatusOf(song.videoId) == LikeStatus.LIKE) return onResult(false)
+        val previous = likeStatusOf(song.videoId)
+        LikeState.set(song.videoId, LikeStatus.LIKE)
+        appendToOpenPlaylist(YtMusicRepository.LIKED_MUSIC, song, null)
+        _library.value = (_library.value as? UiState.Success)?.let { state ->
+            UiState.Success(
+                state.data.copy(
+                    likedSongs = if (state.data.likedSongs.any { it.videoId == song.videoId }) {
+                        state.data.likedSongs
+                    } else {
+                        listOf(song) + state.data.likedSongs
+                    },
+                ),
+            )
+        } ?: _library.value
+        viewModelScope.launch {
+            YtMusicRepository.rate(song.videoId, LikeStatus.LIKE).fold(
+                onSuccess = {
+                    libraryStale = true
+                    onResult(true)
+                },
+                onFailure = {
+                    LikeState.set(song.videoId, previous)
+                    dropFromLikedLists(song.videoId)
+                    onResult(false)
+                },
+            )
+        }
+    }
 
     /** As [toggleLike], for the thumb-down. */
     fun toggleDislike(videoId: String): LikeStatus? {
@@ -1263,7 +1299,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val songs = when (val state = page.songs) {
                 is UiState.Success -> state.data
                 is UiState.Error -> if (state.message == text(R.string.no_tracks_here)) emptyList() else return@map page
-                UiState.Loading -> return@map page
+                UiState.Loading -> {
+                    if (browseId == YtMusicRepository.LIKED_MUSIC) {
+                        pendingLikedAdds.getOrPut(browseId) { linkedMapOf() }[song.videoId] = added
+                    }
+                    return@map page
+                }
             }
             // Already there — a track added twice is two real entries on
             // YouTube's side, but a duplicate row from a double tap is not
@@ -2172,6 +2213,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         runSearch(anonymous = false)
     }
 
+    /** Search the current popup query without adding it to search history. */
+    fun searchQuiet() {
+        if (_query.value.isBlank() || _searchSource.value != SearchSource.YOUTUBE) return
+        searchSubmitted = true
+        _suggestions.value = emptyList()
+        _typeaheadResults.value = emptyList()
+        runSearch(anonymous = true)
+    }
+
     /**
      * Asks every enabled addon for [q] in parallel. A slow or failing addon
      * only costs its own rows; the list is the rest of them, round-robin so
@@ -2864,6 +2914,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             }
+            val pendingLiked = if (browseId == YtMusicRepository.LIKED_MUSIC) {
+                pendingLikedAdds[browseId]?.values?.toList().orEmpty()
+            } else {
+                emptyList()
+            }
+            val stateWithPendingLikes = when {
+                pendingLiked.isEmpty() -> state
+                state is UiState.Success -> {
+                    pendingLikedAdds.remove(browseId)
+                    val existingIds = state.data.mapTo(HashSet()) { it.videoId }
+                    UiState.Success(
+                        pendingLiked.filterNot { it.videoId in existingIds } + state.data,
+                    )
+                }
+                state is UiState.Error && state.message == text(R.string.no_tracks_here) -> {
+                    pendingLikedAdds.remove(browseId)
+                    UiState.Success(pendingLiked)
+                }
+                else -> state
+            }
             // Update by id — the user may have pushed another page meanwhile.
             // A page showing its downloaded copy takes only a real listing: a
             // failed or empty fetch leaves the downloaded tracks up.
@@ -2872,7 +2942,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     (it.songs is UiState.Loading || (onDevice.isNotEmpty() && state is UiState.Success))
                 ) {
                     it.copy(
-                        songs = state,
+                        songs = stateWithPendingLikes,
                         sections = sections,
                         thumbnailUrl = artwork ?: it.thumbnailUrl,
                         title = name ?: it.title,
@@ -3558,6 +3628,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _account.value = null
         likedSyncJob?.cancel()
         LikeState.clear()
+        pendingLikedAdds.clear()
         _playlistsLoading.value = false
         _playlists.value = emptyList()
         _playlistOwned.value = emptyMap()
@@ -3622,6 +3693,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // them would show the next signed-in user someone else's hearts.
         likedSyncJob?.cancel()
         LikeState.clear()
+        pendingLikedAdds.clear()
         _playlists.value = emptyList()
         _playlistOwned.value = emptyMap()
         ownershipInFlight.clear()

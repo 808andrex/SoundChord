@@ -1,7 +1,6 @@
 package com.music.bitchord.ui.player
 
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -62,8 +61,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeDown
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
-import androidx.compose.material.icons.rounded.Cast
-import androidx.compose.material.icons.rounded.CastConnected
 import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Person
@@ -180,6 +177,7 @@ internal fun PlaybackOriginCaption(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
+    val chrome = LocalPlayerChrome.current
     Text(
         text = text,
         style = MaterialTheme.typography.labelSmall.copy(
@@ -189,15 +187,19 @@ internal fun PlaybackOriginCaption(
                 blurRadius = 4f,
             ),
         ),
-        color = LocalPlayerTint.current,
+        color = Color.White.copy(alpha = if (chrome) CHROME_FULL_ALPHA else 1f),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         textAlign = textAlign,
         modifier = modifier
+            .additiveChrome(chrome)
             .clickable(onClick = onClick)
             .padding(contentPadding),
     )
 }
+
+/** How far [PlayerScrubber] draws its times above the slot they are laid out in. */
+internal val SCRUBBER_LABEL_LIFT = 9.dp
 
 /**
  * The seek bar, with elapsed and remaining either side under it and
@@ -244,21 +246,23 @@ internal fun PlayerScrubber(
                 .fillMaxWidth()
                 // The slider's touch target extends well past the drawn bar,
                 // so pull the labels back up under it.
-                .offset(y = (-9).dp),
+                .offset(y = -SCRUBBER_LABEL_LIFT),
         ) {
+            // Drawn like the artist line: the same white, added the same way.
+            val timeColor = chromeWhite(0.55f)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().additiveChrome(LocalPlayerChrome.current),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
                     text = formatTime((shown * durationMs).toLong()),
                     style = MaterialTheme.typography.labelMedium,
-                    color = LocalPlayerTint.current.copy(alpha = 0.55f),
+                    color = timeColor,
                 )
                 Text(
                     text = "-" + formatTime(durationMs - (shown * durationMs).toLong()),
                     style = MaterialTheme.typography.labelMedium,
-                    color = LocalPlayerTint.current.copy(alpha = 0.55f),
+                    color = timeColor,
                 )
             }
             // Pinned to the box's own centre rather than squeezed into the gap
@@ -298,12 +302,17 @@ private fun MixingLabel(pulse: MixPulse, modifier: Modifier = Modifier) {
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
             ) { MixViewRequest.open = true }
-            .graphicsLayer { alpha = pulse.cover * pulse.alpha(1f, restShare = MIXING_LABEL_REST) },
+            .graphicsLayer {
+                alpha = pulse.cover * pulse.alpha(1f, restShare = MIXING_LABEL_REST)
+                // A buffer to fade through would cut the blend below off from the backdrop.
+                compositingStrategy = CompositingStrategy.ModulateAlpha
+            }
+            .additiveChrome(LocalPlayerChrome.current),
         style = MaterialTheme.typography.labelMedium.copy(
             fontWeight = FontWeight.Medium,
             fontSize = (MaterialTheme.typography.labelMedium.fontSize.value + BADGE_SIZE_BUMP).sp,
         ),
-        color = LocalPlayerTint.current.copy(alpha = 0.85f),
+        color = chromeWhite(0.85f),
         maxLines = 1,
     )
 }
@@ -320,19 +329,6 @@ private const val MIXING_LABEL_REST = 0.5f
  * whole point at SemiBold, which shouted next to the timestamps either side.
  */
 private const val BADGE_SIZE_BUMP = 0.5f
-
-/**
- * The colour every secondary line and glyph in the player is set in — artist,
- * timestamps, quality badge, the lyrics/output/queue row, the menu glyphs.
- *
- * Apple Music sets those in the sleeve's own colour lifted pale rather than a
- * translucent white — see [com.music.bitchord.ui.theme.rememberPlayerTint].
- * Provided at the top of the player; white anywhere it isn't, while the
- * sleeve is still being read, and while a Spotify Canvas fills the screen,
- * where there is no sleeve colour to echo. The title, transport, seek and
- * volume bars stay white on purpose.
- */
-internal val LocalPlayerTint = compositionLocalOf { Color.White }
 
 /**
  * The quality badge between the timestamps — "Lossless", "Hi-Res", a loading
@@ -564,6 +560,7 @@ internal fun VolumeRow(
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: () -> Unit,
 ) {
+    val chrome = LocalPlayerChrome.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -571,8 +568,8 @@ internal fun VolumeRow(
         Icon(
             Icons.AutoMirrored.Rounded.VolumeDown,
             contentDescription = null,
-            tint = LocalPlayerTint.current.copy(alpha = 0.5f),
-            modifier = Modifier.size(20.dp),
+            tint = if (chrome) VibrantChromeInk else chromeWhite(0.5f),
+            modifier = Modifier.size(20.dp).vibrantChrome(chrome),
         )
         Spacer(Modifier.width(10.dp))
         ThinSlider(
@@ -587,32 +584,23 @@ internal fun VolumeRow(
         Icon(
             Icons.AutoMirrored.Rounded.VolumeUp,
             contentDescription = null,
-            tint = LocalPlayerTint.current.copy(alpha = 0.5f),
-            modifier = Modifier.size(20.dp),
+            tint = if (chrome) VibrantChromeInk else chromeWhite(0.5f),
+            modifier = Modifier.size(20.dp).vibrantChrome(chrome),
         )
     }
 }
 
 /**
- * Lyrics, the capsule, and the queue — the row both layouts end on.
- *
- * The capsule swaps: output and party normally, the three playback modes while
- * the queue is up, since that is when they are what you are about to reach for.
- * It stays centred between the two glyphs either way.
+ * Lyrics, output and queue actions along the bottom edge.
  */
 @Composable
 internal fun PlayerActionRow(
     radioPlaying: Boolean,
     lyricsOpen: Boolean,
     queueOpen: Boolean,
-    shuffleEnabled: Boolean,
-    repeatMode: Int,
-    autoplayEnabled: Boolean,
+    autoplayBadge: Boolean,
     onToggleLyrics: () -> Unit,
     onToggleQueue: () -> Unit,
-    onToggleShuffle: () -> Unit,
-    onCycleRepeat: () -> Unit,
-    onToggleAutoplay: () -> Unit,
     onOpenOutput: () -> Unit,
     onListenTogether: () -> Unit,
     /** Opens [ListenTogetherMembersSheet] rather than settings directly. */
@@ -620,15 +608,11 @@ internal fun PlayerActionRow(
 ) {
     val showPartyButton by PlayerSettings.showListenTogetherButton.collectAsStateWithLifecycle()
     val inParty = rememberPartyBadge().inParty
-    // Just the output glyph in the middle.
-    val compact = !queueOpen && !showPartyButton && !inParty
+    // Keep the capsule focused on output and Listen Together.
+    val compact = !showPartyButton && !inParty
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        // Sized for the wider of the two capsules — the three-up one — whether
-        // that or the output/party one is up, so the lyrics and queue glyphs
-        // hold still as they swap. A lone output glyph is spaced as though the
-        // two-up capsule held it — closer in, without crowding — and they part
-        // again as the queue opens to make room.
-        val edgeInset = ((maxWidth - BOTTOM_ACTION_SIZE * 2 - pillWidth(3)) / 4).coerceAtLeast(0.dp)
+        // Reserve room for the output/party capsule between the two glyphs.
+        val edgeInset = ((maxWidth - BOTTOM_ACTION_SIZE * 2 - pillWidth(2)) / 4).coerceAtLeast(0.dp)
         val compactInset = ((maxWidth - BOTTOM_ACTION_SIZE * 2 - pillWidth(2)) / 4).coerceAtLeast(0.dp)
         val closeIn = compactInset - edgeInset
         // Held as State and read only in the glyphs' placement, so the slide
@@ -657,74 +641,14 @@ internal fun PlayerActionRow(
                     onClick = onToggleLyrics,
                     highlighted = lyricsOpen,
                     enabled = !radioPlaying,
+                    vibrant = true,
                 )
             }
-            AnimatedContent(
-                targetState = queueOpen,
-                transitionSpec = {
-                    (fadeIn(tween(180, delayMillis = 140)) togetherWith fadeOut(tween(140)))
-                        // Unclipped: the capsule's own rounded ends are what
-                        // the eye follows through the width change, and the
-                        // default clip cuts them square while it happens.
-                        .using(SizeTransform(clip = false) { _, _ -> tween(220) })
-                },
-                label = "playerBottomPill",
-            ) { showQueueModes ->
-                if (showQueueModes) {
-                    // Spaced the same as the output/party capsule, so the two
-                    // read as one control growing a segment.
-                    Pill {
-                        PillSegment(
-                            icon = BitChordIcons.Shuffle,
-                            contentDescription = stringResource(
-                                if (shuffleEnabled) Res.string.shuffle_on else Res.string.shuffle_off,
-                            ),
-                            onClick = onToggleShuffle,
-                            highlighted = shuffleEnabled,
-                            haptic = if (shuffleEnabled) Haptic.ToggleOff else Haptic.ToggleOn,
-                            tapWindowMs = SHUFFLE_TAP_WINDOW_MS,
-                        )
-                        PillDivider()
-                        PillSegment(
-                            icon = if (repeatMode == RepeatModes.ONE) null else BitChordIcons.Repeat,
-                            label = if (repeatMode == RepeatModes.ONE) "1" else null,
-                            contentDescription = when (repeatMode) {
-                                RepeatModes.ONE -> stringResource(Res.string.repeat_one)
-                                RepeatModes.ALL -> stringResource(Res.string.repeat_all)
-                                else -> stringResource(Res.string.repeat_off)
-                            },
-                            onClick = onCycleRepeat,
-                            highlighted = repeatMode != RepeatModes.OFF,
-                            // Three states, so the buzz tracks the edges of the
-                            // cycle: leaving off rises, returning to off falls,
-                            // and the step between the two repeat modes is just
-                            // a selection.
-                            haptic = when (repeatMode) {
-                                RepeatModes.OFF -> Haptic.ToggleOn
-                                RepeatModes.ONE -> Haptic.ToggleOff
-                                else -> Haptic.Select
-                            },
-                        )
-                        PillDivider()
-                        PillSegment(
-                            icon = BitChordIcons.Infinity,
-                            contentDescription = stringResource(
-                                if (autoplayEnabled) Res.string.autoplay_on else Res.string.autoplay_off,
-                            ),
-                            onClick = onToggleAutoplay,
-                            highlighted = autoplayEnabled,
-                            haptic = if (autoplayEnabled) Haptic.ToggleOff else Haptic.ToggleOn,
-                            tapWindowMs = AUTOPLAY_TAP_WINDOW_MS,
-                        )
-                    }
-                } else {
-                    OutputPartyPill(
-                        onOutput = onOpenOutput,
-                        onParty = onListenTogether,
-                        onOpenMembers = onOpenListenTogetherMembers,
-                    )
-                }
-            }
+            OutputPartyPill(
+                onOutput = onOpenOutput,
+                onParty = onListenTogether,
+                onOpenMembers = onOpenListenTogetherMembers,
+            )
             Box(
                 Modifier
                     .align(Alignment.CenterEnd)
@@ -736,39 +660,38 @@ internal fun PlayerActionRow(
                     onClick = onToggleQueue,
                     highlighted = queueOpen,
                     haptic = if (queueOpen) Haptic.Tap else Haptic.Expand,
+                    vibrant = true,
+                    autoplayBadge = autoplayBadge,
                 )
             }
         }
     }
 }
 
+/** How much more of the ink [CircleGlyph]'s disc takes than its plain white — 0.45 at rest. */
+private const val CIRCLE_DISC_DODGE_GAIN = 2.5f
+
 /**
  * Translucent circular button used for the track menu and the like control.
  *
- * [active] brightens the disc rather than only the glyph: this sits on album
- * artwork of any colour, and a white icon on a white-ish sleeve has no tint
- * change left to make. The filled star carries the state as a shape too —
- * see [BitChordIcons.StarFilled].
+ * The selected icon shape represents a liked track. The disc is identical for
+ * the like and menu buttons so neither changes the artwork's contrast.
  */
 @Composable
 internal fun CircleGlyph(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
-    active: Boolean = false,
     haptic: Haptic = Haptic.Tap,
     modifier: Modifier = Modifier,
 ) {
     val haptics = rememberHaptics()
-    val discAlpha by animateFloatAsState(
-        targetValue = if (active) 0.34f else 0.18f,
-        label = "glyphDisc",
-    )
+    val discAlpha = 0.18f
+    val chrome = LocalPlayerChrome.current
     Box(
         modifier = modifier
             .size(34.dp)
             .clip(CircleShape)
-            .background(LocalPlayerTint.current.copy(alpha = discAlpha))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -778,6 +701,21 @@ internal fun CircleGlyph(
             },
         contentAlignment = Alignment.Center,
     ) {
+        // The disc carries the blend, dodged as the bottom row's glyphs are, and
+        // the glyph sits on it in plain white. The ink is mixed in at a few times
+        // the plain disc's strength: a dodge laid on this thinly is next to nothing.
+        Box(
+            Modifier
+                .matchParentSize()
+                .vibrantChrome(chrome)
+                .background(
+                    if (chrome) {
+                        VibrantChromeInk.copy(alpha = (discAlpha * CIRCLE_DISC_DODGE_GAIN).coerceAtMost(1f))
+                    } else {
+                        Color.White.copy(alpha = discAlpha)
+                    },
+                ),
+        )
         Crossfade(
             targetState = icon,
             animationSpec = tween(durationMillis = 180),
@@ -786,7 +724,7 @@ internal fun CircleGlyph(
             Icon(
                 imageVector = glyph,
                 contentDescription = contentDescription,
-                tint = LocalPlayerTint.current,
+                tint = Color.White,
                 modifier = Modifier.size(19.dp),
             )
         }
@@ -891,6 +829,14 @@ private val PILL_OUTPUT_WIDE_SIZE = 21.dp
 /** Watch is drawn the full height of its box. */
 private val PILL_OUTPUT_TALL_SIZE = 17.dp
 
+/**
+ * The earphones are half again as wide as they are tall, so at 23dp the width
+ * limit leaves them little over half their box tall, well short of the glyphs
+ * either side. Past that limit on purpose: the pair is mostly air, and reads no
+ * wider than its neighbours do.
+ */
+private val PILL_OUTPUT_BUDS_SIZE = 29.dp
+
 /** What a segment's glyph is drawn at when it has no optical quirk to correct. */
 private val PILL_ICON_SIZE = 24.dp
 
@@ -915,7 +861,7 @@ private fun Pill(
         modifier = modifier
             .height(BOTTOM_ACTION_SIZE)
             .clip(CircleShape)
-            .background(LocalPlayerTint.current.copy(alpha = 0.12f))
+            .background(Color.White.copy(alpha = 0.12f))
             .animateContentSize(
                 animationSpec = spring(
                     dampingRatio = 0.82f,
@@ -933,7 +879,7 @@ private fun PillDivider() {
         Modifier
             .width(1.dp)
             .fillMaxHeight()
-            .background(LocalPlayerTint.current.copy(alpha = 0.20f)),
+            .background(Color.White.copy(alpha = 0.20f)),
     )
 }
 
@@ -968,6 +914,7 @@ private fun OutputPartyPill(
             iconSize = output.size * (BOTTOM_ICON_SIZE / PILL_OUTPUT_SIZE),
             contentDescription = stringResource(Res.string.audio_output),
             onClick = onOutput,
+            vibrant = true,
         )
         return
     }
@@ -977,6 +924,7 @@ private fun OutputPartyPill(
             iconSize = output.size,
             contentDescription = stringResource(Res.string.audio_output),
             onClick = onOutput,
+            vibrant = true,
         )
         PillDivider()
         PillSegment(
@@ -1017,15 +965,15 @@ private fun rememberOutputGlyph(): OutputGlyph {
     val watch by PlayerPlatform.host.watchOutput.collectAsStateWithLifecycle()
     val active = rememberAudioOutputs().firstOrNull { it.isActive }
     return when {
-        cast.connectedName != null -> OutputGlyph(Icons.Rounded.CastConnected, PILL_OUTPUT_WIDE_SIZE)
+        cast.connectedName != null -> OutputGlyph(vectorResource(Res.drawable.ic_output_airplay))
         watch.active -> OutputGlyph(Icons.Rounded.Watch, PILL_OUTPUT_TALL_SIZE)
         else -> when (active?.kind) {
             // No active row is the phone too — the caption under the pill
             // says "This phone" in the same case. Cast rather than a phone:
             // on the phone itself the button's job is to send it elsewhere.
-            null, AudioOutputKind.PHONE -> OutputGlyph(Icons.Rounded.Cast, PILL_OUTPUT_WIDE_SIZE)
+            null, AudioOutputKind.PHONE -> OutputGlyph(vectorResource(Res.drawable.ic_output_airplay))
             AudioOutputKind.BLUETOOTH -> when (active.form) {
-                BluetoothForm.BUDS -> OutputGlyph(vectorResource(Res.drawable.ic_output_buds))
+                BluetoothForm.BUDS -> OutputGlyph(vectorResource(Res.drawable.ic_output_buds), PILL_OUTPUT_BUDS_SIZE)
                 BluetoothForm.SPEAKER -> OutputGlyph(vectorResource(Res.drawable.ic_output_speaker))
                 BluetoothForm.CAR -> OutputGlyph(Icons.Rounded.DirectionsCar)
                 // Headphones doubles as the neutral "some audio device" glyph:
@@ -1065,14 +1013,19 @@ private fun PillSegment(
     tapWindowMs: Long = 0L,
     /** Per-segment override — see [OutputPartyPill]'s three-up capsule. */
     width: Dp = PILL_SEGMENT_WIDTH,
+    /** See [BottomGlyph], where the same flag means the same thing. */
+    vibrant: Boolean = false,
 ) {
     val haptics = rememberHaptics()
     val lastTap = remember { mutableLongStateOf(-tapWindowMs) }
+    val chrome = LocalPlayerChrome.current
     Box(
         modifier = Modifier
             .width(width)
             .height(BOTTOM_ACTION_SIZE)
-            .background(if (highlighted) LocalPlayerTint.current.copy(alpha = 0.14f) else Color.Transparent)
+            // Round the highlight and both fades, not inside them — see [CircleGlyph].
+            .additiveChrome(chrome && !vibrant)
+            .background(if (highlighted) Color.White.copy(alpha = 0.14f) else Color.Transparent)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -1088,16 +1041,25 @@ private fun PillSegment(
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
-        val tint = LocalPlayerTint.current.copy(alpha = if (highlighted) 1f else 0.75f)
+        val tint = if (vibrant && chrome) {
+            VibrantChromeInk
+        } else {
+            when {
+                !highlighted -> chromeWhite(0.75f)
+                chrome -> Color.White.copy(alpha = CHROME_FULL_ALPHA)
+                else -> Color.White
+            }
+        }
         Crossfade(
             targetState = loading,
+            modifier = Modifier.vibrantChrome(chrome && vibrant),
             animationSpec = tween(durationMillis = 200),
             label = "pillSegmentLoading",
         ) { isLoading ->
             if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(17.dp),
-                    color = LocalPlayerTint.current,
+                    color = Color.White,
                     strokeWidth = 2.dp,
                 )
             } else if (icon != null) {
@@ -1169,6 +1131,7 @@ internal fun OutputCaption(
         ?: stringResource(Res.string.listen_together_jam_unnamed)
     val captionModifier = Modifier
         .fillMaxWidth(0.65f)
+        .additiveChrome(LocalPlayerChrome.current)
         .clickable { if (badge.inParty) onOpenMembers() else onOpenOutput() }
     if (!badge.inParty && (outputFormat.bitPerfect || outputFormat.dacLimited)) {
         ShimmerText(
@@ -1184,7 +1147,7 @@ internal fun OutputCaption(
         Text(
             text = if (badge.inParty) jamName else outputName,
             style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-            color = LocalPlayerTint.current.copy(alpha = 0.55f),
+            color = chromeWhite(0.55f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
@@ -1265,13 +1228,17 @@ private fun BottomGlyph(
      */
     tapWindowMs: Long = 0L,
     enabled: Boolean = true,
+    /** Dodged rather than added, for the bottom row's glyphs — see [vibrantChrome]. */
+    vibrant: Boolean = false,
+    autoplayBadge: Boolean = false,
 ) {
     val haptics = rememberHaptics()
     // Read only from the click handler, never during composition, so writing it
     // costs no recomposition. Starts a full window in the past so the first tap
     // is never the one that gets swallowed.
     val lastTap = remember { mutableLongStateOf(-tapWindowMs) }
-    val tileColor = LocalPlayerTint.current.copy(alpha = BOTTOM_ACTIVE_TILE_ALPHA)
+    val tileColor = chromeWhite(BOTTOM_ACTIVE_TILE_ALPHA)
+    val tileChrome = LocalPlayerChrome.current
     Box(
         modifier = Modifier
             .size(BOTTOM_ACTION_SIZE)
@@ -1279,10 +1246,16 @@ private fun BottomGlyph(
             // artwork showing through. The glyph is drawn first and the tile over
             // it with SrcOut, which keeps the tile only where the glyph is not.
             // Offscreen only while lit, so an unlit glyph costs no extra layer.
+            // The blend's own layer serves as that offscreen when it is on.
             .then(
                 if (highlighted) {
-                    Modifier
-                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    (
+                        if (tileChrome) {
+                            Modifier.additiveChrome(true)
+                        } else {
+                            Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                        }
+                    )
                         .drawWithContent {
                             drawContent()
                             val side = BOTTOM_ACTIVE_TILE_SIZE.toPx()
@@ -1314,17 +1287,22 @@ private fun BottomGlyph(
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
-        val tint = LocalPlayerTint.current.copy(alpha = when {
-            !enabled -> 0.35f
-            highlighted -> 1f
-            else -> 0.75f
-        })
+        // Not while lit: the tile's cut-out needs the glyph drawn plainly in the
+        // layer above, which is blended as a whole.
+        val chrome = LocalPlayerChrome.current && !highlighted
+        val tint = when {
+            !enabled -> chromeWhite(0.35f)
+            vibrant && chrome -> VibrantChromeInk
+            highlighted -> Color.White
+            else -> chromeWhite(0.75f)
+        }
+        val glyphChrome = if (vibrant) Modifier.vibrantChrome(chrome) else Modifier.additiveChrome(chrome)
         if (icon != null) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = tint,
-                modifier = Modifier.size(iconSize),
+                modifier = Modifier.size(iconSize).then(glyphChrome),
             )
         } else if (label != null) {
             Text(
@@ -1332,6 +1310,15 @@ private fun BottomGlyph(
                 color = tint,
                 fontSize = 19.sp,
                 fontWeight = FontWeight.Bold,
+                modifier = glyphChrome,
+            )
+        }
+        if (autoplayBadge) {
+            Icon(
+                imageVector = BitChordIcons.Infinity,
+                contentDescription = stringResource(Res.string.autoplay_on),
+                tint = Color.White.copy(alpha = 0.82f),
+                modifier = Modifier.align(Alignment.TopEnd).offset(x = 1.dp, y = (-2).dp).size(16.dp),
             )
         }
     }
@@ -1805,11 +1792,11 @@ private fun LosslessLabel(
         ).graphicsLayer {
             alpha = pulse?.value ?: 1f
             compositingStrategy = CompositingStrategy.ModulateAlpha
-        },
+        }.additiveChrome(LocalPlayerChrome.current),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val tint = LocalPlayerTint.current.copy(alpha = if (animated) 0.7f else 0.45f)
+        val tint = chromeWhite(if (animated) 0.7f else 0.45f)
         // At the drawable's own size — the wave is wide, the double-D
         // nearly square, and one box squashed one of them.
         Icon(
@@ -1828,7 +1815,7 @@ private fun LosslessLabel(
                     fontWeight = FontWeight.Medium,
                     fontSize = (MaterialTheme.typography.labelMedium.fontSize.value + BADGE_SIZE_BUMP).sp,
                 ),
-                color = LocalPlayerTint.current.copy(alpha = 0.45f),
+                color = chromeWhite(0.45f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1951,8 +1938,8 @@ private fun ShimmerText(
         ),
         label = "lossless-shimmer-progress",
     )
-    val tint = LocalPlayerTint.current
-    val baseColor = tint.copy(alpha = baseAlpha)
+    val tint = Color.White.copy(alpha = if (LocalPlayerChrome.current) CHROME_FULL_ALPHA else 1f)
+    val baseColor = chromeWhite(baseAlpha)
     // The glyphs are laid out and drawn once, in the plain tint, and the moving
     // band is painted over them in the draw phase with SrcIn — which keeps the
     // glyphs' coverage and takes the gradient's colour, the same pixels a

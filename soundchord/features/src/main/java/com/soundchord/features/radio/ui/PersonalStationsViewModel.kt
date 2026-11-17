@@ -41,7 +41,7 @@ class PersonalStationsViewModel : ViewModel() {
 
     fun includeCurrentSong(song: Song?) {
         currentSong = song?.takeUnless {
-            it.isLiveRadioStream || it.playbackSourceId?.startsWith("radio:") == true
+            it.isVideo || it.isLiveRadioStream || it.playbackSourceId?.startsWith("radio:") == true
         }
         if (recentLoadStarted) publishRecentStations()
     }
@@ -73,11 +73,11 @@ class PersonalStationsViewModel : ViewModel() {
         queueJob = viewModelScope.launch {
             _stationQueue.value = PersonalStationQueueState.Loading
             try {
-                YtMusicRepository.radio(seed.videoId, preferVideo = seed.isVideo)
+                YtMusicRepository.radio(seed.videoId, preferVideo = false)
                     .onSuccess { songs ->
                         if (queueSeedId == seed.videoId) {
                             _stationQueue.value = PersonalStationQueueState.Success(
-                                songs.filterNot { it.videoId == seed.videoId }
+                                songs.filterNot { it.isVideo || it.videoId == seed.videoId }
                                     .distinctBy(Song::videoId)
                                     .take(40),
                             )
@@ -97,8 +97,8 @@ class PersonalStationsViewModel : ViewModel() {
     private fun publishRecentStations() {
         val songs = buildList {
             currentSong?.let(::add)
-            addAll(recentSongs)
-        }.distinctBy(Song::videoId).take(20)
+            addAll(recentSongs.filterNot(Song::isVideo))
+        }.filterNot(Song::isVideo).distinctBy(Song::videoId).take(20)
 
         _recentStations.value = when {
             songs.isNotEmpty() -> RecentStationsState.Success(songs)

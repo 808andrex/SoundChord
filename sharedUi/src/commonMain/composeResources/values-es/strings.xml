@@ -17,6 +17,10 @@
     <string name="autoplay_off">AutoPlay desactivado</string>
     <string name="autoplay_on">AutoPlay activado</string>
     <string name="autoplay_queue_description">Música similar elegida para reproducirse a continuación</string>
+    <string name="add_songs_to_queue">Añadir canciones a la cola</string>
+    <string name="automix">Mezcla automática</string>
+    <string name="add_songs_done">Listo</string>
+    <string name="add_songs_suggested">Sugerencias para ti</string>
     <string name="bit_depth">%1$d bits</string>
     <string name="cancel">Cancelar</string>
     <string name="cast">Enviar a</string>
