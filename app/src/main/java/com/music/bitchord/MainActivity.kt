@@ -337,6 +337,7 @@ import com.music.bitchord.ui.player.LocalPlayerDock
 import com.music.bitchord.ui.player.PlayerDock
 import com.music.bitchord.ui.player.AddSongsRequest
 import com.music.bitchord.ui.components.AddSongsDialog
+import com.music.bitchord.ui.components.PlaylistAddSongsHost
 import com.music.bitchord.ui.screens.DetailScreen
 import com.music.bitchord.ui.screens.sortedForDetail
 import com.music.bitchord.ui.screens.LocalFolder
@@ -1063,6 +1064,10 @@ private fun BitChordApp(
     val qualityUpgradesInFlight by NerdStats.racingLossless.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val playlistsLoading by viewModel.playlistsLoading.collectAsStateWithLifecycle()
+    val ownedPlaylists by viewModel.playlistOwned.collectAsStateWithLifecycle()
+    LaunchedEffect(detail?.browseId, signedIn) {
+        if (signedIn) viewModel.resolvePlaylistOwnership(detail?.browseId)
+    }
 
     // The Downloads page is a snapshot of the folder, taken when it was opened.
     // Saving a track or deleting one while it is on screen changes what belongs
@@ -3418,6 +3423,11 @@ private fun BitChordApp(
                             }
                             // This page's songs being rearranged, drawn in place of its list.
                             val reordering = reorderTarget?.takeIf { it.browseId == page.browseId }
+                            val editablePlaylist = if (signedIn && page.type == BrowseType.PLAYLIST) {
+                                viewModel.editablePlaylist(page.browseId)
+                            } else {
+                                null
+                            }
                             DetailScreen(
                                 page = page,
                                 currentSong = player.song,
@@ -3468,6 +3478,11 @@ private fun BitChordApp(
                                     viewModel.openDetail(id, name, "Artist", null, BrowseType.ARTIST)
                                 },
                                 onAddSuggested = { song -> viewModel.addSuggestedSong(page.browseId, song) },
+                                onAddSongs = when {
+                                    page.browseId == "VLLM" && signedIn -> ({ AddSongsRequest.showForLikedMusic() })
+                                    editablePlaylist != null -> ({ AddSongsRequest.showForPlaylist(editablePlaylist) })
+                                    else -> null
+                                },
                                 // Saving is an account action, so it isn't offered to a
                                 // guest at all — same as the like and add-to-playlist rows
                                 // in the track menu.
@@ -5033,13 +5048,19 @@ private fun BitChordApp(
                     // sheet's own window, as the menu has to be to sit above
                     // the player. Not under "reduce dynamic blur": the panel
                     // is opaque then.
-                    val addSongsOpen by AddSongsRequest.open.collectAsStateWithLifecycle()
+                    val addSongsRequested by AddSongsRequest.open.collectAsStateWithLifecycle()
+                    val addSongsPlaylist by AddSongsRequest.playlist.collectAsStateWithLifecycle()
+                    val addSongsToLikedMusic by AddSongsRequest.likedMusic.collectAsStateWithLifecycle()
+                    val addSongsOpen = addSongsRequested && addSongsPlaylist == null && !addSongsToLikedMusic
                     val addSongsTypeahead by viewModel.typeaheadResults.collectAsStateWithLifecycle()
                     var addSongsSuggestions by remember { mutableStateOf<List<Song>?>(null) }
                     var addSongsPreviousFilter by remember { mutableStateOf<SearchFilter?>(null) }
                     DisposableEffect(Unit) {
-                        AddSongsRequest.hide()
-                        onDispose { AddSongsRequest.hide() }
+                        onDispose {
+                            if (AddSongsRequest.playlist.value == null && !AddSongsRequest.likedMusic.value) {
+                                AddSongsRequest.hide()
+                            }
+                        }
                     }
                     LaunchedEffect(addSongsOpen) {
                         if (!addSongsOpen) return@LaunchedEffect
@@ -5083,6 +5104,11 @@ private fun BitChordApp(
                     }
                     AddSongsDialog(
                         open = addSongsOpen,
+                        title = if (addSongsPlaylist != null || addSongsToLikedMusic) {
+                            context.getString(R.string.add_songs_to_playlist)
+                        } else {
+                            null
+                        },
                         query = query,
                         onQueryChange = viewModel::onQueryChange,
                         onSubmit = viewModel::submitSearch,
@@ -5093,7 +5119,20 @@ private fun BitChordApp(
                         onFilterChange = viewModel::onFilterChange,
                         onLiveSearch = viewModel::searchQuiet,
                         backdrop = if (playerLiveCanvas) livePlayerBackdrop else playerBackdrop,
-                        onAdd = { addToQueue(it) },
+                        onAdd = { song ->
+                            when {
+                                addSongsPlaylist != null ->
+                                    viewModel.addToPlaylists(listOf(addSongsPlaylist!!), song) { added, _, failed ->
+                                        if (added == 0 && failed > 0) {
+                                            showQueueNotice(context.getString(R.string.failed))
+                                        }
+                                    }
+                                addSongsToLikedMusic -> viewModel.addSongToLikedMusic(song) { added ->
+                                    if (added) showQueueNotice(context.getString(R.string.song_added_to_liked_music))
+                                }
+                                else -> addToQueue(song)
+                            }
+                        },
                         onDismiss = {
                             AddSongsRequest.hide()
                             viewModel.onQueryChange("")
@@ -5596,6 +5635,21 @@ private fun BitChordApp(
                 }
             }
         }
+
+        // Playlist additions are hosted at the app level so the same glass
+        // search dialog can open from a release page even when Now Playing is
+        // not on screen. Queue additions remain hosted in the player window.
+        PlaylistAddSongsHost(
+            viewModel = viewModel,
+            detailStack = detailStack,
+            library = libraryState,
+            likeStatuses = likeStatuses,
+            query = query,
+            results = results,
+            filter = filter,
+            hazeState = hazeState,
+            onNotice = { message -> showQueueNotice(message) },
+        )
 
         // ---- Welcome (once; under the sign-in WebView it can open) ----
         // There from the first frame, so no way in; on the way out it drops

@@ -335,6 +335,8 @@ fun DetailScreen(
      * wouldn't just be refused.
      */
     onToggleLibrary: (() -> Unit)? = null,
+    /** Opens the shared Liquid Glass picker for an editable playlist. */
+    onAddSongs: (() -> Unit)? = null,
     /**
      * Subscribes to this artist's channel, or unsubscribes —
      * [DetailPage.subscription] says which way round. The artist page's answer
@@ -599,6 +601,7 @@ fun DetailScreen(
                         // A folder's credit says where its tracks live, not who made them.
                         onArtistClick = onArtistClick.takeIf { folder == null },
                         onToggleLibrary = onToggleLibrary,
+                        onAddSongs = onAddSongs,
                         onDownloadAll = folder?.onDownload?.let { download -> { download(songs) } },
                     )
                 }
@@ -928,6 +931,7 @@ private fun ReleaseHeader(
     onShuffle: () -> Unit,
     onArtistClick: ((String, String) -> Unit)?,
     onToggleLibrary: (() -> Unit)?,
+    onAddSongs: (() -> Unit)?,
     /** The Cached songs folder's: saves every track on it to Downloads. Null hides it. */
     onDownloadAll: (() -> Unit)? = null,
 ) {
@@ -1134,22 +1138,50 @@ private fun ReleaseHeader(
                     }
                     return@Row
                 }
-                CircleIconButton(
-                    icon = BitChordIcons.Shuffle,
-                    contentDescription = stringResource(R.string.shuffle),
-                    onClick = onShuffle,
-                    haptic = Haptic.Resume,
-                    size = RELEASE_SIDE_BUTTON,
-                )
-                ActionPill(
-                    icon = BitChordIcons.Play,
-                    label = stringResource(R.string.play),
-                    onClick = onPlay,
-                    filled = true,
-                    size = RELEASE_SIDE_BUTTON,
-                    modifier = Modifier.weight(1f),
-                )
-                if (library != null) {
+                val canAddSongs = onAddSongs != null
+                if (canAddSongs) {
+                    CircleIconButton(
+                        icon = BitChordIcons.Shuffle,
+                        contentDescription = stringResource(R.string.shuffle),
+                        onClick = onShuffle,
+                        haptic = Haptic.Resume,
+                        size = RELEASE_SIDE_BUTTON,
+                    )
+                    ActionPill(
+                        icon = BitChordIcons.Play,
+                        label = stringResource(R.string.play),
+                        onClick = onPlay,
+                        filled = true,
+                        size = RELEASE_SIDE_BUTTON,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    ActionPill(
+                        icon = BitChordIcons.Play,
+                        label = stringResource(R.string.play),
+                        onClick = onPlay,
+                        filled = true,
+                        size = RELEASE_SIDE_BUTTON,
+                        modifier = Modifier.weight(1f),
+                    )
+                    ActionPill(
+                        icon = BitChordIcons.Shuffle,
+                        label = stringResource(R.string.shuffle),
+                        onClick = onShuffle,
+                        filled = false,
+                        size = RELEASE_SIDE_BUTTON,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (canAddSongs) {
+                    CircleIconButton(
+                        icon = BitChordIcons.Plus,
+                        contentDescription = stringResource(R.string.add_songs_to_playlist),
+                        onClick = { onAddSongs?.invoke() },
+                        haptic = Haptic.ToggleOn,
+                        size = RELEASE_SIDE_BUTTON,
+                    )
+                } else if (library != null && page.type != BrowseType.PLAYLIST) {
                     CircleIconButton(
                         // A tick, not a filled-in plus: the pair reads as
                         // "not yet / done", which is what the state is.
@@ -1162,16 +1194,6 @@ private fun ReleaseHeader(
                         onClick = { onToggleLibrary?.invoke() },
                         haptic = if (library.saved) Haptic.ToggleOff else Haptic.ToggleOn,
                         size = RELEASE_SIDE_BUTTON,
-                    )
-                } else {
-                    // Shown but greyed out for a guest, rather than leaving a
-                    // hole beside Play.
-                    CircleIconButton(
-                        icon = BitChordIcons.Plus,
-                        contentDescription = stringResource(R.string.add_to_library),
-                        onClick = {},
-                        size = RELEASE_SIDE_BUTTON,
-                        enabled = false,
                     )
                 }
             }
