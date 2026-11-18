@@ -3108,8 +3108,16 @@ private fun BitChordApp(
                                 onDismissClearConfirmation = {
                                     showRecognitionHistoryClearConfirmation = false
                                 },
+                                dialogSurfaceModifier = Modifier
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(Color(0xFF1C1C1E).copy(alpha = 0.92f))
+                                    .then(
+                                        if (reduceDynamicBlur) Modifier else Modifier.hazeEffect(
+                                            state = hazeState,
+                                            style = HazeMaterials.regular(Color(0xFF1C1C1E)),
+                                        ),
+                                    ),
                                 contentPadding = listPadding,
-                                hazeState = hazeState,
                             )
                         } else if (pageRoute == AppRoute.RadioHistory) {
                             RadioHistoryScreen(
@@ -3983,7 +3991,7 @@ private fun BitChordApp(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .then(
-                                    if (pageRoute == AppRoute.RadioHistory) {
+                                    if (pageRoute == AppRoute.RadioHistory || pageRoute == AppRoute.RecognitionHistory) {
                                         Modifier.hazeSource(hazeState)
                                     } else Modifier
                                 ),

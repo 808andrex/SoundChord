@@ -1,8 +1,21 @@
 package com.music.bitchord.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +36,7 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -29,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,18 +57,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
-import com.music.bitchord.ui.components.AlertAction
-import com.music.bitchord.ui.components.AlertRule
-import com.music.bitchord.ui.components.AlertScaffold
 import com.soundchord.features.recognition.data.RecognitionHistoryEntry
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import dev.chrisbanes.haze.HazeState
 
 @Composable
 fun RecognitionHistoryScreen(
@@ -62,10 +75,20 @@ fun RecognitionHistoryScreen(
     onClear: () -> Unit,
     showClearConfirmation: Boolean,
     onDismissClearConfirmation: () -> Unit,
+    dialogSurfaceModifier: Modifier,
     contentPadding: PaddingValues,
-    hazeState: HazeState,
     modifier: Modifier = Modifier,
 ) {
+    BackHandler(enabled = showClearConfirmation, onBack = onDismissClearConfirmation)
+    var wasClearConfirmationVisible by rememberSaveable { mutableStateOf(false) }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            if (wasClearConfirmationVisible) onDismissClearConfirmation()
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(showClearConfirmation) {
+        wasClearConfirmationVisible = showClearConfirmation
+    }
     var query by rememberSaveable { mutableStateOf("") }
     val locale = Locale.getDefault()
     val monthFormatter = DateTimeFormatter.ofPattern("MMMM yyyy", locale)
@@ -79,11 +102,12 @@ fun RecognitionHistoryScreen(
         YearMonth.from(Instant.ofEpochMilli(entry.timestamp).atZone(zone))
     }.toSortedMap(compareByDescending<YearMonth> { it })
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
+    Box(modifier = modifier.fillMaxSize()) {
+      LazyColumn(
+        modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+      ) {
         item(key = "recognition-history:search") {
             OutlinedTextField(
                 value = query,
@@ -138,36 +162,76 @@ fun RecognitionHistoryScreen(
             }
         }
         item(key = "recognition-history:bottom-space") { Spacer(Modifier.height(12.dp)) }
-    }
+      }
 
-    if (showClearConfirmation) {
-        AlertScaffold(hazeState = hazeState, onDismiss = onDismissClearConfirmation) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+      AnimatedVisibility(
+        visible = showClearConfirmation,
+        modifier = Modifier.fillMaxSize().zIndex(1f),
+        enter = fadeIn(tween(160)) + scaleIn(
+            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 600f),
+            initialScale = 0.9f,
+        ),
+        exit = fadeOut(tween(120)) + scaleOut(tween(140), targetScale = 0.94f),
+      ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = onDismissClearConfirmation,
+                    ),
+            )
+            Column(
+                modifier = Modifier.fillMaxWidth().widthIn(max = 300.dp)
+                    .padding(horizontal = 28.dp)
+                    .then(dialogSurfaceModifier)
+                    .background(Color(0xFF1C1C1E).copy(alpha = 0.92f), RoundedCornerShape(24.dp))
+                    .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)), RoundedCornerShape(24.dp))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = {},
+                    ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+              Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+              ) {
                 Text(
                     text = stringResource(R.string.recognition_history_clear_title),
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
                 )
                 Text(
                     text = stringResource(R.string.recognition_history_clear_message),
+                    modifier = Modifier.padding(top = 8.dp, bottom = 14.dp),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color.White.copy(alpha = 0.72f),
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 18.dp),
                 )
-                AlertRule()
-                AlertAction(stringResource(R.string.cancel), emphasised = false, onClick = onDismissClearConfirmation)
-                AlertRule()
-                AlertAction(
-                    stringResource(R.string.delete),
-                    emphasised = true,
-                    destructive = true,
+                HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+                androidx.compose.material3.TextButton(
+                    onClick = onDismissClearConfirmation,
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                ) {
+                    Text(stringResource(R.string.cancel), color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                }
+                HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+                androidx.compose.material3.TextButton(
                     onClick = { onClear(); onDismissClearConfirmation() },
-                )
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                ) {
+                    Text(stringResource(R.string.delete), color = Color(0xFFFF453A), style = MaterialTheme.typography.bodyLarge)
+                }
+              }
             }
         }
+      }
     }
 }
 
