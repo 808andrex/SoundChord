@@ -4509,6 +4509,10 @@ private fun BitChordApp(
                 // A tab is a fresh start: everything pushed over the old one —
                 // routes and release pages alike — goes with it.
                 val onTabSelected: (Int) -> Unit = { index ->
+                    if (recognitionOpen) {
+                        recognitionOpen = false
+                        MusicRecognitionService.reset()
+                    }
                     navigator.clear()
                     viewModel.closeMoodGenre()
                     selectedTab = index
