@@ -44,6 +44,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.model.CARD_ART_PX
+import com.music.bitchord.data.model.artworkAt
 import com.soundchord.features.R
 
 @Composable
@@ -99,7 +101,7 @@ private fun PersonalStationCard(seed: Song, onOpen: () -> Unit, onPlay: () -> Un
             .background(Color(0xFF202124))
             .clickable(onClick = onOpen),
     ) {
-        seed.thumbnailUrl?.let { artwork ->
+        seed.thumbnailUrl.artworkAt(CARD_ART_PX)?.let { artwork ->
             AsyncImage(
                 model = artwork,
                 contentDescription = null,
