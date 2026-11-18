@@ -74,6 +74,13 @@
     <string name="radio_back">Back</string>
     <string name="radio_add_favorite">Add to favorites</string>
     <string name="radio_remove_favorite">Remove from favorites</string>
+    <string name="radio_history_title">Radio history</string>
+    <string name="radio_history_empty">Stations you play will appear here.</string>
+    <string name="radio_history_clear">Clear history</string>
+    <string name="radio_history_clear_title">Clear radio history?</string>
+    <string name="radio_history_clear_message">This removes all recently played radio stations from this device.</string>
+    <string name="radio_history_delete">Delete</string>
+    <string name="radio_history_cancel">Cancel</string>
     <string name="station_up_next">Up Next</string>
     <string name="station_empty_suggestions">No songs suggested for this station</string>
     <string name="station_retry">Retry</string>

@@ -32,6 +32,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -62,6 +63,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.material.icons.Icons
@@ -129,6 +131,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.soundchord.features.radio.data.PreferencesRadioFavoritesStore
 import com.soundchord.features.radio.data.RadioStation
+import com.soundchord.features.radio.data.RadioHistoryStore
 import com.music.bitchord.auth.DiscordLoginScreen
 import com.music.bitchord.auth.SpotifyLoginScreen
 import com.music.bitchord.auth.WebSessionMode
@@ -285,6 +288,7 @@ import com.music.bitchord.ui.components.MiniPlayer
 import com.music.bitchord.ui.components.QueueActionNotice
 import com.music.bitchord.ui.components.QueueActionNoticeHost
 import com.music.bitchord.ui.components.TopBarAccountButton
+import com.music.bitchord.ui.components.iosMenuPanel
 import com.music.bitchord.ui.screens.SegmentedControl
 import com.music.bitchord.ui.components.SearchField
 import com.music.bitchord.sharedui.resources.Res as SharedRes
@@ -379,6 +383,7 @@ import com.music.bitchord.ui.utils.rememberIosOverscrollFactory
 import com.music.bitchord.ui.performance.resolvePerformanceRefreshRate
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
@@ -386,6 +391,8 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 import com.soundchord.features.icons.SoundChordIcons
 import com.soundchord.features.radio.ui.RadioScreen
+import com.soundchord.features.radio.ui.RadioHistoryScreen
+import com.soundchord.features.radio.playback.toSong
 import com.soundchord.features.recognition.RecognitionFab
 import com.soundchord.features.recognition.RecognitionScreen
 import com.soundchord.features.recognition.data.MusicRecognitionService
@@ -569,6 +576,7 @@ private fun BitChordApp(
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var recognitionOpen by rememberSaveable { mutableStateOf(false) }
     var showRecognitionHistoryClearConfirmation by remember { mutableStateOf(false) }
+    var showRadioHistoryClearConfirmation by remember { mutableStateOf(false) }
     var recognitionFabVisible by rememberSaveable { mutableStateOf(true) }
     // Explore loads the first time it's shown, not at launch beside Home.
     LaunchedEffect(selectedTab) {
@@ -963,6 +971,8 @@ private fun BitChordApp(
     val activeProfileId by viewModel.activeProfileId.collectAsStateWithLifecycle()
     val historyState by viewModel.history.collectAsStateWithLifecycle()
     val recognitionHistory by RecognitionHistoryStore.entries.collectAsStateWithLifecycle()
+    val radioHistoryStore = remember(context) { RadioHistoryStore.apply { init(context) } }
+    val radioHistory by radioHistoryStore.stations.collectAsStateWithLifecycle()
     val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
     val lyricsSource by viewModel.lyricsSource.collectAsStateWithLifecycle()
     val lyricsChecked by viewModel.lyricsChecked.collectAsStateWithLifecycle()
@@ -3101,6 +3111,49 @@ private fun BitChordApp(
                                 contentPadding = listPadding,
                                 hazeState = hazeState,
                             )
+                        } else if (pageRoute == AppRoute.RadioHistory) {
+                            RadioHistoryScreen(
+                                stations = radioHistory,
+                                favoriteUuids = radioFavorites.mapTo(hashSetOf()) { it.uuid },
+                                onPlay = { station ->
+                                    radioHistoryStore.record(context, station)
+                                    playRadio(station.toSong(context), QueueSource(radioLabel, PlaybackSourceType.QUEUE, id = "radio:${station.uuid}"))
+                                },
+                                onFavorite = { station -> radioFavoriteScope.launch {
+                                    if (radioFavorites.any { it.uuid == station.uuid }) radioFavoritesStore.remove(station.uuid)
+                                    else radioFavoritesStore.add(station)
+                                } },
+                                showClearDialog = showRadioHistoryClearConfirmation,
+                                onDismissClearDialog = { showRadioHistoryClearConfirmation = false },
+                                onConfirmClear = {
+                                    radioHistoryStore.clear()
+                                    showRadioHistoryClearConfirmation = false
+                                },
+                                dialogSurfaceModifier = Modifier
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(Color(0xFF1C1C1E).copy(alpha = 0.92f))
+                                    .then(
+                                        if (reduceDynamicBlur) {
+                                            Modifier.border(
+                                                1.dp,
+                                                Color.White.copy(alpha = 0.14f),
+                                                RoundedCornerShape(24.dp),
+                                            )
+                                        } else {
+                                            Modifier.hazeEffect(
+                                                state = hazeState,
+                                                style = dev.chrisbanes.haze.materials.HazeMaterials.regular(
+                                                    Color(0xFF1C1C1E),
+                                                ),
+                                            ).border(
+                                                1.dp,
+                                                Color.White.copy(alpha = 0.14f),
+                                                RoundedCornerShape(24.dp),
+                                            )
+                                        },
+                                    ),
+                                contentPadding = listPadding,
+                            )
                         } else if (pageRoute == AppRoute.History) {
                             HistoryScreen(
                                 state = historyState,
@@ -3926,11 +3979,21 @@ private fun BitChordApp(
                     // them redraws the page under the glass, for nobody.
                     val barsMotion = artworkMotion && transition.targetState == EnterExitState.Visible
                     CompositionLocalProvider(LocalPlayingBarsMotion provides barsMotion) {
-                        if (destination is AppDestination.Tab) {
-                            pageContent()
-                        } else {
-                            pageKeysSeen += key
-                            pageStates.SaveableStateProvider(key, pageContent)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(
+                                    if (pageRoute == AppRoute.RadioHistory) {
+                                        Modifier.hazeSource(hazeState)
+                                    } else Modifier
+                                ),
+                        ) {
+                            if (destination is AppDestination.Tab) {
+                                pageContent()
+                            } else {
+                                pageKeysSeen += key
+                                pageStates.SaveableStateProvider(key, pageContent)
+                            }
                         }
                     }
                 }
@@ -4009,6 +4072,7 @@ private fun BitChordApp(
                         AppRoute.Discord -> "Discord"
                         AppRoute.History -> stringResource(R.string.history)
                         AppRoute.RecognitionHistory -> stringResource(R.string.recognition_history_title)
+                        AppRoute.RadioHistory -> stringResource(com.soundchord.features.R.string.radio_history_title)
                         is AppRoute.LibraryShowAll -> route.shelf.title
                         is AppRoute.ArtistShelf -> route.shelf.title
                         AppRoute.Moods -> stringResource(R.string.find_your_mood)
@@ -4037,7 +4101,7 @@ private fun BitChordApp(
                     artworkPageChrome = true,
                     backButtonHazeState = hazeState,
                     centeredTitle = recognitionOpen || route == AppRoute.History ||
-                        route == AppRoute.RecognitionHistory,
+                        route == AppRoute.RecognitionHistory || route == AppRoute.RadioHistory,
                     trailingTitle = if (detail != null && detailActiveShelf != null) detail.title else null,
                     // Search has no large in-list header to hand the title back to —
                     // the field takes that space — so its bar title is always up.
@@ -4360,13 +4424,30 @@ private fun BitChordApp(
                                     )
                                 }
                             }
+                            if (route == AppRoute.RadioHistory) {
+                                IconButton(
+                                    onClick = { showRadioHistoryClearConfirmation = true },
+                                    enabled = radioHistory.isNotEmpty(),
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Delete,
+                                        contentDescription = stringResource(com.soundchord.features.R.string.radio_history_clear),
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+                            }
+                            if (!recognitionOpen && route == null && detail == null && selectedTab == TAB_RADIO) {
+                                IconButton(onClick = { navigator.push(AppRoute.RadioHistory) }) {
+                                    Icon(Icons.Rounded.History, contentDescription = stringResource(com.soundchord.features.R.string.radio_history_title), tint = MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
                             if (route != AppRoute.Downloads && !recognitionOpen) {
                                 TopBarDownloadButton(onClick = { navigator.push(AppRoute.Downloads) })
                             }
                             // Not on a release page, whose pill already carries
                             // three of its own controls — Apple Music leaves the
                             // profile off its album pages too.
-                            if (!isReleaseDetail && route != AppRoute.RecognitionHistory) TopBarAccountButton(
+                            if (!isReleaseDetail && route != AppRoute.RecognitionHistory && route != AppRoute.RadioHistory) TopBarAccountButton(
                                 account = account,
                                 onClick = {
                                     if (signedIn) {

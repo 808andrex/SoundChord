@@ -73,6 +73,7 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.soundchord.features.R
 import com.soundchord.features.radio.data.RadioStation
+import com.soundchord.features.radio.data.RadioHistoryStore
 import com.soundchord.features.radio.playback.toSong
 
 private data class CountryOption(val code: String, val label: Int, val colors: List<Color>)
@@ -166,6 +167,11 @@ fun RadioScreen(
     }
     var showAllFavorites by remember { mutableStateOf(false) }
     var selectedStationSeed by remember { mutableStateOf<Song?>(null) }
+    val playStation: (RadioStation) -> Unit = { station ->
+        RadioHistoryStore.record(context, station)
+        vm.setCurrentlyPlayingStation(station)
+        onPlayStation(station.toSong(context))
+    }
 
     val detailTitle = when {
         genre != null -> localizedGenre(genre!!)
@@ -212,8 +218,7 @@ fun RadioScreen(
                     item { Text(stringResource(R.string.radio_search_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 } else items(searchState.stations, key = { "radio_search_${it.uuid}" }) { station ->
                     StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
-                        vm.setCurrentlyPlayingStation(station)
-                        onPlayStation(station.toSong(context))
+                        playStation(station)
                     }, onLongPress = { bounds ->
                         onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
                     })
@@ -233,8 +238,7 @@ fun RadioScreen(
             } else {
                 items(favorites, key = { "all_favorite_${it.uuid}" }) { station ->
                     StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
-                        vm.setCurrentlyPlayingStation(station)
-                        onPlayStation(station.toSong(context))
+                        playStation(station)
                     }, onLongPress = { bounds ->
                         onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
                     })
@@ -255,7 +259,7 @@ fun RadioScreen(
                     if (stations.isEmpty()) item { Text(stringResource(R.string.radio_category_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     items(stations, key = { "detail_${it.uuid}" }) { station ->
                         StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
-                            vm.setCurrentlyPlayingStation(station); onPlayStation(station.toSong(context))
+                            playStation(station)
                         }, onLongPress = { bounds ->
                             onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
                         })
@@ -283,7 +287,7 @@ fun RadioScreen(
                                     station = station,
                                     isFavorite = station.uuid in favoriteUuids,
                                     onFavorite = { vm.toggleFavorite(station) },
-                                    onPlay = { vm.setCurrentlyPlayingStation(station); onPlayStation(station.toSong(context)) },
+                                    onPlay = { playStation(station) },
                                     onLongPress = { bounds ->
                                         onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
                                     },
@@ -337,7 +341,7 @@ fun RadioScreen(
                 } else {
                     items(nearby, key = { "nearby_${it.uuid}" }) { station ->
                         StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
-                            vm.setCurrentlyPlayingStation(station); onPlayStation(station.toSong(context))
+                            playStation(station)
                         }, onLongPress = { bounds ->
                             onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
                         })
