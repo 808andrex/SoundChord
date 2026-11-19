@@ -1689,7 +1689,7 @@ fun SettingsScreen(
                                 }
                                 if (featureKey != null && featureKey !in seenNewFeatures) {
                                     Box(Modifier.align(Alignment.TopEnd).padding(2.dp)) {
-                                        Badge(stringResource(R.string.settings_badge_new))
+                                        AppIconNewBadge(stringResource(R.string.settings_badge_new))
                                     }
                                 }
                             }
@@ -3308,6 +3308,20 @@ internal fun Badge(text: String) {
         modifier = Modifier
             .clip(RoundedCornerShape(5.dp))
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
+}
+
+@Composable
+private fun AppIconNewBadge(text: String) {
+    Text(
+        text = text.uppercase(Locale.ROOT),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        color = Color(0xFF111113),
+        modifier = Modifier
+            .clip(RoundedCornerShape(5.dp))
+            .background(Color.White.copy(alpha = 0.94f))
             .padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }

@@ -41,6 +41,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -90,6 +92,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.music.bitchord.R
 import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.data.settings.AccentColor
 import com.music.bitchord.data.settings.ThemeMode
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.ic_google_g
@@ -353,6 +356,14 @@ private fun LookPage(
     val selected by viewModel.selected.collectAsState()
     val theme by AppSettings.themeMode.collectAsState()
     val liquidGlass by AppSettings.liquidGlass.collectAsState()
+    val accentColor by AppSettings.accentColor.collectAsState()
+    val dark = when (theme) {
+        ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    }
+    val accent = Color(if (dark) accentColor.darkColor else accentColor.lightColor)
+    val onAccent = Color(if (dark) accentColor.onDarkColor else accentColor.onLightColor)
     Column(Modifier.fillMaxSize()) {
         OnboardingStepHeader(step = PAGE_LOOK, onBack = onBack)
         Spacer(Modifier.height(12.dp))
@@ -372,7 +383,7 @@ private fun LookPage(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
         ) {
             Spacer(Modifier.height(14.dp))
-            OnboardingLookPreview(selected = selected, themeMode = theme, liquidGlass = liquidGlass)
+            OnboardingLookPreview(selected = selected, themeMode = theme, liquidGlass = liquidGlass, accent = accent)
             OnboardingSectionLabel(stringResource(R.string.onboarding_theme_label))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ThemeMode.entries.forEach { mode ->
@@ -409,11 +420,28 @@ private fun LookPage(
                 color = Color.White.copy(alpha = .66f),
                 modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 4.dp, bottom = 16.dp),
             )
+            OnboardingSectionLabel(stringResource(R.string.accent_color))
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
+            ) {
+                items(AccentColor.entries) { option ->
+                    OnboardingAccentSwatch(
+                        option = option,
+                        selected = accentColor == option,
+                        dark = dark,
+                        onClick = { AppSettings.setAccentColor(option) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(14.dp))
         }
         PillButton(
             label = stringResource(R.string.onboarding_continue),
             onClick = onContinue,
             primary = true,
+            primaryColor = accent,
+            primaryContentColor = onAccent,
         )
         Spacer(Modifier.height(8.dp))
     }
@@ -475,10 +503,48 @@ private fun SettingChoicePill(
 }
 
 @Composable
+private fun OnboardingAccentSwatch(
+    option: AccentColor,
+    selected: Boolean,
+    dark: Boolean,
+    onClick: () -> Unit,
+) {
+    val color = Color(if (dark) option.darkColor else option.lightColor)
+    val ring = if (selected) Color.White else Color.White.copy(alpha = 0.38f)
+    Box(
+        Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(if (selected) Color.White.copy(alpha = 0.12f) else Color.Transparent)
+            .border(if (selected) 2.dp else 1.dp, ring, CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (option == AccentColor.DEFAULT) {
+            Row(Modifier.size(34.dp).clip(CircleShape)) {
+                Box(Modifier.weight(1f).fillMaxSize().background(Color(0xFF111113)))
+                Box(Modifier.weight(1f).fillMaxSize().background(Color.White))
+            }
+        } else {
+            Box(Modifier.size(34.dp).clip(CircleShape).background(color))
+        }
+        if (selected) {
+            Box(
+                Modifier.size(20.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.38f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+            }
+        }
+    }
+}
+
+@Composable
 private fun OnboardingLookPreview(
     selected: List<com.music.bitchord.data.settings.AppSettings.OnboardingArtist>,
     themeMode: ThemeMode,
     liquidGlass: Boolean,
+    accent: Color,
 ) {
     val dark = when (themeMode) {
         ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
@@ -570,7 +636,7 @@ private fun OnboardingLookPreview(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 tabs.forEach { (label, icon, index) ->
-                    val active by animateColorAsState(if (selectedTab == index) Color(0xFFE62E55) else foreground.copy(alpha = .75f), spring(stiffness = 360f), label = "previewTab")
+                    val active by animateColorAsState(if (selectedTab == index) accent else foreground.copy(alpha = .75f), spring(stiffness = 360f), label = "previewTab")
                     Column(
                         Modifier.weight(1f).fillMaxSize().clip(CircleShape).clickable { selectedTab = index },
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -585,7 +651,7 @@ private fun OnboardingLookPreview(
                 Modifier.size(48.dp).clip(CircleShape).background(card.copy(alpha = glassAlpha)).border(1.dp, Color.White.copy(alpha = if (liquidGlass) .34f else .12f), CircleShape).clickable { selectedTab = 4 },
                 contentAlignment = Alignment.Center,
             ) {
-                val searchTint by animateColorAsState(if (selectedTab == 4) Color(0xFFE62E55) else foreground, spring(stiffness = 360f), label = "previewSearch")
+                val searchTint by animateColorAsState(if (selectedTab == 4) accent else foreground, spring(stiffness = 360f), label = "previewSearch")
                 Icon(BitChordIcons.TabSearch, contentDescription = stringResource(R.string.search), tint = searchTint, modifier = Modifier.size(21.dp))
             }
         }
@@ -899,6 +965,8 @@ private fun PillButton(
     primary: Boolean,
     enabled: Boolean = true,
     leading: (@Composable () -> Unit)? = null,
+    primaryColor: Color = Color.White,
+    primaryContentColor: Color = Color.Black,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -914,7 +982,7 @@ private fun PillButton(
                 this.alpha = alpha
             }
             .clip(CircleShape)
-            .background(if (primary) Color.White else Color.White.copy(alpha = 0.16f))
+            .background(if (primary) primaryColor else Color.White.copy(alpha = 0.16f))
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -933,7 +1001,7 @@ private fun PillButton(
             style = MaterialTheme.typography.titleMedium,
             fontSize = 17.sp,
             fontWeight = FontWeight.W700,
-            color = if (primary) Color.Black else Color.White,
+            color = if (primary) primaryContentColor else Color.White,
             textAlign = TextAlign.Center,
             maxLines = 1,
         )
