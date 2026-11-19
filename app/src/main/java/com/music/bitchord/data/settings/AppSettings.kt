@@ -494,6 +494,9 @@ object AppSettings {
     /** Music videos are square wherever they show — see [com.music.bitchord.ui.components.VideoThumbnails]. */
     val squareVideoThumbnails = MutableStateFlow(false)
 
+    /** Checks GitHub releases on the periodic update worker and reports new versions. */
+    val autoUpdateCheck = MutableStateFlow(true)
+
     /** Analyzes audio waveform/envelope to align matching playback moment between versions. */
     val smartVersionAlignment = MutableStateFlow(true)
 
@@ -1063,6 +1066,7 @@ object AppSettings {
         hideHomeMoods.value = prefs.getBoolean(KEY_HIDE_HOME_MOODS, false)
         squareVideoThumbnails.value = prefs.getBoolean(KEY_SQUARE_VIDEO_THUMBNAILS, false)
         VideoThumbnails.square = squareVideoThumbnails.value
+        autoUpdateCheck.value = prefs.getBoolean(KEY_AUTO_UPDATE_CHECK, true)
         smartVersionAlignment.value = prefs.getBoolean(KEY_SMART_VERSION_ALIGNMENT, true)
         reduceDynamicBlur.value = prefs.getBoolean(KEY_REDUCE_BLUR, false)
         disableBlendEffects.value = prefs.getBoolean(KEY_DISABLE_BLEND_EFFECTS, false)
@@ -1541,6 +1545,11 @@ object AppSettings {
         squareVideoThumbnails.value = value
         VideoThumbnails.square = value
         prefs.edit().putBoolean(KEY_SQUARE_VIDEO_THUMBNAILS, value).apply()
+    }
+
+    fun setAutoUpdateCheck(value: Boolean) {
+        autoUpdateCheck.value = value
+        prefs.edit().putBoolean(KEY_AUTO_UPDATE_CHECK, value).apply()
     }
 
     fun setSmartVersionAlignment(value: Boolean) {
@@ -2356,6 +2365,7 @@ object AppSettings {
     private const val KEY_HIDE_TOP_PICKS = "hide_top_picks"
     private const val KEY_HIDE_HOME_MOODS = "hide_home_moods"
     private const val KEY_SQUARE_VIDEO_THUMBNAILS = "square_video_thumbnails"
+    private const val KEY_AUTO_UPDATE_CHECK = "auto_update_check"
     private const val KEY_SMART_VERSION_ALIGNMENT = "smart_version_alignment"
     private const val KEY_REDUCE_BLUR = "reduce_dynamic_blur"
     private const val KEY_DISABLE_BLEND_EFFECTS = "disable_blend_effects"

@@ -216,6 +216,8 @@ fun SettingsScreen(
     onOpenSection: (SettingsCategory) -> Unit = {},
     /** Opens a choice with more options than its row can show, as a page. */
     onOpenChoice: (SettingsChoiceKind) -> Unit = {},
+    /** Opens the full About page. */
+    onOpenAbout: () -> Unit = {},
 ) {
     val context = LocalContext.current
 
@@ -569,9 +571,7 @@ fun SettingsScreen(
                 SettingsRow(
                     iconPainter = painterResource(R.drawable.ic_settings_about),
                     title = stringResource(R.string.settings_category_about),
-                    onClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/808andrex/SoundChord")))
-                    },
+                    onClick = onOpenAbout,
                 )
             }
         }
@@ -693,6 +693,37 @@ fun SettingsScreen(
                     icon = SfIcons.Download,
                     title = stringResource(R.string.settings_category_downloads_local),
                     onClick = { onOpenSection(SettingsCategory.DOWNLOADS_LOCAL) },
+                )
+            }
+        }
+        val aboutSearchTerms = remember(context) {
+            listOf(
+                R.string.settings_category_about,
+                R.string.about_updates,
+                R.string.about_community,
+                R.string.about_developers,
+                R.string.about_help,
+                R.string.about_whats_new,
+                R.string.about_check_updates,
+                R.string.about_auto_updates,
+                R.string.about_source_code,
+                R.string.about_community,
+                R.string.about_support,
+                R.string.about_star_github,
+                R.string.about_source_code_subtitle,
+                R.string.about_developer_subtitle,
+                R.string.about_report_issue,
+            ).map { context.getString(it) }
+        }
+        if (section == null && searching && aboutSearchTerms.any {
+                it.contains(searchQuery.trim(), ignoreCase = true)
+            }
+        ) {
+            SettingsGroup(topSpacing = 12.dp) {
+                SettingsRow(
+                    iconPainter = painterResource(R.drawable.ic_settings_about),
+                    title = stringResource(R.string.settings_category_about),
+                    onClick = onOpenAbout,
                 )
             }
         }

@@ -175,6 +175,8 @@ import com.music.bitchord.ui.components.handleDacVolumeKey
 import com.music.bitchord.ui.components.VolumeHud
 import com.music.bitchord.ui.navigation.AppDestination
 import com.music.bitchord.ui.navigation.AppRoute
+import com.music.bitchord.ui.screens.AboutScreen
+import com.music.bitchord.ui.screens.AboutWhatsNewOverlay
 import com.music.bitchord.ui.screens.EqualizerPresetPage
 import com.music.bitchord.ui.screens.SettingsChoicePage
 import com.music.bitchord.ui.components.SpotifyImportAlert
@@ -907,6 +909,7 @@ private fun BitChordApp(
     // doesn't bring it back — only a fresh launch does.
     var updateDialogShown by rememberSaveable { mutableStateOf(false) }
     var showUpdateDialog by remember { mutableStateOf(false) }
+    var showAboutWhatsNew by remember { mutableStateOf(false) }
     val updateAvailable by viewModel.updateAvailable.collectAsStateWithLifecycle()
 
     /**
@@ -3317,6 +3320,12 @@ private fun BitChordApp(
                                 onChosen = { navigator.pop() },
                                 contentPadding = listPadding,
                             )
+                        } else if (pageRoute == AppRoute.About) {
+                            AboutScreen(
+                                contentPadding = listPadding,
+                                onShowWhatsNew = { showAboutWhatsNew = true },
+                                onShowUpdateDialog = { showUpdateDialog = true },
+                            )
                         } else if (pageRoute is AppRoute.SettingsChoice) {
                             SettingsChoicePage(
                                 choice = pageRoute.choice,
@@ -3331,6 +3340,7 @@ private fun BitChordApp(
                             SettingsScreen(
                                 section = (pageRoute as? AppRoute.SettingsSection)?.category,
                                 onOpenSection = { navigator.push(AppRoute.SettingsSection(it)) },
+                                onOpenAbout = { navigator.push(AppRoute.About) },
                                 onOpenChoice = { navigator.push(AppRoute.SettingsChoice(it)) },
                                 windowWidth = windowWidth,
                                 signedIn = signedIn,
@@ -4089,6 +4099,7 @@ private fun BitChordApp(
                         AppRoute.WearOs -> stringResource(R.string.wear_os_page_title)
                         AppRoute.Equalizer -> stringResource(R.string.equalizer)
                         AppRoute.Settings -> stringResource(R.string.settings)
+                        AppRoute.About -> stringResource(R.string.settings_category_about)
                         is AppRoute.SettingsSection -> stringResource(route.category.title)
                         is AppRoute.SettingsChoice -> stringResource(route.choice.title)
                         AppRoute.EqualizerPresets -> stringResource(R.string.equalizer_preset)
@@ -4105,7 +4116,7 @@ private fun BitChordApp(
                     // Every page, in either material, uses separated floating
                     // circles over the shared gradient — no full-width pane.
                     transparentBackdrop = true,
-                    opaqueBackdrop = route == AppRoute.Settings || route is AppRoute.SettingsSection,
+                    opaqueBackdrop = route == AppRoute.Settings || route == AppRoute.About || route is AppRoute.SettingsSection,
                     artworkPageChrome = true,
                     backButtonHazeState = hazeState,
                     centeredTitle = recognitionOpen || route == AppRoute.History ||
@@ -6412,6 +6423,12 @@ private fun BitChordApp(
                 inOwnWindow = playerRaised || songActions != null || browseActions != null,
             )
         }
+
+        AboutWhatsNewOverlay(
+            visible = showAboutWhatsNew,
+            hazeState = hazeState,
+            onDismiss = { showAboutWhatsNew = false },
+        )
 
     }
 }

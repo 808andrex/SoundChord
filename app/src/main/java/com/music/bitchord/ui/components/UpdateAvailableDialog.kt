@@ -11,7 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -42,22 +44,18 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 
-/** UIAlertController's own metrics: fixed narrow width, 14pt corner, 44pt rows. */
+/** UIAlertController's own metrics: 14pt corner, 44pt rows. */
 internal val ALERT_WIDTH = 270.dp
 internal val ALERT_CORNER = 14.dp
 internal val ACTION_HEIGHT = 44.dp
 
-/**
- * The dim behind the alert. Flat on purpose — the glass is the card, and
- * blurring the wallpaper *behind* it too leaves nothing for the card to be
- * frosted against, which is what made this read as a grey box before.
- */
-internal val SCRIM_COLOR = Color.Black.copy(alpha = 0.28f)
+/** Dim layered over a darkened live blur so the page behind stays unobtrusive. */
+internal val SCRIM_COLOR = Color.Black.copy(alpha = 0.65f)
 
 private val DOWNLOAD_ROW_HEIGHT = 4.dp
 
 /** How much of the card's height the release notes are allowed to fill before scrolling. */
-private val NOTES_MAX_HEIGHT = 220.dp
+private val NOTES_MAX_HEIGHT = 320.dp
 
 /**
  * Once-per-launch nudge that a newer build is on GitHub Releases — the top
@@ -96,34 +94,48 @@ fun UpdateAvailableDialog(
     val shape = RoundedCornerShape(ALERT_CORNER)
 
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(SCRIM_COLOR)
-            // Tapping the scrim reads the same as Remind Me Later — nothing
-            // about this update is mandatory, so backing out of it should be as
-            // easy as getting into it. Mid-download it only closes the sheet;
-            // the download keeps going and the top-bar icon reopens this.
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() },
-                onClick = onDismiss,
-            ),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
+        Box(
+            Modifier.fillMaxSize().then(
+                if (reduceDynamicBlur) {
+                    Modifier.background(Color(0xFF141418).copy(alpha = 0.96f))
+                } else {
+                    Modifier.optimizedHazeEffect(
+                        state = hazeState,
+                        style = HazeMaterials.regular(Color(0xFF141418).copy(alpha = 0.88f)),
+                    )
+                },
+            ),
+        )
+        // Tapping the scrim reads the same as Remind Me Later — nothing about
+        // this update is mandatory, so backing out should be easy.
+        Box(
+            Modifier.fillMaxSize()
+                .background(SCRIM_COLOR)
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = onDismiss,
+                ),
+        )
         Column(
             modifier = Modifier
-                .width(ALERT_WIDTH)
+                .fillMaxWidth(0.92f)
+                .widthIn(max = 420.dp)
                 .clip(shape)
                 .then(
                     if (reduceDynamicBlur) {
-                        Modifier.background(MaterialTheme.colorScheme.surface)
+                        Modifier.background(Color(0xFF141418).copy(alpha = 0.96f))
                     } else {
                         Modifier.optimizedHazeEffect(
                             state = hazeState,
-                            style = HazeMaterials.regular(MaterialTheme.colorScheme.surface),
+                            style = HazeMaterials.regular(Color(0xFF141418).copy(alpha = 0.88f)),
                         )
                     },
                 )
+                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)), shape)
                 // Swallows the tap before it reaches the scrim behind, so
                 // touching the card itself never dismisses it.
                 .clickable(

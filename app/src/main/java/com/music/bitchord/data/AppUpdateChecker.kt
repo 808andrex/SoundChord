@@ -8,6 +8,7 @@ import android.provider.Settings
 import androidx.core.content.FileProvider
 import com.music.bitchord.BuildConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
@@ -22,8 +23,8 @@ import java.io.File
 /**
  * SoundChord ships as a sideloaded APK off GitHub Releases rather than through
  * a store, so there's nothing to push an update notice on its own — this
- * polls the repo's "latest release" once per launch and compares its tag
- * against the running build.
+ * polls the repo's "latest release" on launch, on request, and through the
+ * automatic periodic worker, comparing its tag against the running build.
  *
  * The update itself is also handled here: the release's `.apk` asset is
  * downloaded into the app's cache and handed to the system package installer,
@@ -31,6 +32,8 @@ import java.io.File
  * browser.
  */
 object AppUpdateChecker {
+
+    enum class CheckResult { UPDATE_AVAILABLE, UP_TO_DATE, FAILED }
 
     data class UpdateInfo(
         val version: String,
@@ -65,21 +68,47 @@ object AppUpdateChecker {
     @Volatile
     private var downloadCancelled = false
 
-    suspend fun check() = withContext(Dispatchers.IO) {
+    suspend fun check(): CheckResult = withContext(Dispatchers.IO) {
         runCatching {
             val request = Request.Builder().url(LATEST_RELEASE_URL).build()
             val body = Http.client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) null else response.body?.string()
-            } ?: return@runCatching
-            val release = json.parseToJsonElement(body) as? JsonObject ?: return@runCatching
-            val tag = release["tag_name"]?.jsonPrimitive?.contentOrNull ?: return@runCatching
-            val url = release["html_url"]?.jsonPrimitive?.contentOrNull ?: return@runCatching
+                check(response.isSuccessful) { "GitHub returned HTTP ${response.code}" }
+                response.body?.string() ?: error("GitHub returned an empty release")
+            }
+            val release = json.parseToJsonElement(body) as? JsonObject ?: error("Invalid release response")
+            val tag = release["tag_name"]?.jsonPrimitive?.contentOrNull ?: error("Release has no tag")
+            val url = release["html_url"]?.jsonPrimitive?.contentOrNull ?: error("Release has no URL")
             val apkUrl = apkAssetUrl(release)
             val notes = release["body"]?.jsonPrimitive?.contentOrNull
             val latest = tag.removePrefix("v")
             if (isNewer(latest, BuildConfig.VERSION_NAME)) {
                 _available.value = UpdateInfo(latest, url, apkUrl, notes)
+                CheckResult.UPDATE_AVAILABLE
+            } else {
+                _available.value = null
+                CheckResult.UP_TO_DATE
             }
+        }.getOrElse { error ->
+            if (error is CancellationException) throw error
+            CheckResult.FAILED
+        }
+    }
+
+    /** Loads the release notes for the version this build is running. */
+    suspend fun currentReleaseNotes(): String? = withContext(Dispatchers.IO) {
+        try {
+            val version = BuildConfig.VERSION_NAME.substringBefore('-')
+            val request = Request.Builder()
+                .url("https://api.github.com/repos/808andrex/SoundChord/releases/tags/v$version")
+                .build()
+            val body = Http.client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) response.body?.string() else null
+            }
+            body?.let { json.parseToJsonElement(it) as? JsonObject }
+                ?.get("body")?.jsonPrimitive?.contentOrNull?.takeIf(String::isNotBlank)
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            null
         }
     }
 
