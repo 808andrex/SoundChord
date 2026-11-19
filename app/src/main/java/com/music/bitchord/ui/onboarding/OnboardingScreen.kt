@@ -3,6 +3,7 @@ package com.music.bitchord.ui.onboarding
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -15,10 +16,12 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,21 +35,35 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Radio
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +72,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -65,29 +83,35 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.music.bitchord.R
+import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.data.settings.ThemeMode
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.ic_google_g
 import com.music.bitchord.sharedui.resources.ic_logo
 import org.jetbrains.compose.resources.painterResource
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.soundchord.features.icons.SoundChordIcons
 import com.music.bitchord.ui.player.MeshGradientBackground
 import com.music.bitchord.ui.player.MESH_CYCLE_MILLIS
 import com.music.bitchord.ui.player.MeshPalette
 import com.music.bitchord.ui.player.WelcomeMeshPalettes
 import com.music.bitchord.ui.player.cyclingMeshPalette
+import androidx.lifecycle.viewmodel.compose.viewModel as composeViewModel
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 
 /**
- * The two welcome pages: a name for Listen Together, then the YouTube sign-in.
+ * The welcome pages: name, artist picks, appearance preview, then YouTube sign-in.
  *
  * Shown once — to new installs and, because the flag it sets is new, to anyone
- * updating from a build without it. The second page is skipped for an account
- * that is already signed in; asking somebody to connect what is connected
- * reads as the app having forgotten them.
+ * updating from a build without it. Existing accounts can review their account
+ * on the final page without being prompted to sign in again.
  *
  * Always drawn dark, whatever the theme, for the same reason Replay is: the
  * mesh is colour, and white type is what sits on colour.
@@ -96,27 +120,28 @@ import com.music.bitchord.ui.player.cyclingMeshPalette
 fun OnboardingScreen(
     signedIn: Boolean,
     initialName: String,
+    accountName: String? = null,
+    accountAvatarUrl: String? = null,
     /** Saves the party name. Called on Next, before the second page. */
     onNameChosen: (String) -> Unit,
     /** Opens the Google sign-in. The caller finishes onboarding once it lands. */
     onSignIn: () -> Unit,
     onFinish: () -> Unit,
+    viewModel: OnboardingViewModel? = null,
     modifier: Modifier = Modifier,
 ) {
     var page by rememberSaveable { mutableIntStateOf(PAGE_NAME) }
     var name by rememberSaveable { mutableStateOf(initialName) }
     val focusManager = LocalFocusManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val artistsVm = viewModel ?: composeViewModel(
+        factory = remember(context) { OnboardingViewModel.Factory(context.applicationContext as android.app.Application) },
+    )
 
-    BackHandler(enabled = page == PAGE_CONNECT) { page = PAGE_NAME }
-    // "Sign in with Google" goes through the app's own sign-in WebView, raised
-    // over this page; the account landing is what ends the welcome.
-    LaunchedEffect(signedIn, page) {
-        if (signedIn && page == PAGE_CONNECT) onFinish()
-    }
-
+    BackHandler(enabled = page > PAGE_NAME) { page-- }
     // The mesh never settles on one palette: each crossfade is as long as the
     // hold, so one runs straight into the next.
-    val palette = cyclingMeshPalette(if (page == PAGE_NAME) WelcomeMeshPalettes else ConnectPalettes)
+    val palette = cyclingMeshPalette(if (page == PAGE_CONNECT) ConnectPalettes else WelcomeMeshPalettes)
 
     Box(
         modifier
@@ -174,13 +199,27 @@ fun OnboardingScreen(
                             if (chosen.isEmpty()) return@next
                             focusManager.clearFocus()
                             onNameChosen(chosen)
-                            if (signedIn) onFinish() else page = PAGE_CONNECT
+                            page = PAGE_ARTISTS
                         },
                     )
-                    else -> ConnectPage(
+                    PAGE_ARTISTS -> ArtistsPage(
+                        viewModel = artistsVm,
                         onBack = { page = PAGE_NAME },
+                        onSkip = { page = PAGE_LOOK },
+                        onContinue = { page = PAGE_LOOK },
+                    )
+                    PAGE_LOOK -> LookPage(
+                        viewModel = artistsVm,
+                        onBack = { page = PAGE_ARTISTS },
+                        onContinue = { page = PAGE_CONNECT },
+                    )
+                    else -> ConnectPage(
+                        signedIn = signedIn,
+                        accountName = accountName,
+                        accountAvatarUrl = accountAvatarUrl,
+                        onBack = { page = PAGE_LOOK },
                         onSignIn = onSignIn,
-                        onSkip = onFinish,
+                        onFinish = onFinish,
                     )
                 }
             }
@@ -199,6 +238,462 @@ private fun OnboardingPage(content: @Composable ColumnScope.() -> Unit) {
                 .padding(horizontal = 28.dp),
             content = content,
         )
+    }
+}
+
+@Composable
+private fun ArtistsPage(
+    viewModel: OnboardingViewModel,
+    onBack: () -> Unit,
+    onSkip: () -> Unit,
+    onContinue: () -> Unit,
+) {
+    val query by viewModel.searchQuery.collectAsState()
+    val popular by viewModel.artists.collectAsState()
+    val results by viewModel.searchResults.collectAsState()
+    val loading by viewModel.searchLoading.collectAsState()
+    val artistsLoading by viewModel.artistsLoading.collectAsState()
+    val selected by viewModel.selected.collectAsState()
+    val countryName = viewModel.countryName
+    val shown = if (query.isBlank()) popular else results
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.align(Alignment.CenterStart)) { BackButton(onBack) }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                repeat(4) { index ->
+                    Box(
+                        Modifier.width(if (index == PAGE_ARTISTS) 22.dp else 7.dp).height(7.dp)
+                            .clip(CircleShape)
+                            .background(if (index <= PAGE_ARTISTS) Color.White else Color.White.copy(alpha = .35f)),
+                    )
+                }
+            }
+            Text(
+                stringResource(R.string.onboarding_skip_artists),
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.align(Alignment.CenterEnd).clip(CircleShape)
+                    .background(Color.White.copy(alpha = .16f)).clickable(onClick = onSkip)
+                    .padding(horizontal = 18.dp, vertical = 11.dp),
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(stringResource(R.string.onboarding_artists_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color.White)
+        Spacer(Modifier.height(7.dp))
+        Text(
+            if (countryName.isBlank()) stringResource(R.string.onboarding_artists_description)
+            else stringResource(R.string.onboarding_artists_description_country, countryName),
+            style = MaterialTheme.typography.bodyMedium,
+            lineHeight = 20.sp,
+            color = Color.White.copy(alpha = .72f),
+        )
+        Spacer(Modifier.height(16.dp))
+        ArtistSearchField(query, viewModel::onSearchQueryChanged)
+        Spacer(Modifier.height(10.dp))
+        if (loading || (query.isBlank() && artistsLoading)) {
+            androidx.compose.material3.LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().height(2.dp),
+                color = Color.White,
+                trackColor = Color.White.copy(alpha = .16f),
+            )
+        }
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp),
+        ) {
+            items(shown, key = { it.artist.browseId }) { suggestion ->
+                ArtistChoiceTile(
+                    suggestion = suggestion,
+                    selected = selected.any { it.browseId == suggestion.artist.browseId },
+                    onClick = { viewModel.toggleArtist(suggestion) },
+                )
+            }
+            if (shown.isEmpty() && !loading && !artistsLoading) {
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        stringResource(R.string.onboarding_artists_empty),
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        color = Color.White.copy(alpha = .7f),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
+        val continueLabel = when {
+            selected.isEmpty() -> stringResource(R.string.onboarding_choose_artist)
+            selected.size == 1 -> stringResource(R.string.onboarding_continue_one)
+            else -> stringResource(R.string.onboarding_continue_count, selected.size)
+        }
+        val selectedAvatars: (@Composable () -> Unit)? = if (selected.isEmpty()) {
+            null
+        } else {
+            { SelectedArtistAvatars(selected.take(3)) }
+        }
+        PillButton(
+            label = continueLabel,
+            onClick = onContinue,
+            enabled = selected.isNotEmpty(),
+            primary = true,
+            leading = selectedAvatars,
+        )
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun LookPage(
+    viewModel: OnboardingViewModel,
+    onBack: () -> Unit,
+    onContinue: () -> Unit,
+) {
+    val selected by viewModel.selected.collectAsState()
+    val theme by AppSettings.themeMode.collectAsState()
+    val liquidGlass by AppSettings.liquidGlass.collectAsState()
+    Column(Modifier.fillMaxSize()) {
+        OnboardingStepHeader(step = PAGE_LOOK, onBack = onBack)
+        Spacer(Modifier.height(12.dp))
+        Text(
+            stringResource(R.string.onboarding_look_title),
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            stringResource(R.string.onboarding_look_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = .72f),
+        )
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+        ) {
+            Spacer(Modifier.height(14.dp))
+            OnboardingLookPreview(selected = selected, themeMode = theme, liquidGlass = liquidGlass)
+            OnboardingSectionLabel(stringResource(R.string.onboarding_theme_label))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ThemeMode.entries.forEach { mode ->
+                    SettingChoicePill(
+                        label = when (mode) {
+                            ThemeMode.SYSTEM -> stringResource(R.string.onboarding_theme_system)
+                            ThemeMode.LIGHT -> stringResource(R.string.onboarding_theme_light)
+                            ThemeMode.DARK -> stringResource(R.string.onboarding_theme_dark)
+                        },
+                        selected = theme == mode,
+                        modifier = Modifier.weight(1f),
+                        onClick = { AppSettings.setThemeMode(mode) },
+                    )
+                }
+            }
+            OnboardingSectionLabel(stringResource(R.string.onboarding_glass_label))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SettingChoicePill(
+                    stringResource(R.string.onboarding_glass_standard),
+                    selected = !liquidGlass,
+                    modifier = Modifier.weight(1f),
+                    onClick = { AppSettings.setLiquidGlass(false) },
+                )
+                SettingChoicePill(
+                    stringResource(R.string.onboarding_glass_liquid),
+                    selected = liquidGlass,
+                    modifier = Modifier.weight(1f),
+                    onClick = { AppSettings.setLiquidGlass(true) },
+                )
+            }
+            Text(
+                stringResource(if (liquidGlass) R.string.onboarding_glass_liquid_description else R.string.onboarding_glass_standard_description),
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = .66f),
+                modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 4.dp, bottom = 16.dp),
+            )
+        }
+        PillButton(
+            label = stringResource(R.string.onboarding_continue),
+            onClick = onContinue,
+            primary = true,
+        )
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun OnboardingStepHeader(step: Int, onBack: () -> Unit) {
+    Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.align(Alignment.CenterStart)) { BackButton(onBack) }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            repeat(4) { index ->
+                Box(
+                    Modifier.width(if (index == step) 22.dp else 7.dp).height(7.dp)
+                        .clip(CircleShape)
+                        .background(if (index <= step) Color.White else Color.White.copy(alpha = .35f)),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OnboardingSectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = Color.White.copy(alpha = .8f),
+        modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 9.dp),
+    )
+}
+
+@Composable
+private fun SettingChoicePill(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val background by animateColorAsState(
+        if (selected) Color.White else Color.White.copy(alpha = .14f),
+        spring(stiffness = 520f),
+        label = "onboardingChoiceBackground",
+    )
+    val foreground by animateColorAsState(
+        if (selected) Color(0xFF111113) else Color.White,
+        spring(stiffness = 520f),
+        label = "onboardingChoiceForeground",
+    )
+    val scale by animateFloatAsState(if (selected) 1f else .98f, spring(stiffness = 520f), label = "onboardingChoiceScale")
+    Box(
+        modifier.height(42.dp).graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(CircleShape).background(background).clickable(onClick = onClick)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = foreground, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+    }
+}
+
+@Composable
+private fun OnboardingLookPreview(
+    selected: List<com.music.bitchord.data.settings.AppSettings.OnboardingArtist>,
+    themeMode: ThemeMode,
+    liquidGlass: Boolean,
+) {
+    val dark = when (themeMode) {
+        ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    }
+    val containerTarget = if (dark) Color(0xFF111114) else Color(0xFFF6F5F8)
+    val cardTarget = if (dark) Color(0xFF242429) else Color(0xFFF1F0F4)
+    val foregroundTarget = if (dark) Color.White else Color(0xFF17171A)
+    val mutedTarget = if (dark) Color.White.copy(alpha = .68f) else Color(0xFF626268)
+    val container by animateColorAsState(containerTarget, spring(stiffness = 360f), label = "previewContainer")
+    val card by animateColorAsState(
+        if (liquidGlass) cardTarget.copy(alpha = .54f) else cardTarget,
+        spring(stiffness = 360f),
+        label = "previewCard",
+    )
+    val foreground by animateColorAsState(foregroundTarget, spring(stiffness = 360f), label = "previewForeground")
+    val muted by animateColorAsState(mutedTarget, spring(stiffness = 360f), label = "previewMuted")
+    val glassAlpha by animateFloatAsState(if (liquidGlass) .76f else 1f, spring(stiffness = 360f), label = "previewGlassAlpha")
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val lead = selected.firstOrNull()
+    val selectedArtistNames = selected.take(2).joinToString { it.name }
+    val previewArtistLine = if (selectedArtistNames.isBlank()) stringResource(R.string.app_name) else selectedArtistNames
+    val shape = RoundedCornerShape(26.dp)
+
+    Column(
+        Modifier.fillMaxWidth().height(242.dp).clip(shape)
+            .background(container)
+            .border(1.dp, Color.White.copy(alpha = if (liquidGlass) .28f else .12f), shape)
+            .padding(12.dp),
+    ) {
+        Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(18.dp))) {
+            Box(Modifier.matchParentSize().background(Brush.linearGradient(listOf(Color(0xFFCE6F44), Color(0xFF5B3554), Color(0xFF202A40)))))
+            if (!lead?.thumbnailUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = lead?.thumbnailUrl,
+                    contentDescription = null,
+                    modifier = Modifier.matchParentSize().blur(if (liquidGlass) 20.dp else 0.dp).graphicsLayer { alpha = if (liquidGlass) .68f else .4f },
+                    contentScale = ContentScale.Crop,
+                )
+            }
+            Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = if (dark) .30f else .12f)))
+            Column(Modifier.fillMaxSize().padding(12.dp)) {
+                Text(stringResource(R.string.onboarding_preview_title), color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy((-7).dp)) {
+                    if (selected.isEmpty()) {
+                        repeat(4) { index ->
+                            Box(Modifier.size(38.dp).clip(CircleShape).background(listOf(Color(0xFFDA7E54), Color(0xFF765472), Color(0xFF548596), Color(0xFFB98A48))[index]))
+                        }
+                    } else {
+                        selected.take(4).forEach { artist ->
+                            Box(Modifier.size(38.dp).clip(CircleShape).border(1.dp, Color.White.copy(alpha = .8f), CircleShape)) {
+                                if (!artist.thumbnailUrl.isNullOrBlank()) AsyncImage(artist.thumbnailUrl, null, Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                                else Box(Modifier.fillMaxSize().background(Color(0xFF28282D)), contentAlignment = Alignment.Center) {
+                                    Text(artist.name.take(1).uppercase(), color = Color.White, style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                Row(
+                    Modifier.fillMaxWidth().clip(CircleShape).background(card.copy(alpha = glassAlpha)).border(1.dp, Color.White.copy(alpha = if (liquidGlass) .34f else .12f), CircleShape).padding(horizontal = 9.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(38.dp).clip(RoundedCornerShape(9.dp)).background(Color.White.copy(alpha = .16f)), contentAlignment = Alignment.Center) {
+                        if (!lead?.thumbnailUrl.isNullOrBlank()) AsyncImage(lead?.thumbnailUrl, null, Modifier.fillMaxSize().clip(RoundedCornerShape(9.dp)), contentScale = ContentScale.Crop)
+                        else Icon(Icons.Rounded.Radio, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                    }
+                    Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                        Text(lead?.name ?: stringResource(R.string.onboarding_preview_title), color = foreground, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(previewArtistLine, color = muted, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Icon(Icons.Rounded.PlayArrow, null, tint = foreground, modifier = Modifier.size(23.dp))
+                    Icon(Icons.Rounded.SkipNext, null, tint = foreground, modifier = Modifier.padding(start = 6.dp, end = 2.dp).size(23.dp))
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            val tabs = listOf(
+                Triple(stringResource(R.string.home), BitChordIcons.Home, 0),
+                Triple(stringResource(R.string.explore), BitChordIcons.TabExplore, 1),
+                Triple(stringResource(R.string.onboarding_tab_radio), SoundChordIcons.TabRadio, 2),
+                Triple(stringResource(R.string.library), BitChordIcons.TabLibrary, 3),
+            )
+            Row(
+                Modifier.weight(1f).height(48.dp).clip(CircleShape).background(card.copy(alpha = glassAlpha)).border(1.dp, Color.White.copy(alpha = if (liquidGlass) .34f else .12f), CircleShape).padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                tabs.forEach { (label, icon, index) ->
+                    val active by animateColorAsState(if (selectedTab == index) Color(0xFFE62E55) else foreground.copy(alpha = .75f), spring(stiffness = 360f), label = "previewTab")
+                    Column(
+                        Modifier.weight(1f).fillMaxSize().clip(CircleShape).clickable { selectedTab = index },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(icon, contentDescription = null, tint = active, modifier = Modifier.size(18.dp))
+                        Text(label, color = if (selectedTab == index) active else muted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    }
+                }
+            }
+            Box(
+                Modifier.size(48.dp).clip(CircleShape).background(card.copy(alpha = glassAlpha)).border(1.dp, Color.White.copy(alpha = if (liquidGlass) .34f else .12f), CircleShape).clickable { selectedTab = 4 },
+                contentAlignment = Alignment.Center,
+            ) {
+                val searchTint by animateColorAsState(if (selectedTab == 4) Color(0xFFE62E55) else foreground, spring(stiffness = 360f), label = "previewSearch")
+                Icon(BitChordIcons.TabSearch, contentDescription = stringResource(R.string.search), tint = searchTint, modifier = Modifier.size(21.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArtistSearchField(value: String, onValueChange: (String) -> Unit) {
+    val textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White)
+    Row(
+        Modifier.fillMaxWidth().height(52.dp).clip(CircleShape)
+            .background(Color.White.copy(alpha = .14f)).padding(horizontal = 17.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Search, contentDescription = null, tint = Color.White.copy(alpha = .7f), modifier = Modifier.size(21.dp))
+        Spacer(Modifier.width(11.dp))
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (value.isEmpty()) Text(stringResource(R.string.onboarding_search_artists), style = textStyle, color = Color.White.copy(alpha = .5f))
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = true,
+                textStyle = textStyle,
+                cursorBrush = SolidColor(Color.White),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Search),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (value.isNotEmpty()) {
+            Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.onboarding_clear_search), tint = Color.White.copy(alpha = .7f), modifier = Modifier.size(22.dp).clickable { onValueChange("") })
+        }
+    }
+}
+
+@Composable
+private fun ArtistChoiceTile(
+    suggestion: OnboardingViewModel.ArtistSuggestion,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val artist = suggestion.artist
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onClick)) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            if (!artist.thumbnailUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = artist.thumbnailUrl,
+                    contentDescription = null,
+                    modifier = Modifier.size(82.dp).clip(CircleShape)
+                        .border(if (selected) 3.dp else 1.dp, if (selected) Color.White else Color.White.copy(alpha = .3f), CircleShape),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Box(Modifier.size(82.dp).clip(CircleShape).background(Color.White.copy(alpha = .16f)), contentAlignment = Alignment.Center) {
+                    Text(artist.title.take(1).uppercase(), color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                }
+            }
+            if (selected) {
+                Box(Modifier.align(Alignment.BottomEnd).padding(end = 8.dp).size(25.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(17.dp))
+                }
+            }
+        }
+        Spacer(Modifier.height(7.dp))
+        Text(
+            artist.title,
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        suggestion.relatedToArtistName?.let { sourceName ->
+            Text(
+                stringResource(R.string.onboarding_similar_to_artist, sourceName),
+                color = Color.White.copy(alpha = .58f),
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SelectedArtistAvatars(artists: List<com.music.bitchord.data.settings.AppSettings.OnboardingArtist>) {
+    Box(Modifier.width(66.dp).height(34.dp)) {
+        artists.take(3).forEachIndexed { index, artist ->
+            Box(
+                Modifier.offset(x = (index * 16).dp).size(32.dp).clip(CircleShape)
+                    .border(1.5.dp, Color.Black.copy(alpha = .25f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (!artist.thumbnailUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = artist.thumbnailUrl,
+                        contentDescription = artist.name,
+                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Box(Modifier.fillMaxSize().background(Color(0xFF28282D)), contentAlignment = Alignment.Center) {
+                        Text(artist.name.take(1).uppercase(), color = Color.White, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -259,43 +754,76 @@ private fun ColumnScope.NamePage(
 
 @Composable
 private fun ColumnScope.ConnectPage(
+    signedIn: Boolean,
+    accountName: String?,
+    accountAvatarUrl: String?,
     onBack: () -> Unit,
     onSignIn: () -> Unit,
-    onSkip: () -> Unit,
+    onFinish: () -> Unit,
 ) {
-    Spacer(Modifier.height(16.dp))
-    BackButton(onBack)
-    Spacer(Modifier.height(20.dp))
-    Title(stringResource(R.string.onboarding_connect_title))
+    OnboardingStepHeader(step = PAGE_CONNECT, onBack = onBack)
+    Spacer(Modifier.height(12.dp))
+    Title(stringResource(if (signedIn) R.string.onboarding_connect_title_signed_in else R.string.onboarding_connect_title))
     Spacer(Modifier.height(14.dp))
     Text(
-        text = stringResource(R.string.onboarding_connect_body),
+        text = if (signedIn) {
+            stringResource(R.string.onboarding_account_connected, accountName?.takeIf(String::isNotBlank) ?: stringResource(R.string.onboarding_account_fallback))
+        } else {
+            stringResource(R.string.onboarding_connect_body)
+        },
         style = MaterialTheme.typography.bodyLarge,
         fontSize = 17.sp,
         lineHeight = 23.sp,
         color = Color.White.copy(alpha = 0.72f),
     )
 
+    if (signedIn) {
+        Spacer(Modifier.height(28.dp))
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Color.White.copy(alpha = .14f)).padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(64.dp).clip(CircleShape).background(Color.White.copy(alpha = .18f)), contentAlignment = Alignment.Center) {
+                if (!accountAvatarUrl.isNullOrBlank()) {
+                    AsyncImage(accountAvatarUrl, accountName, Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                } else {
+                    Icon(Icons.Rounded.AccountCircle, null, Modifier.size(48.dp), tint = Color.White)
+                }
+            }
+            Text(
+                accountName?.takeIf(String::isNotBlank) ?: stringResource(R.string.onboarding_account_fallback),
+                Modifier.padding(start = 14.dp),
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+
     Spacer(Modifier.weight(1f))
 
-    PillButton(
-        label = stringResource(R.string.onboarding_sign_in_google),
-        onClick = onSignIn,
-        primary = true,
-        leading = {
-            Image(
-                painter = painterResource(Res.drawable.ic_google_g),
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-            )
-        },
-    )
-    Spacer(Modifier.height(12.dp))
-    PillButton(
-        label = stringResource(R.string.onboarding_skip_sign_in),
-        onClick = onSkip,
-        primary = false,
-    )
+    if (signedIn) {
+        PillButton(label = stringResource(R.string.onboarding_start_listening), onClick = onFinish, primary = true)
+    } else {
+        PillButton(
+            label = stringResource(R.string.onboarding_sign_in_google),
+            onClick = onSignIn,
+            primary = true,
+            leading = {
+                Image(
+                    painter = painterResource(Res.drawable.ic_google_g),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+            },
+        )
+        Spacer(Modifier.height(12.dp))
+        PillButton(
+            label = stringResource(R.string.onboarding_skip_sign_in),
+            onClick = onFinish,
+            primary = false,
+        )
+    }
     Spacer(Modifier.height(16.dp))
 }
 
@@ -434,7 +962,9 @@ private fun BackButton(onClick: () -> Unit) {
 }
 
 private const val PAGE_NAME = 0
-private const val PAGE_CONNECT = 1
+private const val PAGE_ARTISTS = 1
+private const val PAGE_LOOK = 2
+private const val PAGE_CONNECT = 3
 
 /** Long enough for a full name; the party server keeps the first 80. */
 private const val NAME_LIMIT = 40

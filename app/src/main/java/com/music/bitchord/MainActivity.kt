@@ -5755,9 +5755,14 @@ private fun BitChordApp(
                 initialName = remember {
                     ListenTogether.nickname().ifBlank { account?.name.orEmpty() }
                 },
+                accountName = account?.name,
+                accountAvatarUrl = account?.thumbnailUrl,
                 onNameChosen = ListenTogether::setNickname,
                 onSignIn = { webSession = WebSessionMode.SIGN_IN },
-                onFinish = AppSettings::setOnboardingComplete,
+                onFinish = {
+                    AppSettings.setOnboardingComplete()
+                    viewModel.refreshTopPicksWithOnboardingSeeds()
+                },
             )
         }
 

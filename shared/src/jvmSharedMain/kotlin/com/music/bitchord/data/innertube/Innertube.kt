@@ -639,6 +639,14 @@ object Innertube {
             }
         }
 
+    /** YouTube Music's regional Top artists chart; null uses the default region. */
+    suspend fun charts(country: String?): JsonObject = postMusic("browse") {
+        put("browseId", "FEmusic_charts")
+        country?.takeIf(String::isNotBlank)?.let { code ->
+            putJsonObject("formData") { putJsonArray("selectedValues") { add(code) } }
+        }
+    }
+
     /** The next page of a filtered search result. */
     suspend fun searchContinuation(token: String): JsonObject = postMusic(
         endpoint = "search",

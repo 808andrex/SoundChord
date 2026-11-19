@@ -16,6 +16,7 @@ import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.playback.EqLayout
 import com.music.bitchord.playback.EqualizerPreset
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.json.JSONArray
 
 
 /**
@@ -469,6 +470,9 @@ object AppSettings {
      * had no onboarding, so they get it once too — they have no party name yet.
      */
     val onboardingComplete = MutableStateFlow(false)
+    val onboardingArtists = MutableStateFlow<List<OnboardingArtist>>(emptyList())
+
+    data class OnboardingArtist(val browseId: String, val name: String, val thumbnailUrl: String?)
 
     /** Whether the one-time Diwali 2026 greeting has been seen and dismissed. */
     val diwaliGreetingShown = MutableStateFlow(false)
@@ -1076,6 +1080,17 @@ object AppSettings {
         coverFluidAnimation.value = prefs.getBoolean(KEY_COVER_FLUID_ANIMATION, false)
         coverMixOnlyEffects.value = prefs.getBoolean(KEY_COVER_MIX_ONLY_EFFECTS, false)
         onboardingComplete.value = prefs.getBoolean(KEY_ONBOARDING_COMPLETE, false)
+        onboardingArtists.value = runCatching {
+            val array = JSONArray(prefs.getString(KEY_ONBOARDING_ARTISTS, "[]"))
+            List(array.length()) { index ->
+                val item = array.getJSONObject(index)
+                OnboardingArtist(
+                    browseId = item.getString("id"),
+                    name = item.getString("name"),
+                    thumbnailUrl = item.optString("thumbnail").takeIf(String::isNotBlank),
+                )
+            }
+        }.getOrDefault(emptyList())
         diwaliGreetingShown.value = prefs.getBoolean(KEY_DIWALI_GREETING_SHOWN, false)
         highPerformanceMode.value = prefs.getBoolean(KEY_HIGH_PERFORMANCE_MODE, false)
         performanceRefreshRate.value = normalizePerformanceRefreshRate(
@@ -1513,6 +1528,21 @@ object AppSettings {
     fun setOnboardingComplete() {
         onboardingComplete.value = true
         prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETE, true).apply()
+    }
+
+    fun setOnboardingArtists(artists: List<OnboardingArtist>) {
+        val unique = artists.distinctBy { it.browseId }
+        onboardingArtists.value = unique
+        val array = JSONArray().apply {
+            unique.forEach { artist ->
+                put(org.json.JSONObject().apply {
+                    put("id", artist.browseId)
+                    put("name", artist.name)
+                    put("thumbnail", artist.thumbnailUrl.orEmpty())
+                })
+            }
+        }
+        prefs.edit().putString(KEY_ONBOARDING_ARTISTS, array.toString()).apply()
     }
 
     fun setDiwaliGreetingShown() {
@@ -2394,6 +2424,7 @@ object AppSettings {
     private const val KEY_COVER_FLUID_ANIMATION = "cover_fluid_animation"
     private const val KEY_COVER_MIX_ONLY_EFFECTS = "cover_mix_only_effects"
     private const val KEY_ONBOARDING_COMPLETE = "onboarding_complete"
+    private const val KEY_ONBOARDING_ARTISTS = "onboarding_artists"
     private const val KEY_DIWALI_GREETING_SHOWN = "diwali_greeting_2026_shown"
     private const val KEY_HIGH_PERFORMANCE_MODE = "high_performance_mode"
     private const val KEY_PERFORMANCE_REFRESH_RATE = "performance_refresh_rate"

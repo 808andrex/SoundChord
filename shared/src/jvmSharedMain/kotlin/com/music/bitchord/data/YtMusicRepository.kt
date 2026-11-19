@@ -9,6 +9,7 @@ import com.music.bitchord.data.model.isExactArtistMatch
 import com.music.bitchord.data.model.normalizedArtistName
 import com.music.bitchord.data.model.ArtistPage
 import com.music.bitchord.data.model.BrowseType
+import com.music.bitchord.data.model.BrowseItem
 import com.music.bitchord.data.model.HomeFeed
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.LibraryPage
@@ -362,6 +363,17 @@ object YtMusicRepository {
      */
     suspend fun search(query: String, filter: SearchFilter): Result<List<SearchResult>> =
         searchPage(query, filter).map { it.rows }
+
+    /** Popular artist channels from the regional Charts page, with global fallback. */
+    suspend fun chartArtists(country: String?): Result<List<BrowseItem>> = call("charts:artists") {
+        suspend fun artists(region: String?) = InnertubeParser.parseHome(Innertube.charts(region))
+            .firstOrNull { shelf -> shelf.items.any { it.videoId == null && it.browseId?.startsWith("UC") == true } }
+            ?.items.orEmpty()
+            .filter { it.videoId == null && it.browseId?.startsWith("UC") == true }
+            .map { BrowseItem(it.browseId!!, it.title, it.subtitle, it.thumbnailUrl, BrowseType.ARTIST) }
+        val regional = country?.let { artists(it) }.orEmpty()
+        regional.ifEmpty { artists(null) }
+    }
 
     private fun SearchResult.identityKey(): String = when (this) {
         is SearchResult.TopTrack -> "v:${song.videoId}"

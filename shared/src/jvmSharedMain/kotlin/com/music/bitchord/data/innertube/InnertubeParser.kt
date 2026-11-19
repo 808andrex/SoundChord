@@ -308,9 +308,11 @@ object InnertubeParser {
 
     private fun plainShelf(shelf: JsonObject): HomeShelf? {
         val title = shelf.o("title").runs()
-        val items = shelf.a("contents").orEmpty().mapNotNull {
-            parseResponsiveListItem(it.o("musicResponsiveListItemRenderer"))
-        }.map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null, isVideo = it.isVideo) }
+        val items = shelf.a("contents").orEmpty().mapNotNull { item ->
+            parseResponsiveListItem(item.o("musicResponsiveListItemRenderer"))
+                ?.let { song -> ShelfItem(song.title, song.artist, song.thumbnailUrl, song.videoId, null, isVideo = song.isVideo) }
+                ?: parseArtistRow(item.o("musicResponsiveListItemRenderer"))
+        }
         if (items.isEmpty()) return null
         val shelfTitle = title.ifBlank { "For you" }
         return HomeShelf(shelfTitle, items, layout = shelfLayoutFor(shelfTitle, items, fromList = true))

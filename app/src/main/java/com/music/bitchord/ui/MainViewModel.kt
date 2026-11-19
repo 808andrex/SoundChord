@@ -1870,6 +1870,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         loadTopPicks(listenerKey(), rebuild = false)
     }
 
+    /** Rebuilds Home's artist-led picks immediately after onboarding saves taste seeds. */
+    fun refreshTopPicksWithOnboardingSeeds() {
+        loadTopPicks(listenerKey(), rebuild = true)
+    }
+
     /** Which hour of the clock [now] falls in: the date and the hour, 00 to 23. */
     private fun topPicksSlot(now: LocalDateTime = LocalDateTime.now()): String =
         "${now.toLocalDate()}T%02d".format(now.hour)
@@ -1892,11 +1897,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** This app's own Replay chart for the month — Top Picks' second opinion, and all it has signed out. */
     private suspend fun localTaste(): TopPicks.LocalTaste {
         val month = runCatching { ListeningStats.summary(ReplayPeriod.THIS_MONTH) }.getOrNull()
-            ?: return TopPicks.LocalTaste()
         return TopPicks.LocalTaste(
-            artists = month.artists.take(10).map { ArtistRef(name = it.title, browseId = it.browseId) },
-            songs = month.songs.take(5).map { it.song },
-            genres = month.genres.take(3).map { it.title },
+            artists = (
+                month?.artists.orEmpty().take(10).map { ArtistRef(name = it.title, browseId = it.browseId) } +
+                    AppSettings.onboardingArtists.value.map { ArtistRef(name = it.name, browseId = it.browseId) }
+                ).distinctBy { it.browseId ?: it.name },
+            songs = month?.songs.orEmpty().take(5).map { it.song },
+            genres = month?.genres.orEmpty().take(3).map { it.title },
         )
     }
 
