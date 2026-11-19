@@ -9,9 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -79,6 +78,9 @@ fun RecognitionHistoryScreen(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
+    val lightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val scrimColor = Color.Black.copy(alpha = if (lightTheme) 0.25f else 0.65f)
+    val dividerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     BackHandler(enabled = showClearConfirmation, onBack = onDismissClearConfirmation)
     var wasClearConfirmationVisible by rememberSaveable { mutableStateOf(false) }
     androidx.compose.runtime.DisposableEffect(Unit) {
@@ -176,7 +178,7 @@ fun RecognitionHistoryScreen(
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Box(
                 Modifier.fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.65f))
+                    .background(scrimColor)
                     .clickable(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
@@ -187,8 +189,6 @@ fun RecognitionHistoryScreen(
                 modifier = Modifier.fillMaxWidth().widthIn(max = 300.dp)
                     .padding(horizontal = 28.dp)
                     .then(dialogSurfaceModifier)
-                    .background(Color(0xFF1C1C1E).copy(alpha = 0.92f), RoundedCornerShape(24.dp))
-                    .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)), RoundedCornerShape(24.dp))
                     .clickable(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
@@ -204,29 +204,29 @@ fun RecognitionHistoryScreen(
                     text = stringResource(R.string.recognition_history_clear_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                 )
                 Text(
                     text = stringResource(R.string.recognition_history_clear_message),
                     modifier = Modifier.padding(top = 8.dp, bottom = 14.dp),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.72f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
-                HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+                HorizontalDivider(color = dividerColor)
                 androidx.compose.material3.TextButton(
                     onClick = onDismissClearConfirmation,
                     modifier = Modifier.fillMaxWidth().height(46.dp),
                 ) {
-                    Text(stringResource(R.string.cancel), color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge)
                 }
-                HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+                HorizontalDivider(color = dividerColor)
                 androidx.compose.material3.TextButton(
                     onClick = { onClear(); onDismissClearConfirmation() },
                     modifier = Modifier.fillMaxWidth().height(46.dp),
                 ) {
-                    Text(stringResource(R.string.delete), color = Color(0xFFFF453A), style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge)
                 }
               }
             }

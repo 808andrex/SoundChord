@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -301,6 +302,13 @@ fun AboutWhatsNewOverlay(
 ) {
     val version = BuildConfig.VERSION_NAME
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsState()
+    val lightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val glassSurface = if (lightTheme) {
+        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f)
+    } else {
+        Color(0xFF141418).copy(alpha = 0.88f)
+    }
+    val glassBorder = if (lightTheme) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.14f)
     var changelog by remember { mutableStateOf<String?>(null) }
     var loadingChangelog by remember { mutableStateOf(false) }
     BackHandler(enabled = visible, onBack = onDismiss)
@@ -329,18 +337,18 @@ fun AboutWhatsNewOverlay(
             Box(
                 Modifier.fillMaxSize().then(
                     if (reduceDynamicBlur) {
-                        Modifier.background(Color(0xFF141418).copy(alpha = 0.96f))
+                        Modifier.background(if (lightTheme) MaterialTheme.colorScheme.surfaceContainer else Color(0xFF141418))
                     } else {
                         Modifier.optimizedHazeEffect(
                             state = hazeState,
-                            style = HazeMaterials.regular(Color(0xFF141418).copy(alpha = 0.88f)),
+                            style = HazeMaterials.regular(glassSurface),
                         )
                     },
                 ),
             )
             Box(
                 Modifier.fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.65f))
+                    .background(Color.Black.copy(alpha = if (lightTheme) 0.25f else 0.65f))
                     .clickable(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
@@ -353,15 +361,15 @@ fun AboutWhatsNewOverlay(
                     .clip(RoundedCornerShape(24.dp))
                     .then(
                         if (reduceDynamicBlur) {
-                            Modifier.background(Color(0xFF141418).copy(alpha = 0.96f))
+                            Modifier.background(if (lightTheme) MaterialTheme.colorScheme.surfaceContainer else Color(0xFF141418))
                         } else {
                             Modifier.optimizedHazeEffect(
                                 state = hazeState,
-                                style = HazeMaterials.regular(Color(0xFF141418).copy(alpha = 0.88f)),
+                                style = HazeMaterials.regular(glassSurface),
                             )
                         },
                     )
-                    .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)), RoundedCornerShape(24.dp))
+                    .border(BorderStroke(1.dp, glassBorder), RoundedCornerShape(24.dp))
                     .clickable(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
@@ -377,7 +385,7 @@ fun AboutWhatsNewOverlay(
                         text = stringResource(R.string.about_whats_new_title, version),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center,
                     )
                     Box(
@@ -391,13 +399,13 @@ fun AboutWhatsNewOverlay(
                             loadingChangelog -> CircularProgressIndicator()
                             changelog.isNullOrBlank() -> Text(
                                 stringResource(R.string.about_changelog_unavailable),
-                                color = Color.White.copy(alpha = 0.78f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center,
                             )
                             else -> Text(
                                 text = remember(changelog) { releaseNotesAnnotatedString(changelog.orEmpty()) },
                                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
-                                color = Color.White.copy(alpha = 0.88f),
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                         }
                     }

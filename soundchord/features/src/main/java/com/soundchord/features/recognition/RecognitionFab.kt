@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Mic
@@ -30,6 +31,17 @@ import com.soundchord.features.R
 
 @Composable
 fun RecognitionFab(visible: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val lightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val fabSurface = if (lightTheme) {
+        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f)
+    } else {
+        null
+    }
+    val fabBorder = if (lightTheme) {
+        Color.Black.copy(alpha = 0.08f)
+    } else {
+        Color.White.copy(alpha = 0.20f)
+    }
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn() + scaleIn(),
@@ -41,16 +53,19 @@ fun RecognitionFab(visible: Boolean, onClick: () -> Unit, modifier: Modifier = M
                 .size(47.dp)
                 .shadow(10.dp, CircleShape)
                 .clip(CircleShape)
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            Color(0xE62B2D31),
-                            Color(0xCC17181B),
-                            Color(0xD9222428),
+                .then(
+                    if (fabSurface != null) Modifier.background(fabSurface)
+                    else Modifier.background(
+                        Brush.linearGradient(
+                            listOf(
+                                Color(0xE62B2D31),
+                                Color(0xCC17181B),
+                                Color(0xD9222428),
+                            ),
                         ),
                     ),
                 )
-                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.20f)), CircleShape),
+                .border(BorderStroke(1.dp, fabBorder), CircleShape),
         ) {
             FloatingActionButton(
                 onClick = onClick,

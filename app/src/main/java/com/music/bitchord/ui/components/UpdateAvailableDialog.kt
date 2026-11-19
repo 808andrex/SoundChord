@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -49,7 +50,7 @@ internal val ALERT_WIDTH = 270.dp
 internal val ALERT_CORNER = 14.dp
 internal val ACTION_HEIGHT = 44.dp
 
-/** Dim layered over a darkened live blur so the page behind stays unobtrusive. */
+/** Default scrim shared by the other frosted alerts. */
 internal val SCRIM_COLOR = Color.Black.copy(alpha = 0.65f)
 
 private val DOWNLOAD_ROW_HEIGHT = 4.dp
@@ -92,6 +93,13 @@ fun UpdateAvailableDialog(
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
     val state by AppUpdateChecker.download.collectAsStateWithLifecycle()
     val shape = RoundedCornerShape(ALERT_CORNER)
+    val lightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val glassSurface = if (lightTheme) {
+        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f)
+    } else {
+        Color(0xFF141418).copy(alpha = 0.88f)
+    }
+    val glassBorder = if (lightTheme) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.14f)
 
     Box(
         modifier = modifier.fillMaxSize(),
@@ -100,11 +108,11 @@ fun UpdateAvailableDialog(
         Box(
             Modifier.fillMaxSize().then(
                 if (reduceDynamicBlur) {
-                    Modifier.background(Color(0xFF141418).copy(alpha = 0.96f))
+                    Modifier.background(if (lightTheme) MaterialTheme.colorScheme.surfaceContainer else Color(0xFF141418))
                 } else {
                     Modifier.optimizedHazeEffect(
                         state = hazeState,
-                        style = HazeMaterials.regular(Color(0xFF141418).copy(alpha = 0.88f)),
+                        style = HazeMaterials.regular(glassSurface),
                     )
                 },
             ),
@@ -113,7 +121,7 @@ fun UpdateAvailableDialog(
         // this update is mandatory, so backing out should be easy.
         Box(
             Modifier.fillMaxSize()
-                .background(SCRIM_COLOR)
+                .background(Color.Black.copy(alpha = if (lightTheme) 0.25f else 0.65f))
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },
@@ -127,15 +135,15 @@ fun UpdateAvailableDialog(
                 .clip(shape)
                 .then(
                     if (reduceDynamicBlur) {
-                        Modifier.background(Color(0xFF141418).copy(alpha = 0.96f))
+                        Modifier.background(if (lightTheme) MaterialTheme.colorScheme.surfaceContainer else Color(0xFF141418))
                     } else {
                         Modifier.optimizedHazeEffect(
                             state = hazeState,
-                            style = HazeMaterials.regular(Color(0xFF141418).copy(alpha = 0.88f)),
+                            style = HazeMaterials.regular(glassSurface),
                         )
                     },
                 )
-                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)), shape)
+                .border(BorderStroke(1.dp, glassBorder), shape)
                 // Swallows the tap before it reaches the scrim behind, so
                 // touching the card itself never dismisses it.
                 .clickable(

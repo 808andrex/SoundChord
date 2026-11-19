@@ -114,6 +114,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -3113,15 +3114,7 @@ private fun BitChordApp(
                                 onDismissClearConfirmation = {
                                     showRecognitionHistoryClearConfirmation = false
                                 },
-                                dialogSurfaceModifier = Modifier
-                                    .clip(RoundedCornerShape(24.dp))
-                                    .background(Color(0xFF1C1C1E).copy(alpha = 0.92f))
-                                    .then(
-                                        if (reduceDynamicBlur) Modifier else Modifier.hazeEffect(
-                                            state = hazeState,
-                                            style = HazeMaterials.regular(Color(0xFF1C1C1E)),
-                                        ),
-                                    ),
+                                dialogSurfaceModifier = historyDialogSurface(hazeState, reduceDynamicBlur),
                                 contentPadding = listPadding,
                             )
                         } else if (pageRoute == AppRoute.RadioHistory) {
@@ -3142,29 +3135,7 @@ private fun BitChordApp(
                                     radioHistoryStore.clear()
                                     showRadioHistoryClearConfirmation = false
                                 },
-                                dialogSurfaceModifier = Modifier
-                                    .clip(RoundedCornerShape(24.dp))
-                                    .background(Color(0xFF1C1C1E).copy(alpha = 0.92f))
-                                    .then(
-                                        if (reduceDynamicBlur) {
-                                            Modifier.border(
-                                                1.dp,
-                                                Color.White.copy(alpha = 0.14f),
-                                                RoundedCornerShape(24.dp),
-                                            )
-                                        } else {
-                                            Modifier.hazeEffect(
-                                                state = hazeState,
-                                                style = dev.chrisbanes.haze.materials.HazeMaterials.regular(
-                                                    Color(0xFF1C1C1E),
-                                                ),
-                                            ).border(
-                                                1.dp,
-                                                Color.White.copy(alpha = 0.14f),
-                                                RoundedCornerShape(24.dp),
-                                            )
-                                        },
-                                    ),
+                                dialogSurfaceModifier = historyDialogSurface(hazeState, reduceDynamicBlur),
                                 contentPadding = listPadding,
                             )
                         } else if (pageRoute == AppRoute.History) {
@@ -6597,6 +6568,29 @@ private fun FrostedMenuPanel(
             Column(Modifier.padding(vertical = 8.dp), content = content)
         }
     }
+}
+
+@OptIn(ExperimentalHazeMaterialsApi::class)
+@Composable
+private fun historyDialogSurface(hazeState: HazeState, reduceDynamicBlur: Boolean): Modifier {
+    val lightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val surface = if (lightTheme) {
+        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f)
+    } else {
+        Color(0xFF1C1C1E).copy(alpha = 0.92f)
+    }
+    val border = if (lightTheme) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.14f)
+    val shape = RoundedCornerShape(24.dp)
+    return Modifier
+        .clip(shape)
+        .background(surface)
+        .then(
+            if (reduceDynamicBlur) Modifier else Modifier.hazeEffect(
+                state = hazeState,
+                style = HazeMaterials.regular(surface),
+            ),
+        )
+        .border(1.dp, border, shape)
 }
 
 /** One option on a frosted menu: its label, and a tick or [icon] at the end. */
