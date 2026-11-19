@@ -966,6 +966,107 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** The account's own playlists, for the picker and the library tab. */
     private val _playlists = MutableStateFlow<List<UserPlaylist>>(emptyList())
     val playlists: StateFlow<List<UserPlaylist>> = _playlists.asStateFlow()
+    /** Newly created playlists stay visible while YouTube's library feed catches up. */
+    private val pendingCreatedPlaylists = linkedMapOf<String, UserPlaylist>()
+    /** Suppresses stale feed rows until a later remote read confirms deletion. */
+    private val pendingDeletedPlaylistIds = mutableSetOf<String>()
+    /** Newest first; keeps the active session's newest playlist at the top during stale feed reads. */
+    private val recentlyCreatedPlaylistIds = mutableListOf<String>()
+    /** Keeps a successful add visible while YouTube's playlist count catches up. */
+    private val optimisticPlaylistCounts = mutableMapOf<String, Int>()
+
+    private fun normalizedPlaylistId(id: String): String =
+        com.music.bitchord.data.PlaylistCovers.normalizePlaylistId(id)
+
+    /** Custom artwork is local-only and restored by playlist id after every API refresh. */
+    private fun withPlaylistCoverModels(playlists: List<UserPlaylist>): List<UserPlaylist> {
+        val context = getApplication<Application>()
+        return playlists.map { playlist ->
+            val normalizedId = normalizedPlaylistId(playlist.playlistId)
+            val cover = com.music.bitchord.data.PlaylistCovers.getCoverUri(context, normalizedId)
+                ?: com.music.bitchord.data.PlaylistCovers.getCoverUri(context, playlist.browseId)
+            val normalized = if (playlist.playlistId == normalizedId) playlist
+                else playlist.copy(playlistId = normalizedId)
+            val count = optimisticPlaylistCounts[normalizedId]
+            val withCount = if (count == null) normalized else normalized.copy(subtitle = playlistSubtitle(normalized, count))
+            if (cover == null) withCount else withCount.copy(thumbnailUrl = cover.toString())
+        }
+    }
+
+    private fun withPlaylistCovers(page: LibraryPage): LibraryPage {
+        val context = getApplication<Application>()
+        val existingShelf = page.shelves.firstOrNull { it.title == YtMusicRepository.PLAYLISTS_SHELF }
+        val existingItems = existingShelf?.items.orEmpty().filterNot { item ->
+            item.browseId?.let(::normalizedPlaylistId) in pendingDeletedPlaylistIds
+        }
+        val existingIds = existingItems.mapNotNull { it.browseId?.let(::normalizedPlaylistId) }.toSet()
+        val knownPlaylists = (_playlists.value + pendingCreatedPlaylists.values)
+            .distinctBy { normalizedPlaylistId(it.playlistId) }
+        val knownById = knownPlaylists.associateBy { normalizedPlaylistId(it.playlistId) }
+        val missingItems = knownPlaylists
+            .filterNot { normalizedPlaylistId(it.playlistId) in existingIds }
+            .map { playlist -> ShelfItem(playlist.title, playlist.subtitle, playlist.thumbnailUrl, null, playlist.browseId) }
+        val allItems = (existingItems + missingItems).map { item ->
+            val id = item.browseId
+            val current = id?.let { knownById[normalizedPlaylistId(it)] }
+            val updated = if (current == null) item else item.copy(
+                title = current.title,
+                subtitle = current.subtitle,
+                thumbnailUrl = current.thumbnailUrl ?: item.thumbnailUrl,
+            )
+            val count = id?.let { optimisticPlaylistCounts[normalizedPlaylistId(it)] }
+            val withCount = if (id == null || count == null) updated else {
+                val model = current ?: UserPlaylist(
+                    playlistId = normalizedPlaylistId(id),
+                    title = updated.title,
+                    subtitle = updated.subtitle,
+                    thumbnailUrl = updated.thumbnailUrl,
+                )
+                updated.copy(subtitle = playlistSubtitle(model, count))
+            }
+            val cover = id?.let { com.music.bitchord.data.PlaylistCovers.getCoverUri(context, it) }
+            if (cover == null) withCount else withCount.copy(thumbnailUrl = cover.toString())
+        }
+        fun ShelfItem.isLikedMusic() = browseId?.let(::normalizedPlaylistId) ==
+            normalizedPlaylistId(YtMusicRepository.LIKED_MUSIC)
+        fun ShelfItem.isNewEpisodes() = title.trim().lowercase(java.util.Locale.ROOT) in setOf(
+            "new episodes", "nuevos episodios", "nuevas episodios", "episodios nuevos",
+            "new podcasts", "nuevos capítulos", "nuevos capitulos",
+        )
+        val fixedItems = allItems.filter { it.isLikedMusic() || it.isNewEpisodes() }
+            .sortedBy { if (it.isLikedMusic()) 0 else 1 }
+        val fixedIds = fixedItems.mapNotNull { it.browseId?.let(::normalizedPlaylistId) }.toSet()
+        val recentlyCreated = recentlyCreatedPlaylistIds.mapNotNull { id ->
+            allItems.firstOrNull {
+                it.browseId?.let(::normalizedPlaylistId) == id && id !in fixedIds
+            }
+        }
+        val prioritizedIds = (fixedItems + recentlyCreated)
+            .mapNotNull { it.browseId?.let(::normalizedPlaylistId) }.toSet()
+        val orderedItems = fixedItems + recentlyCreated + allItems.filterNot {
+            it.browseId?.let(::normalizedPlaylistId) in prioritizedIds
+        }
+        val shelves = page.shelves.map { shelf ->
+            if (shelf.title != YtMusicRepository.PLAYLISTS_SHELF) shelf
+            else shelf.copy(items = orderedItems)
+        }.let { updated ->
+            if (existingShelf == null && orderedItems.isNotEmpty()) {
+                listOf(HomeShelf(YtMusicRepository.PLAYLISTS_SHELF, orderedItems)) + updated
+            } else updated
+        }
+        return page.copy(shelves = shelves)
+    }
+
+    private fun withPlaylistCovers(shelves: List<HomeShelf>): List<HomeShelf> {
+        val context = getApplication<Application>()
+        return shelves.map { shelf ->
+            shelf.copy(items = shelf.items.map { item ->
+                val id = item.browseId
+                val cover = id?.let { com.music.bitchord.data.PlaylistCovers.getCoverUri(context, it) }
+                if (cover == null) item else item.copy(thumbnailUrl = cover.toString())
+            })
+        }
+    }
 
     private val _playlistsLoading = MutableStateFlow(false)
     val playlistsLoading: StateFlow<Boolean> = _playlistsLoading.asStateFlow()
@@ -976,7 +1077,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val identity = listenerKey()
         _playlistsLoading.value = true
         viewModelScope.launch {
-            YtMusicRepository.userPlaylists().onSuccess { if (identity == listenerKey()) _playlists.value = it }
+            YtMusicRepository.userPlaylists().onSuccess {
+                if (identity == listenerKey()) {
+                    val normalizedRemote = it.map { playlist ->
+                        playlist.copy(playlistId = normalizedPlaylistId(playlist.playlistId))
+                    }
+                    normalizedRemote.forEach { playlist ->
+                        val id = normalizedPlaylistId(playlist.playlistId)
+                        val expected = optimisticPlaylistCounts[id]
+                        val remoteCount = playlistSongCountFromSubtitle(playlist.subtitle)
+                        if (expected != null && remoteCount != null && remoteCount == expected) {
+                            optimisticPlaylistCounts.remove(id)
+                        }
+                    }
+                    val remoteIds = normalizedRemote.mapTo(HashSet()) { normalizedPlaylistId(it.playlistId) }
+                    normalizedRemote.forEach { playlist -> pendingCreatedPlaylists.remove(normalizedPlaylistId(playlist.playlistId)) }
+                    val visibleRemote = normalizedRemote.filterNot { normalizedPlaylistId(it.playlistId) in pendingDeletedPlaylistIds }
+                    val stillPending = pendingCreatedPlaylists.values.filterNot {
+                        normalizedPlaylistId(it.playlistId) in remoteIds
+                    }
+                    _playlists.value = withPlaylistCoverModels(visibleRemote + stillPending)
+                    (_library.value as? UiState.Success)?.let { state ->
+                        _library.value = UiState.Success(withPlaylistCovers(state.data))
+                    }
+                }
+            }
             if (identity == listenerKey()) _playlistsLoading.value = false
         }
     }
@@ -1017,7 +1142,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             items.isEmpty() -> page.shelves.filterNot { it === existing }
             else -> page.shelves.map { if (it === existing) existing.copy(items = items) else it }
         }
-        _library.value = UiState.Success(page.copy(shelves = shelves))
+        _library.value = UiState.Success(withPlaylistCovers(page.copy(shelves = shelves)))
     }
 
     /**
@@ -1035,6 +1160,44 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _detailStack.value = _detailStack.value.map {
             if (it.browseId == playlist.browseId) it.copy(title = title) else it
         }
+    }
+
+    private fun playlistSongCountFromSubtitle(subtitle: String): Int? =
+        Regex("\\d+").find(subtitle.substringAfterLast(" • "))?.value?.toIntOrNull()
+
+    private fun playlistSubtitle(playlist: UserPlaylist, count: Int): String {
+        val owner = playlist.subtitle.substringBeforeLast(" • ", "")
+            .takeIf(String::isNotBlank)
+            ?: _selectedChannelName.value?.takeIf(String::isNotBlank)
+        val countLabel = getApplication<Application>().resources.getQuantityString(
+            R.plurals.song_count_plural,
+            count,
+            count,
+        )
+        return owner?.let { "$it • $countLabel" } ?: countLabel
+    }
+
+    /** Updates the Library grid, Show all route's live source, picker, and open detail together. */
+    private fun setPlaylistSongCount(playlist: UserPlaylist, count: Int) {
+        val id = normalizedPlaylistId(playlist.playlistId)
+        val current = _playlists.value.firstOrNull { normalizedPlaylistId(it.playlistId) == id } ?: playlist
+        val subtitle = playlistSubtitle(current, count)
+        optimisticPlaylistCounts[id] = count
+        _playlists.value = _playlists.value.map {
+            if (normalizedPlaylistId(it.playlistId) == id) it.copy(subtitle = subtitle) else it
+        }
+        pendingCreatedPlaylists[id]?.let { pendingCreatedPlaylists[id] = it.copy(subtitle = subtitle) }
+        editPlaylistShelf { items ->
+            items.map {
+                if (it.browseId?.let(::normalizedPlaylistId) == id) it.copy(subtitle = subtitle) else it
+            }
+        }
+        _detailStack.value = _detailStack.value.map {
+            if (normalizedPlaylistId(it.browseId) == id) it.copy(subtitle = subtitle) else it
+        }
+        // Keep the current snapshot in sync so changing accounts and returning
+        // doesn't restore the previous count over the live card.
+        cacheCurrentListener()
     }
 
     /**
@@ -1063,6 +1226,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!requireSignIn() || playlists.isEmpty()) return
         viewModelScope.launch {
             val outcomes = playlists.map { addOne(it, song) }
+            if (outcomes.any { it == AddOutcome.ADDED }) refreshLibraryAfterPlaylistMutation()
             onResult(
                 outcomes.count { it == AddOutcome.ADDED },
                 outcomes.count { it == AddOutcome.ALREADY_THERE },
@@ -1082,6 +1246,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return YtMusicRepository.addToPlaylist(playlist.playlistId, listOf(song.videoId)).fold(
             onSuccess = { added ->
                 libraryStale = true
+                val current = _playlists.value.firstOrNull {
+                    normalizedPlaylistId(it.playlistId) == normalizedPlaylistId(playlist.playlistId)
+                } ?: playlist
+                val id = normalizedPlaylistId(current.playlistId)
+                val before = openSongs?.size
+                    ?: known?.size
+                    ?: optimisticPlaylistCounts[id]
+                    ?: playlistSongCountFromSubtitle(current.subtitle)
+                    ?: 0
+                setPlaylistSongCount(current, before + added.size.coerceAtLeast(1))
                 // The playlist's page may be open behind the picker — it is
                 // reachable from a row's own menu on it — so the track goes
                 // into it for the same reason [addSuggestedSong] does.
@@ -1097,7 +1271,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * track's menu — one request, so it can't half-succeed into an empty
      * playlist the user has to add to again.
      */
-    fun createPlaylist(title: String, privacy: PlaylistPrivacy, song: Song? = null) {
+    fun createPlaylist(
+        title: String,
+        privacy: PlaylistPrivacy,
+        song: Song? = null,
+        coverUri: android.net.Uri? = null,
+        onCreated: ((UserPlaylist) -> Unit)? = null,
+    ) {
         if (!requireSignIn()) return
         val name = title.trim().ifBlank { text(R.string.new_playlist) }
         viewModelScope.launch {
@@ -1111,25 +1291,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     // made: it is the owner by construction, so its card is
                     // editable the moment it appears rather than one request
                     // after someone holds it.
-                    setPlaylistOwned("VL$playlistId", true)
+                    val normalizedId = normalizedPlaylistId(playlistId)
+                    setPlaylistOwned("VL$normalizedId", true)
                     libraryStale = true
+                    val coverUrl = coverUri?.let {
+                        com.music.bitchord.data.PlaylistCovers.save(getApplication<Application>(), normalizedId, it)?.toString()
+                    }
+                    val accountName = _selectedChannelName.value?.takeIf(String::isNotBlank)
+                    val emptySubtitle = accountName?.let {
+                        "$it • ${getApplication<Application>().resources.getQuantityString(R.plurals.song_count_plural, 0, 0)}"
+                    }.orEmpty()
                     val created = UserPlaylist(
-                        playlistId = playlistId,
+                        playlistId = normalizedId,
                         title = name,
-                        // Only what this request itself establishes. Both
-                        // surfaces that draw it leave a blank one out, so an
-                        // unseeded playlist gets a card of just its name rather
-                        // than a guess at what the feed will call it.
-                        subtitle = if (song != null) "1 song" else "",
-                        thumbnailUrl = song?.thumbnailUrl,
+                        subtitle = if (song != null) getApplication<Application>().resources.getQuantityString(R.plurals.song_count_plural, 1, 1) else emptySubtitle,
+                        thumbnailUrl = coverUrl ?: song?.thumbnailUrl,
                     )
+                    optimisticPlaylistCounts[normalizedId] = if (song == null) 0 else 1
                     // Drawn from what was just sent rather than waited for: the
                     // library feed does not have this playlist yet, and the
                     // fetch that used to run here answered without it — see
                     // [editPlaylistShelf]. Leads the shelf because it is the
                     // newest, which is the order the feed itself comes in.
+                    pendingCreatedPlaylists[normalizedId] = created
+                    recentlyCreatedPlaylistIds.remove(normalizedId)
+                    recentlyCreatedPlaylistIds.add(0, normalizedId)
                     _playlists.value = listOf(created) +
-                        _playlists.value.filterNot { it.playlistId == created.playlistId }
+                        _playlists.value.filterNot { normalizedPlaylistId(it.playlistId) == normalizedId }
                     editPlaylistShelf { items ->
                         listOf(
                             ShelfItem(
@@ -1139,8 +1327,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 videoId = null,
                                 browseId = created.browseId,
                             ),
-                        ) + items.filterNot { it.browseId == created.browseId }
+                        ) + items.filterNot { it.browseId?.let(::normalizedPlaylistId) == normalizedId }
                     }
+                    cacheCurrentListener()
+                    loadPlaylists()
+                    refreshLibraryAfterPlaylistMutation()
+                    onCreated?.invoke(created)
                 },
                 onFailure = {},
             )
@@ -1152,6 +1344,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         privacy: PlaylistPrivacy,
         videoIds: List<String>,
         songs: List<Song> = emptyList(),
+        coverUri: android.net.Uri? = null,
         /** [savedLocally] is true when the playlist went to this device, not YouTube Music. */
         onResult: ((browseId: String?, title: String, savedLocally: Boolean) -> Unit)? = null,
     ) {
@@ -1165,21 +1358,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     videoIds = initialBatch,
                 ).fold(
                     onSuccess = { playlistId ->
+                        val normalizedId = normalizedPlaylistId(playlistId)
                         if (videoIds.size > 50) {
                             videoIds.drop(50).chunked(50).forEach { chunk ->
-                                YtMusicRepository.addToPlaylist(playlistId, chunk)
+                                YtMusicRepository.addToPlaylist(normalizedId, chunk)
                             }
                         }
-                        setPlaylistOwned("VL$playlistId", true)
+                        setPlaylistOwned("VL$normalizedId", true)
                         libraryStale = true
+                        val coverUrl = coverUri?.let {
+                            com.music.bitchord.data.PlaylistCovers.save(getApplication<Application>(), normalizedId, it)?.toString()
+                        }
                         val created = UserPlaylist(
-                            playlistId = playlistId,
+                            playlistId = normalizedId,
                             title = name,
                             subtitle = "${videoIds.size} songs",
-                            thumbnailUrl = null,
+                            thumbnailUrl = coverUrl ?: songs.firstOrNull()?.thumbnailUrl,
                         )
+                        optimisticPlaylistCounts[normalizedId] = videoIds.size
+                        pendingCreatedPlaylists[normalizedId] = created
+                        recentlyCreatedPlaylistIds.remove(normalizedId)
+                        recentlyCreatedPlaylistIds.add(0, normalizedId)
                         _playlists.value = listOf(created) +
-                            _playlists.value.filterNot { it.playlistId == created.playlistId }
+                            _playlists.value.filterNot { normalizedPlaylistId(it.playlistId) == normalizedId }
                         editPlaylistShelf { items ->
                             listOf(
                                 ShelfItem(
@@ -1189,17 +1390,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                     videoId = null,
                                     browseId = created.browseId,
                                 ),
-                            ) + items.filterNot { it.browseId == created.browseId }
+                            ) + items.filterNot { it.browseId?.let(::normalizedPlaylistId) == normalizedId }
                         }
+                        cacheCurrentListener()
                         onResult?.invoke(created.browseId, created.title, false)
                     },
                     onFailure = {
-                        val local = com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, songs)
+                        val local = com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, songs, coverUri)
                         onResult?.invoke(local.browseId, local.title, true)
                     },
                 )
             } else {
-                val local = com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, songs)
+                val local = com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, songs, coverUri)
                 onResult?.invoke(local.browseId, local.title, true)
             }
         }
@@ -1262,6 +1464,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             YtMusicRepository.addToPlaylist(playlistId, listOf(song.videoId)).fold(
                 onSuccess = { added ->
                     libraryStale = true
+                    val currentPage = _detailStack.value.firstOrNull { it.browseId == browseId }
+                    val currentPlaylist = _playlists.value.firstOrNull {
+                        normalizedPlaylistId(it.playlistId) == normalizedPlaylistId(browseId)
+                    } ?: UserPlaylist(
+                        playlistId = normalizedPlaylistId(browseId),
+                        title = currentPage?.title.orEmpty(),
+                        subtitle = currentPage?.subtitle.orEmpty(),
+                        thumbnailUrl = currentPage?.thumbnailUrl,
+                    )
+                    val id = normalizedPlaylistId(currentPlaylist.playlistId)
+                    val countBefore = (currentPage?.songs as? UiState.Success)?.data?.size
+                        ?: optimisticPlaylistCounts[id]
+                        ?: playlistSongCountFromSubtitle(currentPlaylist.subtitle)
+                        ?: 0
+                    setPlaylistSongCount(currentPlaylist, countBefore + added.size.coerceAtLeast(1))
                     _detailStack.value = _detailStack.value.map { page ->
                         if (page.browseId != browseId) {
                             page
@@ -1273,6 +1490,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                     }
                     appendToOpenPlaylist(browseId, song, added[song.videoId])
+                    refreshLibraryAfterPlaylistMutation()
                 },
                 onFailure = {},
             )
@@ -1389,28 +1607,63 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deletePlaylist(playlist: UserPlaylist) {
         if (!requireSignIn()) return
+        val normalizedId = normalizedPlaylistId(playlist.playlistId)
+        val originalPlaylists = _playlists.value
+        val originalLibrary = _library.value
+        val originalHome = _home.value
+        val originalDetails = _detailStack.value
+        pendingCreatedPlaylists.remove(normalizedId)
+        optimisticPlaylistCounts.remove(normalizedId)
+        recentlyCreatedPlaylistIds.remove(normalizedId)
+        pendingDeletedPlaylistIds += normalizedId
+        _playlists.value = originalPlaylists.filterNot { normalizedPlaylistId(it.playlistId) == normalizedId }
+        editPlaylistShelf { items ->
+            items.filterNot { it.browseId?.let(::normalizedPlaylistId) == normalizedId }
+        }
+        _home.value = (_home.value as? UiState.Success)?.let { state ->
+            UiState.Success(state.data.map { shelf ->
+                shelf.copy(items = shelf.items.filterNot {
+                    it.browseId?.let(::normalizedPlaylistId) == normalizedId
+                })
+            })
+        } ?: _home.value
+        _detailStack.value = originalDetails.filterNot {
+            normalizedPlaylistId(it.browseId) == normalizedId
+        }
+        navigator.onDetailStackShrunk(_detailStack.value.size)
+        com.music.bitchord.data.PlaylistCovers.delete(getApplication<Application>(), normalizedId)
+        _playlistOwned.value = _playlistOwned.value.filterKeys { normalizedPlaylistId(it) != normalizedId }
+        ownershipInFlight.removeAll { normalizedPlaylistId(it) == normalizedId }
+        libraryStale = true
+        cacheCurrentListener()
+        refreshLibraryAfterPlaylistMutation()
         viewModelScope.launch {
-            YtMusicRepository.deletePlaylist(playlist.playlistId).fold(
+            YtMusicRepository.deletePlaylist(normalizedId).fold(
                 onSuccess = {
-                    _playlists.value = _playlists.value
-                        .filterNot { it.playlistId == playlist.playlistId }
-                    // The card in the library tab, which is the surface the
-                    // deletion was almost certainly ordered from — and which the
-                    // re-fetch that used to stand in for this left in place; see
-                    // [editPlaylistShelf].
-                    editPlaylistShelf { items ->
-                        items.filterNot { it.browseId == playlist.browseId }
-                    }
-                    // Its page may be the one open; a deleted playlist has
-                    // nothing left to show.
-                    _detailStack.value = _detailStack.value
-                        .filterNot { it.browseId == playlist.browseId }
+                    // The optimistic removal already updated every visible surface.
+                    refreshLibraryAfterPlaylistMutation()
+                },
+                onFailure = {
+                    // A rejected request means it still exists remotely; restore its rows,
+                    // while leaving the removed local cover cleared as requested.
+                    _playlists.value = originalPlaylists
+                    _library.value = originalLibrary
+                    _home.value = originalHome
+                    _detailStack.value = originalDetails
+                    pendingDeletedPlaylistIds.remove(normalizedId)
                     navigator.onDetailStackShrunk(_detailStack.value.size)
                     libraryStale = true
+                    cacheCurrentListener()
+                    loadPlaylists()
+                    refreshLibraryAfterPlaylistMutation()
                 },
-                onFailure = {},
             )
         }
+    }
+
+    private fun refreshLibraryAfterPlaylistMutation() {
+        libraryStale = false
+        refresh(Feed.LIBRARY)
     }
 
     /**
@@ -1510,6 +1763,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     init {
+        val appContext = getApplication<Application>()
+        com.music.bitchord.data.PlaylistCovers.init(appContext)
+        viewModelScope.launch {
+            com.music.bitchord.data.PlaylistCovers.covers.collect { covers ->
+                _playlists.value = withPlaylistCoverModels(_playlists.value)
+                _home.value = (_home.value as? UiState.Success)?.let { state ->
+                    UiState.Success(withPlaylistCovers(state.data))
+                } ?: _home.value
+                _library.value = (_library.value as? UiState.Success)?.let { state ->
+                    UiState.Success(withPlaylistCovers(state.data))
+                } ?: _library.value
+                _detailStack.value = _detailStack.value.map { page ->
+                    val cover = covers[normalizedPlaylistId(page.browseId)]
+                    if (cover == null) page else page.copy(thumbnailUrl = cover.toString())
+                }
+            }
+        }
         startSearchPipeline()
         startSuggestPipeline()
         startTypeaheadMediaPipeline()
@@ -1659,6 +1929,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (feed == Feed.LIBRARY && !_signedIn.value) return
         val identity = listenerKey()
         _refreshing.value = _refreshing.value + feed
+        if (feed == Feed.LIBRARY) loadPlaylists()
         viewModelScope.launch {
             when (feed) {
                 Feed.HOME -> refreshHome(identity)
@@ -1926,14 +2197,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // shelf. The dedicated history endpoint wins and replaces it.
             val replacing = shelves.map { it.title.lowercase(Locale.ROOT) }.toSet()
             homeSeenTitles.addAll(replacing)
-            _home.value = UiState.Success(shelves + existing.filterNot {
+            _home.value = UiState.Success(withPlaylistCovers(shelves) + existing.filterNot {
                 it.title.lowercase(Locale.ROOT) in replacing
             })
             return
         }
         val added = shelves.withoutRepeatsOf(existing)
             .filter { homeSeenTitles.add(it.title.lowercase(Locale.ROOT)) }
-        if (added.isNotEmpty()) _home.value = UiState.Success(existing + added)
+        if (added.isNotEmpty()) _home.value = UiState.Success(withPlaylistCovers(existing + added))
     }
 
     /** Refreshes the core feed without blanking the current Play page first. */
@@ -1948,7 +2219,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             homeSeenTitles.clear()
             val shelves = feed.shelves.withoutRepeatsOf(emptyList())
                 .filter { homeSeenTitles.add(it.title.lowercase(Locale.ROOT)) }
-            if (shelves.isNotEmpty()) _home.value = UiState.Success(shelves)
+            if (shelves.isNotEmpty()) _home.value = UiState.Success(withPlaylistCovers(shelves))
         }
         recent?.await()?.onSuccess { shelf ->
             if (identity == listenerKey()) shelf?.let { publishHomeShelves(listOf(it), prepend = true) }
@@ -1975,7 +2246,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     // itself rather than run dry with a token still attached —
                     // treat it the same as exhausted so scrolling can't spin here.
                     homeContinuation = feed.continuation.takeIf { added.isNotEmpty() }
-                    if (added.isNotEmpty()) _home.value = UiState.Success(existing + added)
+                    if (added.isNotEmpty()) _home.value = UiState.Success(withPlaylistCovers(existing + added))
                 }
             }
             if (identity == listenerKey()) _homeLoadingMore.value = false
@@ -1997,12 +2268,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // this ViewModel's scope, so it is cancelled with the screen and
                 // a liked track past the first page still reads as liked.
                 page.likedContinuation?.let { token -> syncLikedMusic(identity, token) }
+                val remotePlaylistIds = page.shelves
+                    .firstOrNull { it.title == YtMusicRepository.PLAYLISTS_SHELF }
+                    ?.items.orEmpty()
+                    .mapNotNullTo(HashSet()) { it.browseId?.let(::normalizedPlaylistId) }
+                if (identity == listenerKey()) pendingDeletedPlaylistIds.retainAll(remotePlaylistIds)
                 if (page.isEmpty) UiState.Error(text(R.string.library_empty))
                 else UiState.Success(page.copy(likedContinuation = null))
             },
             onFailure = { UiState.Error(it.friendly()) },
         )
-        if (identity == listenerKey()) _library.value = next
+        if (identity == listenerKey()) {
+            _library.value = when (next) {
+                is UiState.Success -> UiState.Success(withPlaylistCovers(next.data))
+                else -> next
+            }
+        }
     }
 
     /**
@@ -2789,11 +3070,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         val resolved = browseTypeOf(browseId, type)
+        val customPlaylistCover = com.music.bitchord.data.PlaylistCovers
+            .getCoverUri(getApplication<Application>(), browseId)?.toString()
         _detailStack.value += DetailPage(
             browseId = browseId,
             title = title,
             subtitle = subtitle,
-            thumbnailUrl = thumbnailUrl,
+            thumbnailUrl = customPlaylistCover ?: thumbnailUrl,
             songs = UiState.Loading,
             type = resolved,
         )
@@ -2846,7 +3129,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (localPlaylist != null) {
                 name = localPlaylist.title
                 credit = getApplication<Application>().getString(R.string.local_playlist_subtitle, localPlaylist.songs.size)
-                artwork = localPlaylist.songs.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }?.thumbnailUrl
+                artwork = localPlaylist.customCoverUri
+                    ?: com.music.bitchord.data.PlaylistCovers.getCoverUri(getApplication<Application>(), localPlaylist.id)?.toString()
+                    ?: localPlaylist.songs.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }?.thumbnailUrl
             }
             // Named by the store rather than by whatever opened it, which
             // may be a "Playing from" label from before a rename.
@@ -2951,7 +3236,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     it.copy(
                         songs = stateWithPendingLikes,
                         sections = sections,
-                        thumbnailUrl = artwork ?: it.thumbnailUrl,
+                        thumbnailUrl = com.music.bitchord.data.PlaylistCovers
+                            .getCoverUri(getApplication<Application>(), browseId)?.toString()
+                            ?: artwork ?: it.thumbnailUrl,
                         title = name ?: it.title,
                         subtitle = credit ?: it.subtitle,
                         suggestedSongs = suggested,
@@ -2964,6 +3251,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 } else {
                     it
+                }
+            }
+            if (stateWithPendingLikes is UiState.Success) {
+                _playlists.value.firstOrNull {
+                    normalizedPlaylistId(it.playlistId) == normalizedPlaylistId(browseId)
+                }?.let { ownedPlaylist ->
+                    setPlaylistSongCount(ownedPlaylist, stateWithPendingLikes.data.size)
                 }
             }
             // Only once the first page is on screen: [fillIn] appends to it,
@@ -3638,6 +3932,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         pendingLikedAdds.clear()
         _playlistsLoading.value = false
         _playlists.value = emptyList()
+        pendingCreatedPlaylists.clear()
+        pendingDeletedPlaylistIds.clear()
+        recentlyCreatedPlaylistIds.clear()
+        optimisticPlaylistCounts.clear()
         _playlistOwned.value = emptyMap()
         ownershipInFlight.clear()
         _songMenu.value = null

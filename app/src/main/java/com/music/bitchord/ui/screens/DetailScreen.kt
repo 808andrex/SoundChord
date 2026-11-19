@@ -1198,6 +1198,20 @@ private fun ReleaseHeader(
                 }
             }
         }
+        if (onAddSongs != null && songs.isEmpty()) {
+            Spacer(Modifier.height(18.dp))
+            ActionPill(
+                icon = BitChordIcons.Plus,
+                label = stringResource(R.string.add_songs_to_playlist),
+                onClick = { onAddSongs.invoke() },
+                filled = true,
+                size = RELEASE_SIDE_BUTTON,
+                modifier = Modifier
+                    .widthIn(max = RELEASE_ACTIONS_MAX_WIDTH)
+                    .fillMaxWidth()
+                    .padding(horizontal = HEADER_GUTTER),
+            )
+        }
     }
 }
 
@@ -2478,7 +2492,7 @@ private fun DetailPage.headerLines(trackCount: Int, playtime: String? = null): P
     val meta = listOfNotNull(
         (kind ?: localKind ?: type.localizedLabel())?.capitalizeWords(),
         year,
-        trackCount.takeIf { it > 0 }?.let {
+        trackCount.takeIf { it > 0 || type == BrowseType.PLAYLIST }?.let {
             pluralStringResource(R.plurals.track_count_plural, it, it).capitalizeWords()
         },
         playtime,

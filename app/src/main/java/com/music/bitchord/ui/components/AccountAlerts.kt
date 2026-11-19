@@ -722,6 +722,7 @@ fun InfoAlert(
      * once the player was closed, long after the tap it was answering.
      */
     inOwnWindow: Boolean = false,
+    actionLabel: String? = null,
 ) {
     if (inOwnWindow) {
         Dialog(
@@ -731,10 +732,10 @@ fun InfoAlert(
             val window = (LocalView.current.parent as? DialogWindowProvider)?.window
             // The scaffold draws its own flat scrim; the platform's would double it.
             SideEffect { window?.setDimAmount(0f) }
-            InfoAlertFrame(hazeState, title, description, onDismiss, frosted = false)
+            InfoAlertFrame(hazeState, title, description, onDismiss, frosted = false, actionLabel = actionLabel)
         }
     } else {
-        InfoAlertFrame(hazeState, title, description, onDismiss, frosted = true)
+        InfoAlertFrame(hazeState, title, description, onDismiss, frosted = true, actionLabel = actionLabel)
     }
 }
 
@@ -745,6 +746,7 @@ private fun InfoAlertFrame(
     description: String,
     onDismiss: () -> Unit,
     frosted: Boolean,
+    actionLabel: String?,
 ) {
     AlertScaffold(hazeState = hazeState, onDismiss = onDismiss, frosted = frosted) {
         Column(
@@ -768,7 +770,7 @@ private fun InfoAlertFrame(
             )
         }
         AlertRule()
-        AlertAction(label = stringResource(android.R.string.ok), emphasised = true, onClick = onDismiss)
+        AlertAction(label = actionLabel ?: stringResource(android.R.string.ok), emphasised = true, onClick = onDismiss)
     }
 }
 

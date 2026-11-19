@@ -1115,7 +1115,7 @@ private fun BitChordApp(
         ShelfItem(
             title = playlist.title,
             subtitle = stringResource(R.string.local_playlist_subtitle, playlist.songs.size),
-            thumbnailUrl = playlist.songs.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }?.thumbnailUrl,
+            thumbnailUrl = playlist.customCoverUri ?: playlist.songs.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }?.thumbnailUrl,
             videoId = null,
             browseId = playlist.browseId,
         )
@@ -1341,7 +1341,10 @@ private fun BitChordApp(
     val libraryPull = rememberPullToRefreshState()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val currentFeed = when {
-        route != null || detail != null -> null
+        detail != null -> null
+        route is AppRoute.LibraryShowAll && route.shelf.title == YtMusicRepository.PLAYLISTS_SHELF ->
+            MainViewModel.Feed.LIBRARY
+        route != null -> null
         selectedTab == TAB_HOME -> MainViewModel.Feed.HOME
         selectedTab == TAB_EXPLORE -> MainViewModel.Feed.EXPLORE
         selectedTab == TAB_LIBRARY -> MainViewModel.Feed.LIBRARY
@@ -3156,9 +3159,16 @@ private fun BitChordApp(
                                 contentPadding = listPadding,
                             )
                         } else if (pageRoute is AppRoute.LibraryShowAll) {
-                            pageRoute.shelf.let { shelf ->
+                            val shelf = if (pageRoute.shelf.title == YtMusicRepository.PLAYLISTS_SHELF) {
+                                val liveLibrary = (libraryState as? UiState.Success)?.data
+                                if (liveLibrary == null) pageRoute.shelf
+                                else liveLibrary.shelves.firstOrNull {
+                                    it.title == YtMusicRepository.PLAYLISTS_SHELF
+                                } ?: HomeShelf(YtMusicRepository.PLAYLISTS_SHELF, emptyList())
+                            } else pageRoute.shelf
+                            shelf.let {
                                 LibraryGridPage(
-                                    shelf = shelf,
+                                    shelf = it,
                                     gridState = libraryShowAllGridState,
                                     onItemClick = onLibraryItemClick,
                                     onItemLongPress = onBrowseLongPress,
@@ -3169,6 +3179,9 @@ private fun BitChordApp(
                                     } else {
                                         null
                                     },
+                                    refreshing = MainViewModel.Feed.LIBRARY in refreshing,
+                                    onRefresh = { viewModel.refresh(MainViewModel.Feed.LIBRARY) },
+                                    pullState = libraryPull,
                                     contentPadding = listPadding,
                                 )
                             }
@@ -3525,6 +3538,9 @@ private fun BitChordApp(
                                 onAddSongs = when {
                                     page.browseId == "VLLM" && signedIn -> ({ AddSongsRequest.showForLikedMusic() })
                                     editablePlaylist != null -> ({ AddSongsRequest.showForPlaylist(editablePlaylist) })
+                                    signedIn && page.type == BrowseType.PLAYLIST -> viewModel.editablePlaylist(page.browseId)?.let { own ->
+                                        { AddSongsRequest.showForPlaylist(own) }
+                                    }
                                     else -> null
                                 },
                                 // Saving is an account action, so it isn't offered to a
@@ -4313,7 +4329,7 @@ private fun BitChordApp(
                             // Shuffle / Play / Add.
                             if ((isReleaseDetail || isLocalDetail) && detail != null) {
                                 val releaseSongs = (detail.songs as? UiState.Success)?.data.orEmpty()
-                                if (releaseSongs.isNotEmpty()) {
+                                if (releaseSongs.isNotEmpty() || (detail.type == BrowseType.PLAYLIST && signedIn)) {
                                     IconButton(onClick = { detailSearching = !detailSearching }) {
                                         Icon(
                                             if (detailSearching) Icons.Rounded.Close else BitChordIcons.Search,
@@ -4339,7 +4355,7 @@ private fun BitChordApp(
                                         tint = MaterialTheme.colorScheme.onSurface,
                                     )
                                 }
-                                if (isReleaseDetail && releaseSongs.isNotEmpty()) {
+                                if (isReleaseDetail && (releaseSongs.isNotEmpty() || detail.type == BrowseType.PLAYLIST)) {
                                     // The page's own tracks, in the order the page
                                     // shows them, so the sheet has them already and
                                     // Play, Shuffle and Open are the buttons beside
@@ -5369,8 +5385,21 @@ private fun BitChordApp(
                         }
                     }
                 },
-                onCreate = { title, privacy ->
-                    viewModel.createPlaylist(title, privacy, target)
+                onCreate = { title, privacy, coverUri ->
+                    viewModel.createPlaylist(title, privacy, target, coverUri) { created ->
+                        creatingPlaylist = false
+                        if (target == null) {
+                            dismiss()
+                            viewModel.openDetail(
+                                browseId = created.browseId,
+                                title = created.title,
+                                subtitle = created.subtitle,
+                                thumbnailUrl = created.thumbnailUrl,
+                                type = BrowseType.PLAYLIST,
+                            )
+                            AddSongsRequest.showForPlaylist(created)
+                        }
+                    }
                 },
             )
         }
@@ -5395,8 +5424,9 @@ private fun BitChordApp(
                             playlist.songs.size,
                             playlist.songs.size,
                         ),
-                        thumbnailUrl = playlist.songs.firstNotNullOfOrNull { it.thumbnailUrl }
-                            .takeUnless { playlist.isLiked },
+                        thumbnailUrl = if (playlist.isLiked) null else
+                            com.music.bitchord.data.PlaylistCovers.getCoverUri(context, playlist.id)?.toString()
+                                ?: playlist.songs.firstNotNullOfOrNull { it.thumbnailUrl },
                     )
                 }
             }
@@ -5422,7 +5452,7 @@ private fun BitChordApp(
                         )
                     }
                 },
-                onCreate = { title, _ ->
+                onCreate = { title, _, _ ->
                     OfflinePlaylists.create(title, listOfNotNull(target))
                     if (target != null) showQueueNotice(context.getString(R.string.song_added_to_playlist))
                 },
@@ -5653,6 +5683,12 @@ private fun BitChordApp(
                 onDelete = playlist?.let { p ->
                     {
                         browseActions = null
+                        if (detail?.browseId == p.browseId) {
+                            // Leave the deleted page before removing its stack entry;
+                            // the playlist list is already being refreshed in the tab.
+                            viewModel.closeDetail()
+                            selectedTab = TAB_LIBRARY
+                        }
                         viewModel.deletePlaylist(p)
                     }
                 } ?: offlineEditable?.let { p ->

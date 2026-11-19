@@ -41,39 +41,68 @@ internal fun PlaylistAddSongsHost(
     val likedMusic by AddSongsRequest.likedMusic.collectAsStateWithLifecycle()
     val open = requestOpen && (playlist != null || likedMusic)
     val typeahead by viewModel.typeaheadResults.collectAsStateWithLifecycle()
+    val history by viewModel.history.collectAsStateWithLifecycle()
+    val home by viewModel.home.collectAsStateWithLifecycle()
     var suggestions by remember { mutableStateOf<List<Song>?>(null) }
     var previousFilter by remember { mutableStateOf<SearchFilter?>(null) }
 
-    LaunchedEffect(open, playlist, likedMusic) {
+    val browseId = if (likedMusic) YtMusicRepository.LIKED_MUSIC else playlist?.browseId
+    val page = detailStack.firstOrNull { it.browseId == browseId }
+    val pageSongs = (page?.songs as? UiState.Success)?.data.orEmpty()
+    val existingIds = remember(pageSongs) { pageSongs.mapTo(HashSet()) { it.videoId } }
+    val likedIds = if (likedMusic) likeStatuses.filterValues { it == LikeStatus.LIKE }.keys else emptySet()
+    val fallbackCandidates = remember(open, browseId, likedMusic, pageSongs, library, history, home, likedIds) {
+        val likedSongs = (library as? UiState.Success)?.data?.likedSongs.orEmpty()
+        val recentSongs = (history as? UiState.Success)?.data.orEmpty()
+        val homeTracks = (home as? UiState.Success)?.data.orEmpty()
+            .flatMap { it.items }
+            .mapNotNull { item ->
+                item.videoId?.takeIf(String::isNotBlank)?.let { id ->
+                    Song(id, item.title, item.subtitle, item.thumbnailUrl)
+                }
+            }
+        (recentSongs + likedSongs + homeTracks)
+            .filterNot { it.videoId in existingIds || (likedMusic && it.videoId in likedIds) }
+            .distinctBy { it.videoId }
+            .take(30)
+    }
+
+    // If library/history/home finish loading after the sheet opened, put their
+    // tracks in the blank-query list without waiting for another playlist fetch.
+    LaunchedEffect(open, playlist?.playlistId, likedMusic, fallbackCandidates, query) {
+        if (open && query.isBlank() && suggestions.isNullOrEmpty() && fallbackCandidates.isNotEmpty()) {
+            suggestions = fallbackCandidates
+        }
+    }
+
+    LaunchedEffect(open, playlist?.playlistId, likedMusic) {
         if (!open) return@LaunchedEffect
         viewModel.onQueryChange("")
         previousFilter = filter
         viewModel.onFilterChange(SearchFilter.ALL)
         suggestions = null
 
-        val browseId = if (likedMusic) YtMusicRepository.LIKED_MUSIC else playlist?.browseId
-        val page = detailStack.firstOrNull { it.browseId == browseId }
-        val pageSongs = (page?.songs as? UiState.Success)?.data.orEmpty()
+        // Show useful rows while the playlist lookup/recommendation request runs.
+        suggestions = fallbackCandidates.takeIf { it.isNotEmpty() }
         val collection = when {
             likedMusic -> {
-                val librarySongs = (library as? UiState.Success)?.data?.likedSongs.orEmpty()
-                (pageSongs + librarySongs).distinctBy { it.videoId }
+                (pageSongs + (library as? UiState.Success)?.data?.likedSongs.orEmpty()).distinctBy { it.videoId }
             }
             browseId != null -> YtMusicRepository.allSongs(browseId).getOrNull()
                 ?.takeIf { it.isNotEmpty() }
                 ?: pageSongs
             else -> emptyList()
         }
-        val likedIds = if (likedMusic) {
-            likeStatuses.filterValues { it == LikeStatus.LIKE }.keys
-        } else {
-            emptySet()
-        }
-        suggestions = loadPlaylistRecommendations(
+        val excludedIds = existingIds + collection.mapTo(HashSet()) { it.videoId } + likedIds
+        val recommended = loadPlaylistRecommendations(
             collection = collection,
             preferred = if (likedMusic) emptyList() else page?.suggestedSongs.orEmpty(),
-            excludedVideoIds = likedIds,
+            excludedVideoIds = excludedIds,
         )
+        suggestions = (recommended + fallbackCandidates)
+            .filterNot { it.videoId in excludedIds }
+            .distinctBy { it.videoId }
+            .take(30)
     }
 
     AddSongsDialog(

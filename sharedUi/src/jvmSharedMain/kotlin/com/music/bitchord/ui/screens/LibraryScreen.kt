@@ -392,11 +392,15 @@ internal fun LibraryGridShelf(
  * same [libraryGrid] width, run down the screen instead of stopping at one row.
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun LibraryGridPage(
     shelf: HomeShelf,
     gridState: LazyGridState,
     onItemClick: (ShelfItem) -> Unit,
     onItemLongPress: (ShelfItem) -> Unit,
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+    pullState: PullToRefreshState,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     onNewPlaylist: (() -> Unit)? = null,
@@ -407,39 +411,43 @@ fun LibraryGridPage(
     // immediately rather than waiting for the row underneath to be revisited.
     val pinnedPlaylists by AppUi.host.pinnedPlaylists.collectAsStateWithLifecycle()
     val librarySort by AppUi.host.librarySort.collectAsStateWithLifecycle()
-    // Pinning wins over the default order, but an explicit sort is a stronger,
-    // more deliberate signal than a pin and is left to reorder the whole grid,
-    // pinned cards included.
     val sortedShelf = shelf.pinnedFirst(pinnedPlaylists).sortedForLibrary(librarySort)
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        val grid = libraryGrid(maxWidth - PAGE_GUTTER * 2)
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(grid.columns),
-            state = gridState,
-            contentPadding = contentPadding,
-            horizontalArrangement = Arrangement.spacedBy(LIBRARY_GRID_SPACING),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            modifier = Modifier.padding(horizontal = PAGE_GUTTER),
-        ) {
-            if (onNewPlaylist != null) {
-                item(key = "leading") {
-                    NewShelfCard(
-                        icon = BitChordIcons.Plus,
-                        label = stringResource(Res.string.new_playlist),
-                        subtitle = stringResource(Res.string.saved_to_youtube_music),
-                        onClick = onNewPlaylist,
+    PullToRefresh(
+        refreshing = refreshing,
+        onRefresh = onRefresh,
+        state = pullState,
+        modifier = modifier,
+    ) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val grid = libraryGrid(maxWidth - PAGE_GUTTER * 2)
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(grid.columns),
+                state = gridState,
+                contentPadding = contentPadding,
+                horizontalArrangement = Arrangement.spacedBy(LIBRARY_GRID_SPACING),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+            ) {
+                if (onNewPlaylist != null) {
+                    item(key = "leading") {
+                        NewShelfCard(
+                            icon = BitChordIcons.Plus,
+                            label = stringResource(Res.string.new_playlist),
+                            subtitle = stringResource(Res.string.saved_to_youtube_music),
+                            onClick = onNewPlaylist,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+                items(sortedShelf.items, key = { it.browseId ?: it.title }) { item ->
+                    ShelfCard(
+                        item = item,
+                        onClick = { onItemClick(item) },
+                        onLongPress = { onItemLongPress(item) },
                         modifier = Modifier.fillMaxWidth(),
+                        isPinned = item.browseId != null && item.browseId in pinnedPlaylists,
                     )
                 }
-            }
-            items(sortedShelf.items, key = { it.browseId ?: it.title }) { item ->
-                ShelfCard(
-                    item = item,
-                    onClick = { onItemClick(item) },
-                    onLongPress = { onItemLongPress(item) },
-                    modifier = Modifier.fillMaxWidth(),
-                    isPinned = item.browseId != null && item.browseId in pinnedPlaylists,
-                )
             }
         }
     }
@@ -454,12 +462,15 @@ fun LibraryGridPage(
  * browse ids, so an album or artist shelf never has a card that matches.
  */
 private fun HomeShelf.pinnedFirst(pinned: List<String>): HomeShelf {
-    if (pinned.isEmpty()) return this
-    val byId = items.filter { it.browseId != null }.associateBy { it.browseId }
+    val fixedItems = items.filter { it.isLikedMusicCard() || it.isNewEpisodesCard() }
+        .sortedBy { if (it.isLikedMusicCard()) 0 else 1 }
+    val ordinaryItems = items.filterNot { it.isLikedMusicCard() || it.isNewEpisodesCard() }
+    if (pinned.isEmpty()) return copy(items = fixedItems + ordinaryItems)
+    val byId = ordinaryItems.filter { it.browseId != null }.associateBy { it.browseId }
     val pinnedItems = pinned.mapNotNull { byId[it] }
-    if (pinnedItems.isEmpty()) return this
+    if (pinnedItems.isEmpty()) return copy(items = fixedItems + ordinaryItems)
     val pinnedSet = pinnedItems.toSet()
-    return copy(items = pinnedItems + items.filter { it !in pinnedSet })
+    return copy(items = fixedItems + pinnedItems + ordinaryItems.filter { it !in pinnedSet })
 }
 
 /**
@@ -468,11 +479,26 @@ private fun HomeShelf.pinnedFirst(pinned: List<String>): HomeShelf {
  */
 private fun HomeShelf.sortedForLibrary(sort: LibrarySort): HomeShelf = when (sort) {
     LibrarySort.DEFAULT -> this
-    LibrarySort.TITLE_ASC -> copy(items = items.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }))
-    LibrarySort.TITLE_DESC -> copy(
-        items = items.sortedWith(compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.title }),
-    )
+    LibrarySort.TITLE_ASC -> sortOrdinaryItems { it.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { item -> item.title }) }
+    LibrarySort.TITLE_DESC -> sortOrdinaryItems {
+        it.sortedWith(compareByDescending(String.CASE_INSENSITIVE_ORDER) { item -> item.title })
+    }
 }
+
+private fun HomeShelf.sortOrdinaryItems(sort: (List<ShelfItem>) -> List<ShelfItem>): HomeShelf {
+    val fixedItems = items.filter { it.isLikedMusicCard() || it.isNewEpisodesCard() }
+        .sortedBy { if (it.isLikedMusicCard()) 0 else 1 }
+    val ordinaryItems = items.filterNot { it.isLikedMusicCard() || it.isNewEpisodesCard() }
+    return copy(items = fixedItems + sort(ordinaryItems))
+}
+
+private fun ShelfItem.isLikedMusicCard(): Boolean =
+    browseId?.trim()?.removePrefix("VL") == YtMusicRepository.LIKED_MUSIC.removePrefix("VL")
+
+private fun ShelfItem.isNewEpisodesCard(): Boolean = title.trim().lowercase() in setOf(
+    "new episodes", "nuevos episodios", "nuevas episodios", "episodios nuevos",
+    "new podcasts", "nuevos capítulos", "nuevos capitulos",
+)
 
 /** The library feed whose cards are the account's own — see [PlaylistShelf]. */
 private const val PLAYLISTS = YtMusicRepository.PLAYLISTS_SHELF

@@ -1,6 +1,11 @@
 package com.music.bitchord.ui.components
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +36,8 @@ import androidx.compose.material.icons.Icons
 import com.music.bitchord.ui.icons.SfIcons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Public
@@ -42,6 +49,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.Text
@@ -60,10 +69,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,9 +86,12 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.UserPlaylist
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.ui.components.thumbnailBorder
+import com.music.bitchord.ui.components.InfoAlert
 import com.music.bitchord.ui.icons.BitChordIcons
 import java.util.Locale
 import kotlinx.coroutines.launch
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 
 /**
  * Where a track goes: one of the account's playlists, or a new one.
@@ -107,7 +121,7 @@ fun PlaylistPickerSheet(
     playlists: List<UserPlaylist>,
     loading: Boolean,
     onAdd: (List<UserPlaylist>) -> Unit,
-    onCreate: (String, PlaylistPrivacy) -> Unit,
+    onCreate: (String, PlaylistPrivacy, Uri?) -> Unit,
     onDismiss: () -> Unit,
     song: Song? = null,
     startCreating: Boolean = false,
@@ -159,7 +173,7 @@ fun PlaylistPickerSheet(
                     // the form, so that bar closes it instead.
                     onBack = if (startCreating) null else ({ creating = false }),
                     onClose = { closeAfter {} },
-                    onCreate = { name, privacy -> closeAfter { onCreate(name, privacy) } },
+                    onCreate = { name, privacy, cover -> closeAfter { onCreate(name, privacy, cover) } },
                     offline = offline,
                 )
             } else {
@@ -286,6 +300,10 @@ private fun SheetTopBar(
 
 @Composable
 private fun PlaylistRow(playlist: UserPlaylist, selected: Boolean, onClick: () -> Unit) {
+    val covers by com.music.bitchord.data.PlaylistCovers.covers.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val customCover = covers[com.music.bitchord.data.PlaylistCovers.normalizePlaylistId(playlist.playlistId)]
+        ?: com.music.bitchord.data.PlaylistCovers.getCoverUri(context, playlist.playlistId)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -294,7 +312,7 @@ private fun PlaylistRow(playlist: UserPlaylist, selected: Boolean, onClick: () -
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AsyncImage(
-            model = playlist.thumbnailUrl.artworkAt(ROW_ART_PX),
+            model = customCover ?: playlist.thumbnailUrl.artworkAt(ROW_ART_PX),
             contentDescription = null,
             modifier = Modifier
                 .size(44.dp)
@@ -335,26 +353,34 @@ private fun PlaylistRow(playlist: UserPlaylist, selected: Boolean, onClick: () -
  * Name and visibility, and nothing else. YouTube also takes a description,
  * which nobody fills in from a phone at the moment of saving a song.
  */
+@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 private fun NewPlaylistForm(
     onBack: (() -> Unit)?,
     onClose: () -> Unit,
-    onCreate: (String, PlaylistPrivacy) -> Unit,
+    onCreate: (String, PlaylistPrivacy, Uri?) -> Unit,
     offline: Boolean,
 ) {
     var name by remember { mutableStateOf("") }
-    var privacy by remember { mutableStateOf(PlaylistPrivacy.PRIVATE) }
+    var selectedPrivacy by remember { mutableStateOf(PlaylistPrivacy.PRIVATE) }
+    var cover by remember { mutableStateOf<Uri?>(null) }
+    var showCoverNotice by remember { mutableStateOf(false) }
+    val pickCover = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked ->
+        if (picked != null) {
+            cover = picked
+            showCoverNotice = true
+        }
+    }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
 
     // The form exists to be typed into; opening it with the keyboard already
     // up saves the tap that would otherwise always follow.
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
-
     val submit: () -> Unit = {
         if (name.isNotBlank()) {
             focusManager.clearFocus()
-            onCreate(name, privacy)
+            onCreate(name.trim(), selectedPrivacy, cover)
         }
     }
 
@@ -388,75 +414,94 @@ private fun NewPlaylistForm(
         )
         HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 22.dp, vertical = 16.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(11.dp))
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Box(
+            modifier = Modifier.fillMaxWidth().padding(top = 22.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(Modifier.weight(1f)) {
-                if (name.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.playlist_name),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                BasicTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onBackground,
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { submit() }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester),
-                )
-            }
-            if (name.isNotEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .clickable { name = "" },
+            Box(
+                    Modifier.size(176.dp).clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable {
+                            pickCover.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.clear_name),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
-                    )
+                    val selectedCover = cover
+                    if (selectedCover == null) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Rounded.AddPhotoAlternate, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(40.dp))
+                            Spacer(Modifier.height(8.dp))
+                            Text(stringResource(R.string.playlist_cover_add), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else {
+                        AsyncImage(selectedCover, stringResource(R.string.playlist_cover_change), contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        IconButton(onClick = { pickCover.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.align(Alignment.BottomEnd)) {
+                            Icon(Icons.Rounded.Edit, stringResource(R.string.playlist_cover_change), tint = MaterialTheme.colorScheme.onPrimary)
+                        }
+                        IconButton(onClick = { cover = null }, modifier = Modifier.align(Alignment.TopEnd)) {
+                            Icon(Icons.Rounded.Close, stringResource(R.string.playlist_cover_remove), tint = MaterialTheme.colorScheme.onPrimary)
+                        }
+                    }
                 }
             }
-        }
 
-        // A playlist on the device is seen by whoever holds the device.
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp).focusRequester(focusRequester),
+            placeholder = { Text(stringResource(R.string.playlist_name)) },
+            trailingIcon = if (name.isNotEmpty()) {
+                { IconButton(onClick = { name = "" }) { Icon(Icons.Rounded.Close, stringResource(R.string.clear_name)) } }
+            } else null,
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { submit() }),
+        )
+
         if (!offline) {
             SheetHeading(stringResource(R.string.who_can_see_it).uppercase(Locale.getDefault()))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 22.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 PlaylistPrivacy.entries.forEach { option ->
-                    PrivacyPill(
-                        icon = option.icon,
-                        label = option.label,
-                        selected = option == privacy,
-                        onClick = { privacy = option },
-                    )
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                            .background(if (option == selectedPrivacy) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f) else MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable { selectedPrivacy = option }.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(option.icon, null, tint = if (option == selectedPrivacy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(stringResource(option.titleRes), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                            Text(stringResource(option.subtitleRes), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        IconButton(onClick = { selectedPrivacy = option }) {
+                            Icon(
+                                if (option == selectedPrivacy) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                                contentDescription = stringResource(option.titleRes),
+                                tint = if (option == selectedPrivacy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
+            }
+            Button(onClick = submit, enabled = name.isNotBlank(), shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 20.dp).height(52.dp)) {
+                Text(stringResource(R.string.create_playlist))
             }
         }
 
+    }
+
+    if (showCoverNotice) {
+        InfoAlert(
+            hazeState = androidx.compose.runtime.remember { HazeState() },
+            title = stringResource(R.string.playlist_cover_local_notice_title),
+            description = stringResource(R.string.playlist_cover_local_notice_message),
+            onDismiss = { showCoverNotice = false },
+            inOwnWindow = true,
+            actionLabel = stringResource(R.string.accept),
+        )
     }
 }
 
@@ -563,44 +608,16 @@ private val PlaylistPrivacy.icon: ImageVector
         PlaylistPrivacy.PUBLIC -> Icons.Rounded.Public
     }
 
-/** The search filters' pill, carrying an icon ahead of its label. */
-@Composable
-private fun PrivacyPill(
-    icon: ImageVector,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val content = if (selected) {
-        MaterialTheme.colorScheme.onPrimary
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
+private val PlaylistPrivacy.titleRes: Int
+    get() = when (this) {
+        PlaylistPrivacy.PRIVATE -> R.string.playlist_privacy_private
+        PlaylistPrivacy.UNLISTED -> R.string.playlist_privacy_unlisted
+        PlaylistPrivacy.PUBLIC -> R.string.playlist_privacy_public
     }
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(percent = 50))
-            .background(
-                if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
-                },
-            )
-            .clickable(onClick = onClick)
-            .padding(start = 11.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = content,
-            modifier = Modifier.size(16.dp),
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleMedium,
-            color = content,
-        )
+
+private val PlaylistPrivacy.subtitleRes: Int
+    get() = when (this) {
+        PlaylistPrivacy.PRIVATE -> R.string.playlist_privacy_private_subtitle
+        PlaylistPrivacy.UNLISTED -> R.string.playlist_privacy_unlisted_subtitle
+        PlaylistPrivacy.PUBLIC -> R.string.playlist_privacy_public_subtitle
     }
-}
