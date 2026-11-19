@@ -220,7 +220,7 @@ class RadioViewModel(
         requestJob = viewModelScope.launch {
             _uiState.value = RadioUiState.Loading
             try {
-                val stations = repository.getStations(query, country, genre, language, limit = 40)
+                val stations = repository.getStations(query, country, genre, language, limit = 60)
                 _uiState.value = RadioUiState.Success(stations)
             } catch (cancelled: CancellationException) {
                 throw cancelled
