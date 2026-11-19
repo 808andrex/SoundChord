@@ -3350,7 +3350,6 @@ private fun BitChordApp(
                                 onTranslationLanguage = { showTranslationLanguage = true },
                                 onSources = { navigator.push(AppRoute.Sources) },
                                 onListenTogether = { navigator.push(AppRoute.ListenTogether) },
-                                onWearOs = { navigator.push(AppRoute.WearOs) },
                                 onAppLanguage = { showAppLanguage = true },
                                 onEditSignatureApi = { editingSignatureApi = true },
                                 onConfirmBitPerfect = { confirmBitPerfect = it },
@@ -4106,6 +4105,7 @@ private fun BitChordApp(
                     // Every page, in either material, uses separated floating
                     // circles over the shared gradient — no full-width pane.
                     transparentBackdrop = true,
+                    opaqueBackdrop = route == AppRoute.Settings || route is AppRoute.SettingsSection,
                     artworkPageChrome = true,
                     backButtonHazeState = hazeState,
                     centeredTitle = recognitionOpen || route == AppRoute.History ||

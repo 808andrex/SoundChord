@@ -164,6 +164,8 @@ fun FrostedTopBar(
     modifier: Modifier = Modifier,
     /** Leaves the whole bar transparent so the page's own top gradient is the backdrop. */
     transparentBackdrop: Boolean = false,
+    /** Draws a fully opaque bar and status-bar surface on pages with fixed headers. */
+    opaqueBackdrop: Boolean = false,
     /** Circular back surface and no collapsing title, for artwork-led pages. */
     artworkPageChrome: Boolean = false,
     /** Source sampled by floating top-bar surfaces when liquid glass is off. */
@@ -209,7 +211,9 @@ fun FrostedTopBar(
         modifier = modifier
             .fillMaxWidth()
             .then(
-                if (reduceDynamicBlur && !transparentBackdrop) {
+                if (opaqueBackdrop) {
+                    Modifier.background(MaterialTheme.colorScheme.background)
+                } else if (reduceDynamicBlur && !transparentBackdrop) {
                     Modifier.background(MaterialTheme.colorScheme.surface)
                 } else Modifier,
             ),
@@ -218,7 +222,7 @@ fun FrostedTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(
-                    if (centeredTitle) Modifier.statusBarsPadding()
+                    if (centeredTitle || opaqueBackdrop) Modifier.statusBarsPadding()
                     else Modifier.windowInsetsPadding(stableStatusBarInsets()),
                 )
                 .height(TopBarContentHeight),
