@@ -60,7 +60,7 @@ internal fun PersonalStationsSection(
             stringResource(R.string.radio_personal_stations),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onBackground,
         )
         Spacer(Modifier.height(12.dp))
         when (state) {
@@ -181,29 +181,29 @@ internal fun PersonalStationDetailScreen(
                 Icon(
                     Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = stringResource(R.string.radio_back),
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            Text(
-                stringResource(R.string.station_title_format, seed.title),
-                modifier = Modifier.weight(1f).padding(start = 8.dp),
-                color = Color.White,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 28.dp),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            item(key = "station_detail_title") {
+                Text(
+                    text = stringResource(R.string.station_title_format, seed.title),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 6.dp),
+                )
+            }
             item(key = "station_seed") { PersonalStationHero(seed, onPlay) }
             item(key = "station_up_next_title") {
                 Text(
-                    stringResource(R.string.station_up_next),
-                    color = Color.White,
+                    stringResource(R.string.station_recommended_songs),
+                    color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
@@ -287,7 +287,10 @@ private fun PersonalStationHero(seed: Song, onPlay: () -> Unit) {
 @Composable
 private fun StationQueueRow(song: Song, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(vertical = 6.dp),
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -298,9 +301,9 @@ private fun StationQueueRow(song: Song, onClick: () -> Unit) {
                 ?: Icon(Icons.Rounded.MusicNote, null, tint = Color.White.copy(alpha = .6f))
         }
         Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-            Text(song.title, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(song.artist, color = Color.White.copy(alpha = .68f), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(song.title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(song.artist, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        song.durationText?.let { Text(it, color = Color.White.copy(alpha = .56f), style = MaterialTheme.typography.bodySmall) }
+        song.durationText?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
     }
 }

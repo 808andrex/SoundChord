@@ -81,7 +81,7 @@
     <string name="radio_history_clear_message">This removes all recently played radio stations from this device.</string>
     <string name="radio_history_delete">Delete</string>
     <string name="radio_history_cancel">Cancel</string>
-    <string name="station_up_next">Up Next</string>
+    <string name="station_recommended_songs">Recommended songs</string>
     <string name="station_empty_suggestions">No songs suggested for this station</string>
     <string name="station_retry">Retry</string>
     <string name="station_load_error">Could not load this station.</string>
