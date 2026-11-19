@@ -26,6 +26,7 @@
     <string name="back">Volver</string>
     <string name="settings">Ajustes</string>
     <string name="settings_badge_new">NUEVO</string>
+    <string name="settings_footer_brand">SoundChord v%1$s · Made in 808andrex</string>
     <string name="settings_group_account_connection">Cuenta y conexión</string>
     <string name="settings_group_audio_playback">Audio y reproducción</string>
     <string name="settings_group_visual_multimedia">Visualización y multimedia</string>

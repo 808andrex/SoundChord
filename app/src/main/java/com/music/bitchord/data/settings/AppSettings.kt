@@ -206,6 +206,14 @@ object AppSettings {
     const val FEATURE_ACCENT_COLOR = "accent_color"
     const val FEATURE_SKIP_UNPLAYABLE = "skip_unplayable"
     const val FEATURE_ABOUT_WHATS_NEW = "about_whats_new"
+    const val FEATURE_COVER_ANIMATION_MENU = "cover_animation_menu"
+    const val FEATURE_COVER_ANIM_SLIDE = "cover_anim_slide"
+    const val FEATURE_COVER_ANIM_FLUID = "cover_anim_fluid"
+    const val FEATURE_COVER_ANIM_AUTOMIX = "cover_anim_automix"
+    const val FEATURE_CROSSFADE_ON_NEXT = "crossfade_on_next"
+    const val FEATURE_ICON_MONOCHROME = "icon_monochrome"
+    const val FEATURE_ICON_RED = "icon_red"
+    const val FEATURE_ICON_GREEN = "icon_green"
 
 
     private lateinit var prefs: SharedPreferences
@@ -460,7 +468,7 @@ object AppSettings {
     val reduceAnimation = MutableStateFlow(false)
 
     /** Cover-to-cover transition preference and its scope. */
-    val coverSlideAnimation = MutableStateFlow(true)
+    val coverSlideAnimation = MutableStateFlow(false)
     val coverFluidAnimation = MutableStateFlow(false)
     val coverMixOnlyEffects = MutableStateFlow(false)
 
@@ -1076,7 +1084,7 @@ object AppSettings {
         showNerdStats.value = prefs.getBoolean(KEY_NERD_STATS, false)
         showListenTogetherButton.value = prefs.getBoolean(KEY_LISTEN_TOGETHER_BUTTON, false)
         reduceAnimation.value = prefs.getBoolean(KEY_REDUCE_ANIMATION, false)
-        coverSlideAnimation.value = prefs.getBoolean(KEY_COVER_SLIDE_ANIMATION, true)
+        coverSlideAnimation.value = prefs.getBoolean(KEY_COVER_SLIDE_ANIMATION, false)
         coverFluidAnimation.value = prefs.getBoolean(KEY_COVER_FLUID_ANIMATION, false)
         coverMixOnlyEffects.value = prefs.getBoolean(KEY_COVER_MIX_ONLY_EFFECTS, false)
         onboardingComplete.value = prefs.getBoolean(KEY_ONBOARDING_COMPLETE, false)

@@ -132,14 +132,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.viewinterop.AndroidView
 import com.music.bitchord.AppIcon
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLinkStyles
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -266,6 +260,13 @@ fun SettingsScreen(
     val accentColorIsNew = AppSettings.FEATURE_ACCENT_COLOR !in seenNewFeatures
     val skipUnplayableIsNew = AppSettings.FEATURE_SKIP_UNPLAYABLE !in seenNewFeatures
     val aboutWhatsNewIsNew = AppSettings.FEATURE_ABOUT_WHATS_NEW !in seenNewFeatures
+    val coverAnimationMenuIsNew = AppSettings.FEATURE_COVER_ANIMATION_MENU !in seenNewFeatures
+    val coverAnimSlideIsNew = AppSettings.FEATURE_COVER_ANIM_SLIDE !in seenNewFeatures
+    val coverAnimFluidIsNew = AppSettings.FEATURE_COVER_ANIM_FLUID !in seenNewFeatures
+    val coverAnimAutomixIsNew = AppSettings.FEATURE_COVER_ANIM_AUTOMIX !in seenNewFeatures
+    val crossfadeOnNextIsNew = AppSettings.FEATURE_CROSSFADE_ON_NEXT !in seenNewFeatures
+    val playerLyricsIsNew = coverAnimationMenuIsNew || coverAnimSlideIsNew || coverAnimFluidIsNew || coverAnimAutomixIsNew
+    val audioPlaybackIsNew = crossfadeOnNextIsNew
     val accentIsDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val sessionId by AppSettings.audioSessionId.collectAsStateWithLifecycle()
     val outputPcmMode by AppSettings.outputPcmMode.collectAsStateWithLifecycle()
@@ -416,7 +417,7 @@ fun SettingsScreen(
     val version = remember(context) {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        }.getOrNull()?.substringBefore('-')?.removeSuffix(".0") ?: "1.1"
+        }.getOrNull()?.substringBefore('-')?.removeSuffix(".0") ?: "1.2"
     }
 
     // Made fresh on every pass rather than remembered: it tallies the rows
@@ -526,12 +527,14 @@ fun SettingsScreen(
                 SettingsRow(
                     iconPainter = painterResource(R.drawable.ic_settings_player_lyrics),
                     title = stringResource(R.string.settings_category_player_lyrics),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { playerLyricsIsNew },
                     onClick = { onOpenSection(SettingsCategory.PLAYER_LYRICS) },
                 )
                 RowDivider()
                 SettingsRow(
                     icon = SfIcons.PlayCircle,
                     title = stringResource(R.string.settings_category_audio_playback),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { audioPlaybackIsNew },
                     onClick = { onOpenSection(SettingsCategory.AUDIO_REPRODUCTION) },
                 )
                 RowDivider()
@@ -633,6 +636,7 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = SfIcons.PlayCircle,
                     title = stringResource(R.string.settings_category_audio_playback),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { audioPlaybackIsNew },
                     onClick = { onOpenSection(SettingsCategory.AUDIO_REPRODUCTION) },
                 )
             }
@@ -843,7 +847,11 @@ fun SettingsScreen(
                     icon = SfIcons.Animation,
                     title = stringResource(R.string.cover_animation),
                     value = coverAnimationValue,
-                    onClick = { onOpenChoice(SettingsChoiceKind.COVER_ANIMATION) },
+                    badge = stringResource(R.string.settings_badge_new).takeIf { coverAnimationMenuIsNew },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_COVER_ANIMATION_MENU)
+                        onOpenChoice(SettingsChoiceKind.COVER_ANIMATION)
+                    },
                 )
                 RowDivider()
                 SettingsRow(
@@ -1281,10 +1289,17 @@ fun SettingsScreen(
                         trailing = {
                             IosSwitch(
                                 checked = crossfadeOnSkip,
-                                onCheckedChange = AppSettings::setCrossfadeOnSkip,
+                                onCheckedChange = {
+                                    AppSettings.markFeatureSeen(AppSettings.FEATURE_CROSSFADE_ON_NEXT)
+                                    AppSettings.setCrossfadeOnSkip(it)
+                                },
                             )
                         },
-                        onClick = { AppSettings.setCrossfadeOnSkip(!crossfadeOnSkip) },
+                        badge = stringResource(R.string.settings_badge_new).takeIf { crossfadeOnNextIsNew },
+                        onClick = {
+                            AppSettings.markFeatureSeen(AppSettings.FEATURE_CROSSFADE_ON_NEXT)
+                            AppSettings.setCrossfadeOnSkip(!crossfadeOnSkip)
+                        },
                     )
                 }
             }
@@ -1595,18 +1610,20 @@ fun SettingsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = accentColor.localizedLabel(),
-                                style = MaterialTheme.typography.bodyLarge,
+                                style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                softWrap = false,
                             )
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(5.dp))
                             Box(
                                 Modifier
-                                    .size(18.dp)
+                                    .size(16.dp)
                                     .clip(CircleShape)
                                     .background(Color(accentColor.colorFor(accentIsDark)))
                                     .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f), CircleShape),
                             )
-                            Spacer(Modifier.width(4.dp))
+                            Spacer(Modifier.width(2.dp))
                             Chevron()
                         }
                     },
@@ -1631,6 +1648,12 @@ fun SettingsScreen(
                                 .clip(RoundedCornerShape(16.dp))
                                 .clickable {
                                     selectedIcon = option
+                                    when (option) {
+                                        AppIcon.Monochrome -> AppSettings.markFeatureSeen(AppSettings.FEATURE_ICON_MONOCHROME)
+                                        AppIcon.ClassicRed -> AppSettings.markFeatureSeen(AppSettings.FEATURE_ICON_RED)
+                                        AppIcon.SpotifyGreen -> AppSettings.markFeatureSeen(AppSettings.FEATURE_ICON_GREEN)
+                                        AppIcon.Default -> Unit
+                                    }
                                     AppIcon.apply(context, option)
                                 }
                                 .padding(vertical = 6.dp),
@@ -1638,24 +1661,37 @@ fun SettingsScreen(
                         ) {
                             // The preview matches the launcher's framed icon scale.
                             val preview = option.previewRes
-                            if (preview == null) {
-                                AndroidView(
-                                    factory = { ctx ->
-                                        android.widget.ImageView(ctx).apply { setImageResource(option.iconRes) }
-                                    },
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .clip(RoundedCornerShape(20.dp)),
-                                )
-                            } else {
-                                Image(
-                                    painter = painterResource(preview),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Fit,
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .scale(1.5f),
-                                )
+                            Box(Modifier.size(68.dp), contentAlignment = Alignment.Center) {
+                                if (preview == null) {
+                                    AndroidView(
+                                        factory = { ctx ->
+                                            android.widget.ImageView(ctx).apply { setImageResource(option.iconRes) }
+                                        },
+                                        modifier = Modifier
+                                            .size(64.dp)
+                                            .clip(RoundedCornerShape(20.dp)),
+                                    )
+                                } else {
+                                    Image(
+                                        painter = painterResource(preview),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier
+                                            .size(64.dp)
+                                            .scale(1.5f),
+                                    )
+                                }
+                                val featureKey = when (option) {
+                                    AppIcon.Monochrome -> AppSettings.FEATURE_ICON_MONOCHROME
+                                    AppIcon.ClassicRed -> AppSettings.FEATURE_ICON_RED
+                                    AppIcon.SpotifyGreen -> AppSettings.FEATURE_ICON_GREEN
+                                    AppIcon.Default -> null
+                                }
+                                if (featureKey != null && featureKey !in seenNewFeatures) {
+                                    Box(Modifier.align(Alignment.TopEnd).padding(2.dp)) {
+                                        Badge(stringResource(R.string.settings_badge_new))
+                                    }
+                                }
                             }
                             Text(
                                 text = stringResource(option.labelRes),
@@ -1706,7 +1742,11 @@ fun SettingsScreen(
                         icon = SfIcons.Animation,
                         title = coverAnimationTitle,
                         value = coverAnimationValue,
-                        onClick = { onOpenChoice(SettingsChoiceKind.COVER_ANIMATION) },
+                        badge = stringResource(R.string.settings_badge_new).takeIf { coverAnimationMenuIsNew },
+                        onClick = {
+                            AppSettings.markFeatureSeen(AppSettings.FEATURE_COVER_ANIMATION_MENU)
+                            onOpenChoice(SettingsChoiceKind.COVER_ANIMATION)
+                        },
                     )
                 }
             }
@@ -2324,39 +2364,13 @@ fun SettingsScreen(
         }
 
         if (rootHome) {
-        Column(
+        Text(
+            text = stringResource(R.string.settings_footer_brand, version),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = buildAnnotatedString {
-                    append("SoundChord v$version  ")
-                    val linkStyles = TextLinkStyles(
-                        style = SpanStyle(
-                            color = MaterialTheme.colorScheme.primary,
-                            textDecoration = TextDecoration.Underline,
-                        ),
-                    )
-                    withLink(LinkAnnotation.Url("https://github.com/808andrex/SoundChord", linkStyles)) {
-                        append("GitHub")
-                    }
-                    append("  ")
-                    withLink(LinkAnnotation.Url("https://github.com/808andrex", linkStyles)) {
-                        append("Developer")
-                    }
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = "Made in 808andrex",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
+        )
         }
         }
     }
@@ -3170,6 +3184,7 @@ internal fun SettingsRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = title,
+                    modifier = Modifier.weight(1f, fill = false),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
@@ -3215,6 +3230,7 @@ private fun CoverAnimationToggle(
     title: Int,
     subtitle: Int,
     checked: Boolean,
+    badge: String? = null,
     enabled: Boolean = true,
     onChange: (Boolean) -> Unit,
 ) {
@@ -3222,6 +3238,7 @@ private fun CoverAnimationToggle(
         icon = icon,
         title = stringResource(title),
         subtitle = stringResource(subtitle),
+        badge = badge,
         enabled = enabled,
         trailing = { IosSwitch(checked = checked, onCheckedChange = onChange, enabled = enabled) },
         onClick = { onChange(!checked) },
@@ -3486,6 +3503,10 @@ fun SettingsChoicePage(
     modifier: Modifier = Modifier,
     onSpotifyCanvasAuth: () -> Unit = {},
 ) {
+    val seenNewFeatures by AppSettings.seenNewFeatures.collectAsStateWithLifecycle()
+    val coverAnimSlideIsNew = AppSettings.FEATURE_COVER_ANIM_SLIDE !in seenNewFeatures
+    val coverAnimFluidIsNew = AppSettings.FEATURE_COVER_ANIM_FLUID !in seenNewFeatures
+    val coverAnimAutomixIsNew = AppSettings.FEATURE_COVER_ANIM_AUTOMIX !in seenNewFeatures
     Column(
         modifier
             .fillMaxWidth()
@@ -3604,7 +3625,11 @@ fun SettingsChoicePage(
                         title = R.string.cover_animation_enabled,
                         subtitle = R.string.cover_animation_enabled_subtitle,
                         checked = slide,
-                        onChange = AppSettings::setCoverSlideAnimation,
+                        badge = stringResource(R.string.settings_badge_new).takeIf { coverAnimSlideIsNew },
+                        onChange = {
+                            AppSettings.markFeatureSeen(AppSettings.FEATURE_COVER_ANIM_SLIDE)
+                            AppSettings.setCoverSlideAnimation(it)
+                        },
                     )
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         RowDivider()
@@ -3614,7 +3639,11 @@ fun SettingsChoicePage(
                             subtitle = if (slide) R.string.fluid_cover_effect_subtitle else R.string.cover_fluid_locked,
                             checked = fluid,
                             enabled = slide,
-                            onChange = AppSettings::setCoverFluidAnimation,
+                            badge = stringResource(R.string.settings_badge_new).takeIf { coverAnimFluidIsNew },
+                            onChange = {
+                                AppSettings.markFeatureSeen(AppSettings.FEATURE_COVER_ANIM_FLUID)
+                                AppSettings.setCoverFluidAnimation(it)
+                            },
                         )
                     }
                     RowDivider()
@@ -3624,7 +3653,11 @@ fun SettingsChoicePage(
                         subtitle = if (slide) R.string.animate_only_during_mix_subtitle else R.string.cover_fluid_locked,
                         checked = mixOnly,
                         enabled = slide,
-                        onChange = AppSettings::setCoverMixOnlyEffects,
+                        badge = stringResource(R.string.settings_badge_new).takeIf { coverAnimAutomixIsNew },
+                        onChange = {
+                            AppSettings.markFeatureSeen(AppSettings.FEATURE_COVER_ANIM_AUTOMIX)
+                            AppSettings.setCoverMixOnlyEffects(it)
+                        },
                     )
                 }
                 SettingsGroup(header = stringResource(R.string.animated_cover_section)) {
