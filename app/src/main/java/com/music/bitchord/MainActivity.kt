@@ -580,6 +580,7 @@ private fun BitChordApp(
     var recognitionOpen by rememberSaveable { mutableStateOf(false) }
     var showRecognitionHistoryClearConfirmation by remember { mutableStateOf(false) }
     var showRadioHistoryClearConfirmation by remember { mutableStateOf(false) }
+    var radioSubpageBack by remember { mutableStateOf<(() -> Unit)?>(null) }
     var recognitionFabVisible by rememberSaveable { mutableStateOf(true) }
     // Explore loads the first time it's shown, not at launch beside Home.
     LaunchedEffect(selectedTab) {
@@ -3740,6 +3741,8 @@ private fun BitChordApp(
                             )
                             TAB_RADIO -> RadioScreen(
                                 currentSong = player.song,
+                                contentPadding = listPadding,
+                                onSubpageBackHandlerChanged = { radioSubpageBack = it },
                                 onPlayStation = { song ->
                                     // QueueTimeline copies QueueSource.id over the Song field.
                                     // Preserve Radio's identity so the player star can persist it.
@@ -4144,6 +4147,7 @@ private fun BitChordApp(
                     // offered on anything pushed over a tab.
                     onBack = when {
                         recognitionOpen -> ({ recognitionOpen = false; MusicRecognitionService.reset() })
+                        selectedTab == TAB_RADIO && route == null && radioSubpageBack != null -> radioSubpageBack
                         route != null || detail != null || selectedMoodGenre != null -> goBack
                         else -> null
                     },
@@ -4527,6 +4531,7 @@ private fun BitChordApp(
                     }
                     navigator.clear()
                     viewModel.closeMoodGenre()
+                    radioSubpageBack = null
                     selectedTab = index
 
                     // Every search tab tap resets the field, focuses it, and opens

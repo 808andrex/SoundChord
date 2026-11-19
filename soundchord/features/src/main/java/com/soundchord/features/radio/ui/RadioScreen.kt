@@ -23,9 +23,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -33,7 +33,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Radio
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -45,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -130,6 +130,8 @@ fun RadioScreen(
     stationsViewModel: PersonalStationsViewModel? = null,
     searchQuery: String? = null,
     onStationLongPress: (RadioStation, Boolean, Rect, () -> Unit) -> Unit = { _, _, _, _ -> },
+    contentPadding: PaddingValues = PaddingValues(),
+    onSubpageBackHandlerChanged: ((() -> Unit)?) -> Unit = {},
 ) {
     val context = LocalContext.current
     val vm = viewModel ?: composeViewModel(factory = remember(context) { RadioViewModel.Factory(context) })
@@ -179,6 +181,17 @@ fun RadioScreen(
         else -> null
     }
     val detailStateActive = detailTitle != null
+    val subpageBack = remember(detailStateActive, showAllFavorites, vm) {
+        when {
+            detailStateActive -> ({
+                vm.onGenreChanged(null)
+                vm.onCountryCodeChanged(null)
+            })
+            showAllFavorites -> ({ showAllFavorites = false })
+            else -> null
+        }
+    }
+    SideEffect { onSubpageBackHandlerChanged(subpageBack) }
     BackHandler(enabled = selectedStationSeed != null || showAllFavorites || detailStateActive) {
         if (selectedStationSeed != null) {
             selectedStationSeed = null
@@ -204,7 +217,12 @@ fun RadioScreen(
 
     LazyColumn(
         modifier = if (searchQuery != null) Modifier.fillMaxWidth().heightIn(max = 1600.dp) else Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = if (searchQuery == null) contentPadding.calculateTopPadding() else 8.dp,
+            bottom = if (searchQuery == null) contentPadding.calculateBottomPadding() else 24.dp,
+        ),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         if (searchQuery != null && searchQuery.isNotBlank()) {
@@ -231,7 +249,7 @@ fun RadioScreen(
             // The integrated search results above are the whole page in this mode.
         } else if (showAllFavorites) {
             item(key = "favorites_header") {
-                RadioSubpageHeader(stringResource(R.string.radio_favourites)) { showAllFavorites = false }
+                RadioSubpageTitle(stringResource(R.string.radio_favourites))
             }
             if (favorites.isEmpty()) {
                 item { Text(stringResource(R.string.radio_favorites_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -246,10 +264,7 @@ fun RadioScreen(
             }
         } else if (detailStateActive) {
             item(key = "detail_header") {
-                RadioSubpageHeader(stringResource(R.string.radio_stations_for, detailTitle.orEmpty())) {
-                    vm.onGenreChanged(null)
-                    vm.onCountryCodeChanged(null)
-                }
+                RadioSubpageTitle(stringResource(R.string.radio_stations_for, detailTitle.orEmpty()))
             }
             when (state) {
                 RadioUiState.Loading -> item { Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
@@ -267,14 +282,22 @@ fun RadioScreen(
                 }
             }
         } else {
-            item(key = "title") { Text(stringResource(R.string.radio_title), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp, bottom = 10.dp)) }
+            item(key = "title") {
+                Text(
+                    text = stringResource(R.string.radio_title),
+                    style = MaterialTheme.typography.displayLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 14.dp),
+                )
+            }
 
             item(key = "favorites") {
                 Column {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         SectionTitle(stringResource(R.string.radio_favourites), prominent = true, modifier = Modifier.weight(1f))
                         TextButton(onClick = { showAllFavorites = true }) {
-                            Text(stringResource(R.string.radio_show_all), color = Color.White)
+                            Text(stringResource(R.string.radio_show_all), color = MaterialTheme.colorScheme.primary)
                         }
                     }
                     Spacer(Modifier.height(4.dp))
@@ -366,27 +389,14 @@ fun RadioScreen(
 }
 
 @Composable
-private fun RadioSubpageHeader(title: String, onBack: () -> Unit) {
-    Column(Modifier.statusBarsPadding().padding(top = 8.dp, bottom = 8.dp)) {
-        Surface(
-            modifier = Modifier.size(52.dp),
-            shape = CircleShape,
-            color = Color.White.copy(alpha = .08f),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = .22f)),
-            onClick = onBack,
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = stringResource(R.string.radio_back),
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp),
-                )
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-        Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color.White)
-    }
+private fun RadioSubpageTitle(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onBackground,
+        modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
+    )
 }
 
 @Composable
@@ -396,7 +406,7 @@ private fun SectionTitle(title: String, prominent: Boolean = false, modifier: Mo
         modifier = modifier,
         style = if (prominent) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
         fontWeight = FontWeight.Bold,
-        color = Color.White,
+        color = MaterialTheme.colorScheme.onSurface,
     )
 }
 
@@ -446,7 +456,7 @@ private fun FavoriteStationCard(station: RadioStation, isFavorite: Boolean, onFa
             modifier = Modifier.padding(top = 10.dp),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Medium,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -514,13 +524,13 @@ private fun StationRow(station: RadioStation, isPlaying: Boolean, isFavorite: Bo
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text(station.name, style = MaterialTheme.typography.bodyLarge, fontWeight = if (isPlaying) FontWeight.SemiBold else FontWeight.Normal, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(stationMetadata(station), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = .72f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (isPlaying) Text(stringResource(R.string.radio_now_playing), style = MaterialTheme.typography.labelSmall, color = Color.White)
+                    Text(station.name, style = MaterialTheme.typography.bodyLarge, fontWeight = if (isPlaying) FontWeight.SemiBold else FontWeight.Normal, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(stationMetadata(station), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (isPlaying) Text(stringResource(R.string.radio_now_playing), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
             }
             IconButton(onClick = onFavorite) {
-                Icon(if (isFavorite) BitChordIcons.StarFilled else BitChordIcons.Star, stringResource(if (isFavorite) R.string.radio_remove_favorite else R.string.radio_add_favorite), tint = if (isFavorite) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(if (isFavorite) BitChordIcons.StarFilled else BitChordIcons.Star, stringResource(if (isFavorite) R.string.radio_remove_favorite else R.string.radio_add_favorite), tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

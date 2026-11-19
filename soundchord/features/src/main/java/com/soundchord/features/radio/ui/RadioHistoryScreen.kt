@@ -212,7 +212,7 @@ private fun RadioHistoryRow(station: RadioStation, favorite: Boolean, onPlay: ()
             } else Icon(Icons.Rounded.Radio, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Column(Modifier.weight(1f).padding(start = 12.dp, end = 4.dp)) {
-            Text(station.name, color = Color.White, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(station.name, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val metadata = listOfNotNull(
                 station.country,
                 station.codec?.uppercase(),
@@ -221,7 +221,7 @@ private fun RadioHistoryRow(station: RadioStation, favorite: Boolean, onPlay: ()
             Text(metadata, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         IconButton(onClick = onFavorite, modifier = Modifier.size(44.dp)) {
-            Icon(if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder, stringResource(if (favorite) R.string.radio_remove_favorite else R.string.radio_add_favorite), tint = if (favorite) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder, stringResource(if (favorite) R.string.radio_remove_favorite else R.string.radio_add_favorite), tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

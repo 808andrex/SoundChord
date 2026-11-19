@@ -262,7 +262,7 @@ private fun RecognitionHistoryRow(
         Column(Modifier.weight(1f).padding(start = 12.dp, end = 4.dp)) {
             Text(
                 text = entry.title,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
