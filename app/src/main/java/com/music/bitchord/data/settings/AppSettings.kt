@@ -476,6 +476,9 @@ object AppSettings {
     /** Music videos play as their audio version — see [com.music.bitchord.playback.MusicOnlyPlayback]. */
     val preferMusicOnly = MutableStateFlow(false)
 
+    /** Skip tracks the resolver has determined have no playable source. */
+    val skipUnplayableTracks = MutableStateFlow(true)
+
     /** Home's Recents shelf. */
     val hideRecents = MutableStateFlow(false)
 
@@ -1053,6 +1056,7 @@ object AppSettings {
         swipeToPlayNext.value = prefs.getBoolean(KEY_SWIPE_TO_PLAY_NEXT, false)
         dontRepeatSuggestions.value = prefs.getBoolean(KEY_DONT_REPEAT_SUGGESTIONS, false)
         preferMusicOnly.value = prefs.getBoolean(KEY_PREFER_MUSIC_ONLY, false)
+        skipUnplayableTracks.value = prefs.getBoolean(KEY_SKIP_UNPLAYABLE_TRACKS, true)
         hideRecents.value = prefs.getBoolean(KEY_HIDE_RECENTS, false)
         hideHomeVideos.value = prefs.getBoolean(KEY_HIDE_HOME_VIDEOS, false)
         hideTopPicks.value = prefs.getBoolean(KEY_HIDE_TOP_PICKS, false)
@@ -1506,6 +1510,11 @@ object AppSettings {
     fun setPreferMusicOnly(value: Boolean) {
         preferMusicOnly.value = value
         prefs.edit().putBoolean(KEY_PREFER_MUSIC_ONLY, value).apply()
+    }
+
+    fun setSkipUnplayableTracks(value: Boolean) {
+        skipUnplayableTracks.value = value
+        prefs.edit().putBoolean(KEY_SKIP_UNPLAYABLE_TRACKS, value).apply()
     }
 
     fun setHideRecents(value: Boolean) {
@@ -2341,6 +2350,7 @@ object AppSettings {
     private const val KEY_SWIPE_TO_PLAY_NEXT = "swipe_to_play_next"
     private const val KEY_DONT_REPEAT_SUGGESTIONS = "dont_repeat_suggestions"
     private const val KEY_PREFER_MUSIC_ONLY = "prefer_music_only"
+    private const val KEY_SKIP_UNPLAYABLE_TRACKS = "skip_unplayable_tracks"
     private const val KEY_HIDE_RECENTS = "hide_recents"
     private const val KEY_HIDE_HOME_VIDEOS = "hide_home_videos"
     private const val KEY_HIDE_TOP_PICKS = "hide_top_picks"

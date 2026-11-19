@@ -4489,10 +4489,10 @@ class PlaybackService : MediaLibraryService() {
      *
      * Two things get past here.
      *
-     * A [verdict] always does, unconditionally and exactly as it did before this
-     * function existed: the resolver has established the track cannot be served
-     * by anyone, and a playlist with a run of age-gated or region-locked tracks
-     * in it should walk straight through them.
+     * A [verdict] does when [AppSettings.skipUnplayableTracks] is enabled: the
+     * resolver has established the track cannot be served by anyone, and a
+     * playlist with a run of age-gated or region-locked tracks should walk
+     * straight through them by default.
      *
      * Everything else gets past only when the track never made a sound. The
      * error itself is not consulted — a 403, a dead socket, a codec that will
@@ -4514,8 +4514,8 @@ class PlaybackService : MediaLibraryService() {
      * leaves the error on the player, which is what puts a message on screen,
      * and leaves the queue where it was. The count only resets when something
      * actually plays, so a working track anywhere in a bad patch restores the
-     * full allowance. Verdicts are exempt: they are a statement about one track
-     * rather than a guess, and their skipping is behaviour that already works.
+     * full allowance. Temporary failures still use this bounded rule; the new
+     * preference only controls deterministic resolver verdicts.
      */
     private fun skipReason(
         verdict: String?,
@@ -4523,7 +4523,7 @@ class PlaybackService : MediaLibraryService() {
         neverStarted: Boolean,
         attempts: Int,
     ): String? {
-        if (verdict != null) return verdict
+        if (verdict != null) return verdict.takeIf { AppSettings.skipUnplayableTracks.value }
         if (!neverStarted) return null
         if (consecutiveErrorSkips >= MAX_CONSECUTIVE_SKIPS) {
             TrackLog.w(
