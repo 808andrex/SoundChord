@@ -262,6 +262,10 @@ fun SettingsScreen(
     val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
     val appFont by AppSettings.appFont.collectAsStateWithLifecycle()
     val accentColor by AppSettings.accentColor.collectAsStateWithLifecycle()
+    val seenNewFeatures by AppSettings.seenNewFeatures.collectAsStateWithLifecycle()
+    val accentColorIsNew = AppSettings.FEATURE_ACCENT_COLOR !in seenNewFeatures
+    val skipUnplayableIsNew = AppSettings.FEATURE_SKIP_UNPLAYABLE !in seenNewFeatures
+    val aboutWhatsNewIsNew = AppSettings.FEATURE_ABOUT_WHATS_NEW !in seenNewFeatures
     val accentIsDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val sessionId by AppSettings.audioSessionId.collectAsStateWithLifecycle()
     val outputPcmMode by AppSettings.outputPcmMode.collectAsStateWithLifecycle()
@@ -534,6 +538,7 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = SfIcons.Appearance,
                     title = stringResource(R.string.settings_category_appearance),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { accentColorIsNew },
                     onClick = { onOpenSection(SettingsCategory.APP_APPEARANCE) },
                 )
             }
@@ -542,7 +547,11 @@ fun SettingsScreen(
                 SettingsRow(
                     iconPainter = painterResource(R.drawable.ic_settings_library_content),
                     title = stringResource(R.string.settings_category_library_content),
-                    onClick = { onOpenSection(SettingsCategory.LIBRARY_CONTENT) },
+                    badge = stringResource(R.string.settings_badge_new).takeIf { skipUnplayableIsNew },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_SKIP_UNPLAYABLE)
+                        onOpenSection(SettingsCategory.LIBRARY_CONTENT)
+                    },
                 )
                 RowDivider()
                 SettingsRow(
@@ -576,7 +585,11 @@ fun SettingsScreen(
                 SettingsRow(
                     iconPainter = painterResource(R.drawable.ic_settings_about),
                     title = stringResource(R.string.settings_category_about),
-                    onClick = onOpenAbout,
+                    badge = stringResource(R.string.settings_badge_new).takeIf { aboutWhatsNewIsNew },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_ABOUT_WHATS_NEW)
+                        onOpenAbout()
+                    },
                 )
             }
         }
@@ -629,6 +642,7 @@ fun SettingsScreen(
                 R.string.settings_category_appearance,
                 R.string.theme,
                 R.string.font,
+                R.string.accent_color,
                 R.string.app_icon,
                 R.string.liquid_glass,
                 R.string.glass_performance,
@@ -647,6 +661,7 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = SfIcons.Appearance,
                     title = stringResource(R.string.settings_category_appearance),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { accentColorIsNew },
                     onClick = { onOpenSection(SettingsCategory.APP_APPEARANCE) },
                 )
             }
@@ -673,7 +688,11 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = SfIcons.LibraryMusic,
                     title = stringResource(R.string.settings_category_library_content),
-                    onClick = { onOpenSection(SettingsCategory.LIBRARY_CONTENT) },
+                    badge = stringResource(R.string.settings_badge_new).takeIf { skipUnplayableIsNew },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_SKIP_UNPLAYABLE)
+                        onOpenSection(SettingsCategory.LIBRARY_CONTENT)
+                    },
                 )
             }
         }
@@ -728,7 +747,11 @@ fun SettingsScreen(
                 SettingsRow(
                     iconPainter = painterResource(R.drawable.ic_settings_about),
                     title = stringResource(R.string.settings_category_about),
-                    onClick = onOpenAbout,
+                    badge = stringResource(R.string.settings_badge_new).takeIf { aboutWhatsNewIsNew },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_ABOUT_WHATS_NEW)
+                        onOpenAbout()
+                    },
                 )
             }
         }
@@ -1464,13 +1487,20 @@ fun SettingsScreen(
                     icon = SfIcons.PlayNext,
                     title = skipUnplayableTitle,
                     subtitle = stringResource(R.string.skip_unplayable_tracks_subtitle),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { skipUnplayableIsNew },
                     trailing = {
                         IosSwitch(
                             checked = skipUnplayableTracks,
-                            onCheckedChange = AppSettings::setSkipUnplayableTracks,
+                            onCheckedChange = {
+                                AppSettings.markFeatureSeen(AppSettings.FEATURE_SKIP_UNPLAYABLE)
+                                AppSettings.setSkipUnplayableTracks(it)
+                            },
                         )
                     },
-                    onClick = { AppSettings.setSkipUnplayableTracks(!skipUnplayableTracks) },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_SKIP_UNPLAYABLE)
+                        AppSettings.setSkipUnplayableTracks(!skipUnplayableTracks)
+                    },
                 )
             }
             val canvasSetupTitle = stringResource(R.string.canvas_cover_settings)
@@ -1556,7 +1586,11 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = SfIcons.BlurOn,
                     title = accentTitle,
-                    onClick = { onOpenChoice(SettingsChoiceKind.ACCENT) },
+                    badge = stringResource(R.string.settings_badge_new).takeIf { accentColorIsNew },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_ACCENT_COLOR)
+                        onOpenChoice(SettingsChoiceKind.ACCENT)
+                    },
                     trailing = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(

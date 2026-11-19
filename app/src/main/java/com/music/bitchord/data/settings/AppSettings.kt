@@ -202,6 +202,10 @@ enum class SongSort {
  * no restart, no rebinding.
  */
 object AppSettings {
+    const val FEATURE_ACCENT_COLOR = "accent_color"
+    const val FEATURE_SKIP_UNPLAYABLE = "skip_unplayable"
+    const val FEATURE_ABOUT_WHATS_NEW = "about_whats_new"
+
 
     private lateinit var prefs: SharedPreferences
 
@@ -434,6 +438,7 @@ object AppSettings {
     val themeMode = MutableStateFlow(ThemeMode.DARK)
     val appFont = MutableStateFlow(AppFont.DEFAULT)
     val accentColor = MutableStateFlow(AccentColor.DEFAULT)
+    val seenNewFeatures = MutableStateFlow<Set<String>>(emptySet())
 
     /** Keep playing similar music once the queue runs out. */
     val autoplay = MutableStateFlow(true)
@@ -1003,6 +1008,7 @@ object AppSettings {
 
     private fun readAll() {
         migrateSingleQuality()
+        seenNewFeatures.value = prefs.getStringSet(KEY_SEEN_NEW_FEATURES, emptySet()).orEmpty().toSet()
         audioQualityWifi.value = readQuality(KEY_QUALITY_WIFI)
         audioQualityCellular.value = readQuality(KEY_QUALITY_CELLULAR)
         upgradeLengthSlackSeconds.value = prefs.getInt(
@@ -1471,6 +1477,15 @@ object AppSettings {
         accentColor.value = value
         prefs.edit().putString(KEY_ACCENT_COLOR, value.name).apply()
     }
+
+    fun markFeatureSeen(featureKey: String) {
+        if (featureKey in seenNewFeatures.value) return
+        val updated = seenNewFeatures.value + featureKey
+        seenNewFeatures.value = updated
+        prefs.edit().putStringSet(KEY_SEEN_NEW_FEATURES, updated).apply()
+    }
+
+    fun isFeatureNew(featureKey: String): Boolean = featureKey !in seenNewFeatures.value
 
     fun setReduceAnimation(value: Boolean) {
         reduceAnimation.value = value
@@ -2367,6 +2382,7 @@ object AppSettings {
     private const val KEY_THEME = "theme_mode"
     private const val KEY_APP_FONT = "app_font"
     private const val KEY_ACCENT_COLOR = "accent_color"
+    private const val KEY_SEEN_NEW_FEATURES = "seen_new_features"
     private const val KEY_AUTOPLAY = "autoplay"
     private const val KEY_SHUFFLE_ENABLED = "shuffle_enabled"
     private const val KEY_REPEAT_MODE = "repeat_mode"
