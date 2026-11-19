@@ -18,7 +18,7 @@
 
 <br/>
 
-[**Descargar APK**](#download) · [**Características**](#features) · [**Novedades v1.1.0**](#whats-new) · [**Arquitectura**](#architecture) · [**Créditos**](#contributing) · [**Aviso Legal**](#disclaimer)
+[**Descargar APK**](#download) · [**Características**](#features) · [**Novedades v1.2.0**](#whats-new) · [**Arquitectura**](#architecture) · [**Créditos**](#contributing) · [**Aviso Legal**](#disclaimer)
 
 </div>
 
@@ -37,7 +37,7 @@
 
 #### Reproducción y Audio
 - **Streaming de alta fidelidad** — Búsqueda y reproducción desde YouTube Music con soporte para formatos sin pérdidas (FLAC / Lossless / DSD) en módulos compatibles.
-- **Radio en Vivo & Menú Contextual** — Integración completa con Radio Browser por género y país, más menús flotantes por pulsación larga para favoritos, compartir y ficha técnica del stream.
+- **Radio Global & Historial** — Búsqueda global en Radio Browser con rotación automática de servidores espejo, estaciones personalizadas con recomendaciones, menús contextuales e historial reciente.
 - **Reconocimiento musical (Shazam) + Historial** — Identificación de canciones en tiempo real mediante el micrófono con historial local persistente, buscador instantáneo y reproducción directa.
 - **Crossfade y AutoMix inteligente** — Transiciones suaves de 0 a 12 segundos y fundido cruzado al saltar pistas sincronizado con el punto de mezcla DJ.
 - **Sesiones Escuchar Juntos con Control Remoto** — Modo de silenciado local para actuar únicamente como controlador remoto sin interrumpir la reproducción activa.
@@ -47,12 +47,12 @@
     <td width="50%" valign="top">
 
 #### Experiencia e Interfaz
-- **Diseño "Liquid Glass" (Glassmorphism)** — Tarjetas flotantes translúcidas para *Salida de audio*, controles del reproductor, diálogos de calidad y menús contextuales.
+- **Onboarding Interactivo & Color de Acento Global** — Flujo inicial de 4 pasos con selección inteligente de artistas, vista previa en vivo de tema/cristal, paleta de colores de acento dinámicos e iconos alternativos (*Monocromo*, *Rojo clásico*, *Verde Spotify*).
+- **Diseño "Liquid Glass" (Glassmorphism)** — Tarjetas flotantes translúcidas adaptativas a Tema Claro y Oscuro para *Salida de audio*, controles del reproductor, diálogos de calidad y menús contextuales.
 - **Transiciones Fluidas de Carátula (AGSL)** — Shader de disolución líquida en Android 13+, precarga inteligente de portadas vecinas, portadas animadas y Spotify Canvas.
 - **Gestión Rápida de Cola y Playlists** — Buscador modal con sugerencias inteligentes para añadir canciones directamente a la cola, a tus playlists propias o a *Música que me gusta*.
 - **Letras sincronizadas palabra por palabra** — Animación tipo Apple Music con soporte multi-proveedor (Musixmatch, LRCLIB, BiniLyrics, Genius).
-- **Resumen Anual / Replay & Temas Dinámicos** — Historias interactivas con tarjetas compartibles bajo identidad *SoundChord* y extracción de paletas Material 3 por carátula.
-- **Actualizador OTA integrado** — Detección automática e instalación directa desde los lanzamientos firmados de `808andrex/SoundChord`.
+- **Actualizador OTA & Pantalla *Acerca de*** — Detección automática desde GitHub Releases con notas de versión integradas, historial de cambios e instalación directa.
 
     </td>
   </tr>
@@ -64,15 +64,15 @@
 
 <div align="center">
 
-<h1><a id="whats-new"></a>Novedades en v1.1.0</h1>
+<h1><a id="whats-new"></a>Novedades en v1.2.0</h1>
 
 </div>
 
-- **Historial de Reconocimiento Musical:** Acceso rápido desde *Identificar canción*, almacenamiento automático local con fecha/hora, agrupación cronológica por mes/año, buscador instantáneo y gestión completa.
-- **Transiciones Animadas de Portada y Fundido Cruzado:** Nuevo shader líquido AGSL en carátulas, precarga de pistas vecinas, crossfade configurable en saltos manuales y subpantalla dedicada *Animación de portada* en *Ajustes → Apariencia*.
-- **Menú Contextual en Radio:** Pulsación larga en cualquier emisora para previsualizar país, códec y bitrate, gestionar favoritos, compartir o inspeccionar la URL del stream.
-- **Selector Flotante *Salida de Audio* y Cola Rediseñada:** Nuevo panel compacto *Liquid Glass* con píldora de volumen interactiva, acceso directo a *Cast* y *Flujo de procesamiento de audio*, controles superiores de cola (*Aleatorio*, *Repetir*, *AutoPlay*, *AutoMix*) y diálogo **`+ Añadir canciones a la cola`**.
-- **Gestión Rápida en Playlists y Replay *SoundChord*:** Botón `+` funcional con recomendaciones contextuales en playlists propias y *Música que me gusta*, botones dobles (*Reproducir* y *Aleatorio*) en playlists externas, e identidad visual **SoundChord** en las historias y tarjetas compartidas de *Replay*.
+- **Nuevo Flujo de Bienvenida (Onboarding de 4 Pasos):** Configuración inicial guiada con identidad para *Escuchar juntos*, selección interactiva de artistas favoritos (con sugerencias dinámicas *«Similares a...»* que alimentan tus recomendaciones de Inicio), vista previa en vivo (*Hazlo tuyo*) para probar **Tema**, **Cristal** y **Color de acento**, y conexión directa con YouTube Music.
+- **Color de Acento Global e Iconos Alternativos:** Nuevo selector en *Apariencia → Tema e icono* con paleta de colores dinámicos en toda la interfaz, además de 3 nuevos iconos de aplicación (**Monocromo**, **Rojo clásico** y **Verde Spotify**).
+- **Historial de Radio y Búsqueda Global Mejorada:** Acceso rápido a emisoras escuchadas recientemente desde *Radio* y solución de búsqueda internacional en Radio Browser mediante rotación automática de mirrors (`de1`, `de2`, `fi1`, `nl1`) y filtros globales.
+- **Pulido Integral de Tema Claro (*Light Mode*) y Cabeceras:** Adaptación completa de contraste en *Radio*, búsqueda, estaciones personalizadas (*Canciones recomendadas*), historiales, botón flotante de Shazam y diálogos *Liquid Glass*, junto con cabeceras alineadas entre *Explorar*, *Radio* y *Biblioteca*.
+- **Ajustes Reorganizados, Badges «NUEVO» y Pantalla *Acerca de*:** Categorías más claras con distintivos interactivos que desaparecen al explorar cada novedad, y nueva vista *Información de SoundChord* con actualizador integrado y notas de versión.
 
 ---
 
@@ -89,13 +89,13 @@ SoundChord está construido bajo una arquitectura **Kotlin Multiplatform / Andro
 - **Estructura Modular:**
   - `:app` — Punto de entrada Android, navegación principal, integración de servicios y vistas específicas de plataforma.
   - `:shared` & `:sharedUi` — Lógica compartida, componentes de interfaz del reproductor, recursos multiplataforma y modelos de dominio.
-  - `:soundchord:features` — Módulo dedicado para las extensiones exclusivas de SoundChord (*Radio Browser*, *Shazam & Historial*, diálogos *Liquid Glass* y selector de *Salida de audio*).
+  - `:soundchord:features` — Módulo dedicado para las extensiones exclusivas de SoundChord (*Radio Browser & Historial*, *Shazam & Historial*, diálogos *Liquid Glass* y selector de *Salida de audio*).
 
 ---
 
 <div align="center">
 
-<h1><a id="download"></a>Descargas (Versión 1.1.0)</h1>
+<h1><a id="download"></a>Descargas (Versión 1.2.0)</h1>
 
 <a href="https://github.com/808andrex/SoundChord/releases/latest" target="_blank" rel="noopener noreferrer"><img src="https://cdn.jsdelivr.net/gh/JMcrafter26/badges@main/src/assets/supported/android/cozy.svg" alt="Descargar SoundChord para Android" height="55"/></a>
 
