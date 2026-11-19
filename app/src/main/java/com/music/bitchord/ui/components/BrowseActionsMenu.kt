@@ -128,6 +128,7 @@ fun BrowseActionsMenu(
     isPinned: Boolean = false,
     onTogglePin: (() -> Unit)? = null,
     onRename: ((String) -> Unit)? = null,
+    isOwnedPlaylist: Boolean = false,
     /**
      * Opens the reorder page for one of the account's own playlists — set
      * under the same rule as [onRename], since YouTube refuses to rearrange a
@@ -243,7 +244,10 @@ fun BrowseActionsMenu(
                 )
             }
             if (onRename != null) {
-                ActionRow(SfIcons.Pencil, stringResource(R.string.rename)) {
+                ActionRow(
+                    SfIcons.Pencil,
+                    stringResource(if (isOwnedPlaylist) R.string.edit_playlist else R.string.rename),
+                ) {
                     if (onRenameInSheet != null) {
                         onRenameInSheet()
                     } else {

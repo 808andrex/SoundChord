@@ -1012,7 +1012,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val updated = if (current == null) item else item.copy(
                 title = current.title,
                 subtitle = current.subtitle,
-                thumbnailUrl = current.thumbnailUrl ?: item.thumbnailUrl,
+                thumbnailUrl = current.thumbnailUrl ?: item.thumbnailUrl?.takeUnless { it.startsWith("file:") },
             )
             val count = id?.let { optimisticPlaylistCounts[normalizedPlaylistId(it)] }
             val withCount = if (id == null || count == null) updated else {
@@ -1556,6 +1556,54 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 },
                 onFailure = {},
             )
+        }
+    }
+
+    /** Saves or removes this playlist's local cover and updates every visible copy immediately. */
+    fun updatePlaylistCover(playlist: UserPlaylist, newCover: android.net.Uri?, remove: Boolean) {
+        if (!remove && newCover == null) return
+        viewModelScope.launch {
+            val id = normalizedPlaylistId(playlist.playlistId)
+            val context = getApplication<Application>()
+            val coverUri = if (remove) {
+                com.music.bitchord.data.PlaylistCovers.delete(context, id)
+                null
+            } else {
+                com.music.bitchord.data.PlaylistCovers.save(context, id, newCover!!)
+            }
+            if (!remove && coverUri == null) return@launch
+            _playlists.value = _playlists.value.map {
+                if (normalizedPlaylistId(it.playlistId) == id) it.copy(thumbnailUrl = coverUri?.toString()) else it
+            }
+            pendingCreatedPlaylists[id]?.let {
+                pendingCreatedPlaylists[id] = it.copy(thumbnailUrl = coverUri?.toString())
+            }
+            editPlaylistShelf { items ->
+                items.map { item ->
+                    if (item.browseId?.let(::normalizedPlaylistId) == id) {
+                        item.copy(thumbnailUrl = coverUri?.toString())
+                    } else item
+                }
+            }
+            _detailStack.value = _detailStack.value.map {
+                if (normalizedPlaylistId(it.browseId) == id) it.copy(thumbnailUrl = coverUri?.toString()) else it
+            }
+            _home.value = when (val state = _home.value) {
+                is UiState.Success -> UiState.Success(state.data.map { shelf ->
+                    shelf.copy(items = shelf.items.map { item ->
+                        if (item.browseId?.let(::normalizedPlaylistId) == id) {
+                            item.copy(thumbnailUrl = coverUri?.toString())
+                        } else item
+                    })
+                })
+                else -> state
+            }
+            if (remove) {
+                // The playlist endpoint supplies the original YouTube collage again after
+                // the local override has gone; refresh both caches without blocking the sheet.
+                loadPlaylists()
+                refreshLibraryAfterPlaylistMutation()
+            }
         }
     }
 

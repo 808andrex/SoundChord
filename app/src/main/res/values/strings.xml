@@ -774,6 +774,7 @@
     <string name="playlist_cover_add">Add cover</string>
     <string name="playlist_cover_change">Change cover</string>
     <string name="playlist_cover_remove">Remove cover</string>
+    <string name="playlist_cover_delete">Delete cover</string>
     <string name="playlist_cover_local_notice_title">Cover saved locally</string>
     <string name="playlist_cover_local_notice_message">Your list and its songs will sync with your YouTube Music account, but the custom cover is saved only on this device. To use a permanent cover synced across your devices, change it directly in the official YouTube Music app or website.</string>
     <string name="accept">OK</string>
@@ -794,6 +795,8 @@
     <string name="remove_from_liked">Remove from Liked Music</string>
     <string name="remove_from_playlist">Remove from this playlist</string>
     <string name="rename_playlist">Rename playlist</string>
+    <string name="edit_playlist">Edit playlist</string>
+    <string name="playlist_cover_removed">Custom cover removed</string>
     <string name="reorder_songs">Reorder songs</string>
     <string name="reorder_failed">Couldn\'t save the new order</string>
     <string name="playlist_reordered">Playlist order saved</string>

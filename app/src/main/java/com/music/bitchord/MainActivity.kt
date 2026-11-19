@@ -247,6 +247,7 @@ import com.music.bitchord.ui.components.ConfirmationAlert
 import com.music.bitchord.ui.components.InfoAlert
 import com.music.bitchord.ui.components.DownloadManagerPage
 import com.music.bitchord.ui.components.PlaylistPickerSheet
+import com.music.bitchord.ui.components.EditPlaylistSheet
 import com.music.bitchord.ui.components.ReorderPlaylistPage
 import com.music.bitchord.ui.components.LongPressOrigin
 import com.music.bitchord.ui.components.MenuAnchor
@@ -791,6 +792,7 @@ private fun BitChordApp(
     var browseMenuAnchor by remember { mutableStateOf<Rect?>(null) }
     /** Rename asked for from the menu, which hands it on to a sheet holding only the form. */
     var browseRenameInSheet by remember { mutableStateOf(false) }
+    var editPlaylistTarget by remember { mutableStateOf<UserPlaylist?>(null) }
     /** The playlist being rearranged, or null when the reorder page is shut. */
     var reorderTarget by remember { mutableStateOf<UserPlaylist?>(null) }
     /** Its entries as YouTube has them now — fetched fresh when the sheet opens. */
@@ -5550,8 +5552,13 @@ private fun BitChordApp(
                     },
                 ),
                 onRenameInSheet = {
-                    browseRenameInSheet = true
-                    browseMenuOrigin = null
+                    if (playlist != null) {
+                        browseActions = null
+                        editPlaylistTarget = playlist
+                    } else {
+                        browseRenameInSheet = true
+                        browseMenuOrigin = null
+                    }
                 },
                 startRenaming = browseRenameInSheet,
                 onPlayNext = act(playSongsNext),
@@ -5653,6 +5660,7 @@ private fun BitChordApp(
                         viewModel.retitleDetail(p.browseId, name.trim())
                     }
                 },
+                isOwnedPlaylist = playlist != null,
                 onReorder = playlist?.let { p ->
                     {
                         browseActions = null
@@ -5709,6 +5717,22 @@ private fun BitChordApp(
         }
         // In a recompose scope of its own, as the track menu's is.
         Isolated {
+            editPlaylistTarget?.let { playlist ->
+                val customCover = com.music.bitchord.data.PlaylistCovers
+                    .getCoverUri(context, playlist.playlistId)
+                EditPlaylistSheet(
+                    playlist = playlist,
+                    customCoverUri = customCover,
+                    onDismiss = { editPlaylistTarget = null },
+                    onSave = { title, newCover, removeCover ->
+                        if (title != playlist.title) viewModel.renamePlaylist(playlist, title)
+                        if (newCover != null || removeCover) {
+                            viewModel.updatePlaylistCover(playlist, newCover, removeCover)
+                        }
+                        editPlaylistTarget = null
+                    },
+                )
+            }
             // Rename is a text field and a keyboard, which have no place on a menu
             // floating over the page: the menu hands it on, and the form comes up
             // here on a sheet of its own.

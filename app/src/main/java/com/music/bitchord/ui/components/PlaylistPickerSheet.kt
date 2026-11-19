@@ -38,11 +38,14 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -593,6 +596,128 @@ internal fun RenamePlaylistForm(
             Text(stringResource(R.string.save_name))
         }
         Spacer(Modifier.height(28.dp))
+    }
+}
+
+@OptIn(ExperimentalHazeMaterialsApi::class, ExperimentalMaterial3Api::class)
+@Composable
+internal fun EditPlaylistSheet(
+    playlist: UserPlaylist,
+    customCoverUri: Uri?,
+    onDismiss: () -> Unit,
+    onSave: (String, Uri?, Boolean) -> Unit,
+) {
+    var name by remember(playlist.playlistId) { mutableStateOf(playlist.title) }
+    var selectedCover by remember(playlist.playlistId) { mutableStateOf<Uri?>(null) }
+    var removeCover by remember(playlist.playlistId) { mutableStateOf(false) }
+    var showCoverNotice by remember { mutableStateOf(false) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            selectedCover = uri
+            removeCover = false
+            showCoverNotice = true
+        }
+    }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val changed = name.trim().isNotEmpty() &&
+        (name.trim() != playlist.title || selectedCover != null || removeCover)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.background,
+    ) {
+        Column(Modifier.fillMaxWidth().imePadding()) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 8.dp, end = 22.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onDismiss) {
+                    Icon(SfIcons.ArrowBack, stringResource(R.string.back))
+                }
+                Text(
+                    stringResource(R.string.edit_playlist),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
+            Box(Modifier.fillMaxWidth().padding(vertical = 22.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(160.dp).clip(RoundedCornerShape(24.dp))) {
+                    val previewModel = selectedCover ?: if (removeCover) {
+                        playlist.thumbnailUrl?.takeUnless { it.startsWith("file:") }
+                    } else customCoverUri ?: playlist.thumbnailUrl
+                    AsyncImage(
+                        model = previewModel,
+                        contentDescription = stringResource(R.string.playlist_cover_change),
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    if (previewModel == null) {
+                        Icon(
+                            Icons.Rounded.AddPhotoAlternate,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.align(Alignment.Center).size(42.dp),
+                        )
+                    }
+                    IconButton(
+                        onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)
+                            .clip(CircleShape).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)),
+                    ) {
+                        Icon(Icons.Rounded.Edit, stringResource(R.string.playlist_cover_change), tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            }
+            if (!removeCover && (customCoverUri != null || selectedCover != null)) {
+                FilledTonalButton(
+                    onClick = {
+                        removeCover = true
+                        selectedCover = null
+                    },
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) {
+                    Icon(Icons.Rounded.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.playlist_cover_delete))
+                }
+            }
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 12.dp),
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                trailingIcon = if (name.isNotEmpty()) {
+                    { IconButton(onClick = { name = "" }) { Icon(Icons.Rounded.Close, stringResource(R.string.clear_name)) } }
+                } else null,
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+            )
+            Button(
+                onClick = { onSave(name.trim(), selectedCover, removeCover) },
+                enabled = changed,
+                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp).height(52.dp),
+            ) { Text(stringResource(R.string.save)) }
+            Spacer(Modifier.height(20.dp))
+        }
+    }
+    if (showCoverNotice) {
+        InfoAlert(
+            hazeState = remember { HazeState() },
+            title = stringResource(R.string.playlist_cover_local_notice_title),
+            description = stringResource(R.string.playlist_cover_local_notice_message),
+            onDismiss = { showCoverNotice = false },
+            inOwnWindow = true,
+            actionLabel = stringResource(R.string.accept),
+        )
     }
 }
 
