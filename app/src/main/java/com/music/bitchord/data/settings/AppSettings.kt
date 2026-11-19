@@ -134,6 +134,26 @@ enum class ThemeMode(val label: String) {
  */
 enum class AppFont { DEFAULT, LEGACY }
 
+/** Global interface accent, with separate foreground contrast for each theme. */
+enum class AccentColor(
+    val lightColor: Long,
+    val darkColor: Long,
+    val onLightColor: Long,
+    val onDarkColor: Long,
+) {
+    DEFAULT(0xFF111113, 0xFFFFFFFF, 0xFFFFFFFF, 0xFF000000),
+    RED(0xFFFA243C, 0xFFFA243C, 0xFF000000, 0xFFFFFFFF),
+    ORANGE(0xFFFF9500, 0xFFFF9F0A, 0xFF000000, 0xFF000000),
+    YELLOW(0xFFE6B800, 0xFFFFD60A, 0xFF000000, 0xFF000000),
+    GREEN(0xFF34C759, 0xFF30D158, 0xFF000000, 0xFF000000),
+    TEAL(0xFF30B0C7, 0xFF40C8E0, 0xFF000000, 0xFF000000),
+    BLUE(0xFF007AFF, 0xFF0A84FF, 0xFF000000, 0xFF000000),
+    INDIGO(0xFF5856D6, 0xFF5E5CE6, 0xFFFFFFFF, 0xFFFFFFFF),
+    PURPLE(0xFFAF52DE, 0xFFBF5AF2, 0xFFFFFFFF, 0xFFFFFFFF),
+    PINK(0xFFFF2D55, 0xFFFF375F, 0xFF000000, 0xFF000000),
+    GRAY(0xFF8E8E93, 0xFF98989D, 0xFF000000, 0xFF000000),
+}
+
 /**
  * Which of the equaliser's two tabs is driving the sound.
  *
@@ -413,6 +433,7 @@ object AppSettings {
     val playbackSpeed = MutableStateFlow(1.0f)
     val themeMode = MutableStateFlow(ThemeMode.DARK)
     val appFont = MutableStateFlow(AppFont.DEFAULT)
+    val accentColor = MutableStateFlow(AccentColor.DEFAULT)
 
     /** Keep playing similar music once the queue runs out. */
     val autoplay = MutableStateFlow(true)
@@ -1036,6 +1057,9 @@ object AppSettings {
         appFont.value = runCatching {
             AppFont.valueOf(prefs.getString(KEY_APP_FONT, null) ?: AppFont.DEFAULT.name)
         }.getOrDefault(AppFont.DEFAULT)
+        accentColor.value = runCatching {
+            AccentColor.valueOf(prefs.getString(KEY_ACCENT_COLOR, null) ?: AccentColor.DEFAULT.name)
+        }.getOrDefault(AccentColor.DEFAULT)
         autoplay.value = prefs.getBoolean(KEY_AUTOPLAY, true)
         shuffleEnabled.value = prefs.getBoolean(KEY_SHUFFLE_ENABLED, false)
         repeatMode.value = prefs.getInt(KEY_REPEAT_MODE, Player.REPEAT_MODE_OFF)
@@ -1441,6 +1465,11 @@ object AppSettings {
     fun setAppFont(value: AppFont) {
         appFont.value = value
         prefs.edit().putString(KEY_APP_FONT, value.name).apply()
+    }
+
+    fun setAccentColor(value: AccentColor) {
+        accentColor.value = value
+        prefs.edit().putString(KEY_ACCENT_COLOR, value.name).apply()
     }
 
     fun setReduceAnimation(value: Boolean) {
@@ -2337,6 +2366,7 @@ object AppSettings {
     private const val KEY_SPEED = "playback_speed"
     private const val KEY_THEME = "theme_mode"
     private const val KEY_APP_FONT = "app_font"
+    private const val KEY_ACCENT_COLOR = "accent_color"
     private const val KEY_AUTOPLAY = "autoplay"
     private const val KEY_SHUFFLE_ENABLED = "shuffle_enabled"
     private const val KEY_REPEAT_MODE = "repeat_mode"

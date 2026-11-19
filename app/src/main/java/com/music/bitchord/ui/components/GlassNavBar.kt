@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -115,7 +116,15 @@ fun GlassNavBar(
     // lambda, which the tab bar sees as a changed argument and recomposes on.
     val pillShape = remember { RoundedCornerShape(percent = 50) }
     val contentColor = glassContentColor()
-    val selectedColor = contentColor
+    val isDarkGlass = contentColor == Color.White
+    // Keep the selected tab on the global accent over Liquid Glass too. In a
+    // dark glass bar the small lift toward white preserves contrast over bright
+    // artwork, matching Zenith; the default monochrome accent remains white.
+    val selectedColor = if (isDarkGlass) {
+        lerp(MaterialTheme.colorScheme.primary, Color.White, 0.06f)
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
     val unselectedColor = contentColor.copy(alpha = 0.65f)
     val haptics = rememberHaptics()
 

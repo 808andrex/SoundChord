@@ -9,6 +9,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.text.TextStyle
@@ -18,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.music.bitchord.R
 import com.music.bitchord.data.settings.AppFont
+import com.music.bitchord.data.settings.AccentColor
 
 // Apple Music's signature red. No longer the primary accent, but kept for the
 // spots (Replay's rank badge) that want that specific red regardless of theme.
@@ -45,6 +47,22 @@ private val LightColors = lightColorScheme(
     surfaceVariant = Color(0xFFF2F2F7),
     onSurfaceVariant = Color(0xFF6E6E73),
     outline = Color(0xFFE5E5EA),
+)
+
+/** Changes only Material's accent roles; artwork pages keep their own palette. */
+private fun androidx.compose.material3.ColorScheme.withAccent(accent: AccentColor, dark: Boolean) = copy(
+    primary = Color(if (dark) accent.darkColor else accent.lightColor),
+    onPrimary = Color(if (dark) accent.onDarkColor else accent.onLightColor),
+    primaryContainer = if (dark) {
+        lerp(Color.Black, Color(accent.darkColor), 0.28f)
+    } else {
+        lerp(Color.White, Color(accent.lightColor), 0.16f)
+    },
+    onPrimaryContainer = if (dark) {
+        lerp(Color(accent.darkColor), Color.White, 0.8f)
+    } else {
+        lerp(Color(accent.lightColor), Color.Black, 0.65f)
+    },
 )
 
 /**
@@ -142,10 +160,11 @@ private fun Typography.withFamily(family: FontFamily) = Typography(
 fun BitChordTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     font: AppFont = AppFont.DEFAULT,
+    accentColor: AccentColor = AccentColor.DEFAULT,
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = (if (darkTheme) DarkColors else LightColors).withAccent(accentColor, darkTheme),
         typography = when (font) {
             AppFont.DEFAULT -> BitChordTypography
             AppFont.LEGACY -> LegacyTypography

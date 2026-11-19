@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -118,6 +119,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -167,6 +169,7 @@ import com.music.bitchord.data.sources.DeviceCodecs
 import com.music.bitchord.data.settings.AudioQuality
 import com.music.bitchord.data.settings.DownloadQuality
 import com.music.bitchord.data.settings.ThemeMode
+import com.music.bitchord.data.settings.AccentColor
 import com.music.bitchord.data.settings.AppFont
 import com.music.bitchord.data.settings.PlayerTheme
 import com.music.bitchord.data.stats.Backup
@@ -258,6 +261,8 @@ fun SettingsScreen(
     val translationLanguage by AppSettings.translationLanguage.collectAsStateWithLifecycle()
     val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
     val appFont by AppSettings.appFont.collectAsStateWithLifecycle()
+    val accentColor by AppSettings.accentColor.collectAsStateWithLifecycle()
+    val accentIsDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val sessionId by AppSettings.audioSessionId.collectAsStateWithLifecycle()
     val outputPcmMode by AppSettings.outputPcmMode.collectAsStateWithLifecycle()
     val preferUsbDac by AppSettings.preferUsbDac.collectAsStateWithLifecycle()
@@ -1546,6 +1551,33 @@ fun SettingsScreen(
                     onClick = { onOpenChoice(SettingsChoiceKind.FONT) },
                 )
             }
+            val accentTitle = stringResource(R.string.accent_color)
+            row(accentTitle, "accent", "colour", "color", "theme") {
+                SettingsRow(
+                    icon = SfIcons.BlurOn,
+                    title = accentTitle,
+                    onClick = { onOpenChoice(SettingsChoiceKind.ACCENT) },
+                    trailing = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = accentColor.localizedLabel(),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Box(
+                                Modifier
+                                    .size(18.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(accentColor.colorFor(accentIsDark)))
+                                    .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f), CircleShape),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Chevron()
+                        }
+                    },
+                )
+            }
             val appIconTitle = stringResource(R.string.app_icon)
             row(appIconTitle, "icon", "launcher", "logo") {
                 var selectedIcon by remember { mutableStateOf(AppIcon.current(context)) }
@@ -2577,6 +2609,25 @@ private fun AppFont.description(): String = stringResource(
 )
 
 @Composable
+private fun AccentColor.localizedLabel(): String = stringResource(
+    when (this) {
+        AccentColor.DEFAULT -> R.string.accent_default
+        AccentColor.RED -> R.string.accent_red
+        AccentColor.ORANGE -> R.string.accent_orange
+        AccentColor.YELLOW -> R.string.accent_yellow
+        AccentColor.GREEN -> R.string.accent_green
+        AccentColor.TEAL -> R.string.accent_teal
+        AccentColor.BLUE -> R.string.accent_blue
+        AccentColor.INDIGO -> R.string.accent_indigo
+        AccentColor.PURPLE -> R.string.accent_purple
+        AccentColor.PINK -> R.string.accent_pink
+        AccentColor.GRAY -> R.string.accent_gray
+    },
+)
+
+private fun AccentColor.colorFor(dark: Boolean): Long = if (dark) darkColor else lightColor
+
+@Composable
 private fun AutomixPerformanceMode.localizedLabel(): String = stringResource(
     when (this) {
         AutomixPerformanceMode.EFFICIENT -> R.string.automix_mode_efficient
@@ -3381,6 +3432,7 @@ enum class SettingsChoiceKind(@param:StringRes val title: Int) {
     AUTOMIX_PERFORMANCE(R.string.automix_performance),
     BIT_PERFECT(R.string.bit_perfect_output),
     FONT(R.string.font),
+    ACCENT(R.string.accent_color),
     COVER_ANIMATION(R.string.cover_animation),
 }
 
@@ -3501,6 +3553,11 @@ fun SettingsChoicePage(
                 }
             }
 
+            SettingsChoiceKind.ACCENT -> {
+                val selected by AppSettings.accentColor.collectAsStateWithLifecycle()
+                AccentColorPicker(selected = selected, onSelect = AppSettings::setAccentColor)
+            }
+
             SettingsChoiceKind.COVER_ANIMATION -> {
                 val slide by AppSettings.coverSlideAnimation.collectAsStateWithLifecycle()
                 val fluid by AppSettings.coverFluidAnimation.collectAsStateWithLifecycle()
@@ -3567,6 +3624,56 @@ fun SettingsChoicePage(
             }
         }
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+/** The fixed global accents, with the selected swatch haloed and checked. */
+@Composable
+private fun AccentColorPicker(
+    selected: AccentColor,
+    onSelect: (AccentColor) -> Unit,
+) {
+    val haptics = LocalHapticFeedback.current
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    SettingsGroup(footer = stringResource(R.string.accent_color_footer), topSpacing = 0.dp) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+            AccentColor.entries.chunked(5).forEach { line ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = ROW_INSET, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    line.forEach { accent ->
+                        val tint = Color(accent.colorFor(dark))
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(CircleShape)
+                                .background(if (accent == selected) tint.copy(alpha = 0.25f) else Color.Transparent)
+                                .clickable {
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onSelect(accent)
+                                }
+                                .padding(6.dp)
+                                .background(tint, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (accent == selected) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = accent.localizedLabel(),
+                                    tint = Color(if (dark) accent.onDarkColor else accent.onLightColor),
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            }
+                        }
+                    }
+                    repeat(5 - line.size) { Spacer(Modifier.size(52.dp)) }
+                }
+            }
+        }
     }
 }
 
