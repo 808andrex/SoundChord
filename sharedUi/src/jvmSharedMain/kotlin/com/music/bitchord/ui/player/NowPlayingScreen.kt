@@ -2047,11 +2047,23 @@ fun NowPlayingScreen(
                 FullscreenVideoPlayer(
                     song = song,
                     isPlaying = isPlaying,
+                    isLoading = isLoading || audioVersionSwitching,
                     artRequest = art.request,
                     rendered = videoRendered,
                     onRenderedChanged = { videoRendered = it },
                     onExitFullscreen = exitFullscreen,
                     onOpenQuality = { showVideoQuality = true },
+                    onPlayPause = onPlayPause,
+                    onSeekBackward10 = {
+                        haptics.play(Haptic.Tap)
+                        onSeek((position.positionMs - 10_000L).coerceAtLeast(0L))
+                    },
+                    onSeekForward10 = {
+                        haptics.play(Haptic.Tap)
+                        val maxMs = if (durationMs > 0L) durationMs else Long.MAX_VALUE
+                        onSeek((position.positionMs + 10_000L).coerceAtMost(maxMs))
+                    },
+                    seekEnabled = !controlsLocked && !radioPlaying && durationMs > 0L,
                     scrubber = {
                         PlayerScrubber(
                             shown = shown,
@@ -2073,19 +2085,6 @@ fun NowPlayingScreen(
                                     .padding(horizontal = 8.dp),
                             )
                         }
-                    },
-                    transport = {
-                        TransportRow(
-                            isPlaying = isPlaying,
-                            isLoading = isLoading || audioVersionSwitching,
-                            previousEnabled = !controlsLocked && (hasPrevious || pastRestartPoint),
-                            nextEnabled = !controlsLocked && hasNext,
-                            onPrevious = onPrevious,
-                            onPlayPause = onPlayPause,
-                            onNext = onNext,
-                            compact = true,
-                            radioPlaying = radioPlaying,
-                        )
                     },
                 )
             }
