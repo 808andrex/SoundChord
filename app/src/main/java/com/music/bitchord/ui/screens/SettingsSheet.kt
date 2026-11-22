@@ -95,7 +95,9 @@ import com.music.bitchord.ui.components.IosSwitch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -257,16 +259,20 @@ fun SettingsScreen(
     val appFont by AppSettings.appFont.collectAsStateWithLifecycle()
     val accentColor by AppSettings.accentColor.collectAsStateWithLifecycle()
     val seenNewFeatures by AppSettings.seenNewFeatures.collectAsStateWithLifecycle()
-    val accentColorIsNew = AppSettings.FEATURE_ACCENT_COLOR !in seenNewFeatures
-    val skipUnplayableIsNew = AppSettings.FEATURE_SKIP_UNPLAYABLE !in seenNewFeatures
-    val aboutWhatsNewIsNew = AppSettings.FEATURE_ABOUT_WHATS_NEW !in seenNewFeatures
     val coverAnimationMenuIsNew = AppSettings.FEATURE_COVER_ANIMATION_MENU !in seenNewFeatures
     val coverAnimSlideIsNew = AppSettings.FEATURE_COVER_ANIM_SLIDE !in seenNewFeatures
     val coverAnimFluidIsNew = AppSettings.FEATURE_COVER_ANIM_FLUID !in seenNewFeatures
     val coverAnimAutomixIsNew = AppSettings.FEATURE_COVER_ANIM_AUTOMIX !in seenNewFeatures
     val crossfadeOnNextIsNew = AppSettings.FEATURE_CROSSFADE_ON_NEXT !in seenNewFeatures
-    val playerLyricsIsNew = coverAnimationMenuIsNew || coverAnimSlideIsNew || coverAnimFluidIsNew || coverAnimAutomixIsNew
-    val audioPlaybackIsNew = crossfadeOnNextIsNew
+    val youtubePremiumIsNew = AppSettings.FEATURE_YOUTUBE_PREMIUM_AUDIO !in seenNewFeatures
+    val downloadLikedSongs by AppSettings.downloadLikedSongs.collectAsStateWithLifecycle()
+    val downloadLikedSongsIsNew = AppSettings.FEATURE_DOWNLOAD_LIKED_SONGS !in seenNewFeatures
+    val bestPart by AppSettings.showBestPart.collectAsStateWithLifecycle()
+    val bestPartIsNew = AppSettings.FEATURE_BEST_PART !in seenNewFeatures
+    val sleepTimerFadeOut by AppSettings.sleepTimerFadeOut.collectAsStateWithLifecycle()
+    val sleepTimerFadeOutIsNew = AppSettings.FEATURE_SLEEP_TIMER_FADE_OUT !in seenNewFeatures
+    val playerLyricsIsNew = bestPartIsNew || coverAnimationMenuIsNew || coverAnimSlideIsNew || coverAnimFluidIsNew || coverAnimAutomixIsNew
+    val audioPlaybackIsNew = sleepTimerFadeOutIsNew || crossfadeOnNextIsNew
     val accentIsDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val sessionId by AppSettings.audioSessionId.collectAsStateWithLifecycle()
     val outputPcmMode by AppSettings.outputPcmMode.collectAsStateWithLifecycle()
@@ -506,7 +512,11 @@ fun SettingsScreen(
                     title = accountTitle,
                     subtitle = account?.email?.takeIf { it.isNotBlank() }
                         ?: stringResource(if (signedIn) R.string.signed_in else R.string.not_signed_in),
-                    onClick = onAccountScrobbling,
+                    badge = stringResource(R.string.settings_badge_new).takeIf { youtubePremiumIsNew },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_YOUTUBE_PREMIUM_AUDIO)
+                        onAccountScrobbling()
+                    },
                 )
             }
 
@@ -541,7 +551,6 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = SfIcons.Appearance,
                     title = stringResource(R.string.settings_category_appearance),
-                    badge = stringResource(R.string.settings_badge_new).takeIf { accentColorIsNew },
                     onClick = { onOpenSection(SettingsCategory.APP_APPEARANCE) },
                 )
             }
@@ -550,16 +559,13 @@ fun SettingsScreen(
                 SettingsRow(
                     iconPainter = painterResource(R.drawable.ic_settings_library_content),
                     title = stringResource(R.string.settings_category_library_content),
-                    badge = stringResource(R.string.settings_badge_new).takeIf { skipUnplayableIsNew },
-                    onClick = {
-                        AppSettings.markFeatureSeen(AppSettings.FEATURE_SKIP_UNPLAYABLE)
-                        onOpenSection(SettingsCategory.LIBRARY_CONTENT)
-                    },
+                    onClick = { onOpenSection(SettingsCategory.LIBRARY_CONTENT) },
                 )
                 RowDivider()
                 SettingsRow(
                     icon = SfIcons.Download,
                     title = stringResource(R.string.settings_category_downloads_local),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { downloadLikedSongsIsNew },
                     onClick = { onOpenSection(SettingsCategory.DOWNLOADS_LOCAL) },
                 )
             }
@@ -588,11 +594,7 @@ fun SettingsScreen(
                 SettingsRow(
                     iconPainter = painterResource(R.drawable.ic_settings_about),
                     title = stringResource(R.string.settings_category_about),
-                    badge = stringResource(R.string.settings_badge_new).takeIf { aboutWhatsNewIsNew },
-                    onClick = {
-                        AppSettings.markFeatureSeen(AppSettings.FEATURE_ABOUT_WHATS_NEW)
-                        onOpenAbout()
-                    },
+                    onClick = { onOpenAbout() },
                 )
             }
         }
@@ -621,6 +623,7 @@ fun SettingsScreen(
                 R.string.automix,
                 R.string.automix_performance,
                 R.string.skip_silence,
+                R.string.sleep_timer_fade_out,
                 R.string.spatial_audio,
                 R.string.smart_version_alignment,
                 R.string.play_next_on_swipe,
@@ -665,7 +668,6 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = SfIcons.Appearance,
                     title = stringResource(R.string.settings_category_appearance),
-                    badge = stringResource(R.string.settings_badge_new).takeIf { accentColorIsNew },
                     onClick = { onOpenSection(SettingsCategory.APP_APPEARANCE) },
                 )
             }
@@ -692,11 +694,7 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = SfIcons.LibraryMusic,
                     title = stringResource(R.string.settings_category_library_content),
-                    badge = stringResource(R.string.settings_badge_new).takeIf { skipUnplayableIsNew },
-                    onClick = {
-                        AppSettings.markFeatureSeen(AppSettings.FEATURE_SKIP_UNPLAYABLE)
-                        onOpenSection(SettingsCategory.LIBRARY_CONTENT)
-                    },
+                    onClick = { onOpenSection(SettingsCategory.LIBRARY_CONTENT) },
                 )
             }
         }
@@ -707,6 +705,7 @@ fun SettingsScreen(
                 R.string.download_wifi_only,
                 R.string.export_compatible_downloads,
                 R.string.sync_downloaded_playlists,
+                R.string.download_liked_songs,
                 R.string.local_music_folder,
                 R.string.use_all_audio_folders,
                 R.string.filter_non_music_audio,
@@ -720,6 +719,7 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = SfIcons.Download,
                     title = stringResource(R.string.settings_category_downloads_local),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { downloadLikedSongsIsNew },
                     onClick = { onOpenSection(SettingsCategory.DOWNLOADS_LOCAL) },
                 )
             }
@@ -751,11 +751,7 @@ fun SettingsScreen(
                 SettingsRow(
                     iconPainter = painterResource(R.drawable.ic_settings_about),
                     title = stringResource(R.string.settings_category_about),
-                    badge = stringResource(R.string.settings_badge_new).takeIf { aboutWhatsNewIsNew },
-                    onClick = {
-                        AppSettings.markFeatureSeen(AppSettings.FEATURE_ABOUT_WHATS_NEW)
-                        onOpenAbout()
-                    },
+                    onClick = { onOpenAbout() },
                 )
             }
         }
@@ -832,6 +828,26 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.show_nerd_stats_subtitle),
                     trailing = { IosSwitch(checked = nerdStats, onCheckedChange = AppSettings::setShowNerdStats) },
                     onClick = { AppSettings.setShowNerdStats(!nerdStats) },
+                )
+                RowDivider()
+                SettingsRow(
+                    icon = SfIcons.MusicNote,
+                    title = stringResource(R.string.show_best_part),
+                    subtitle = stringResource(R.string.show_best_part_subtitle),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { bestPartIsNew },
+                    trailing = {
+                        IosSwitch(
+                            checked = bestPart,
+                            onCheckedChange = {
+                                AppSettings.markFeatureSeen(AppSettings.FEATURE_BEST_PART)
+                                AppSettings.setShowBestPart(it)
+                            },
+                        )
+                    },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_BEST_PART)
+                        AppSettings.setShowBestPart(!bestPart)
+                    },
                 )
             }
 
@@ -1117,6 +1133,19 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.sync_downloaded_playlists_subtitle),
                 )
             }
+            val downloadLikedTitle = stringResource(R.string.download_liked_songs)
+            row(downloadLikedTitle, "liked", "favorites", "offline", "automatic") {
+                SettingsSubRow(
+                    title = downloadLikedTitle,
+                    checked = downloadLikedSongs,
+                    badge = stringResource(R.string.settings_badge_new).takeIf { downloadLikedSongsIsNew },
+                    onCheckedChange = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_DOWNLOAD_LIKED_SONGS)
+                        AppSettings.setDownloadLikedSongs(it)
+                    },
+                    subtitle = stringResource(R.string.download_liked_songs_subtitle),
+                )
+            }
         }
 
         if (shows(SettingsCategory.PLAYBACK)) SearchableSettingsGroup(
@@ -1364,6 +1393,28 @@ fun SettingsScreen(
                     )
                 }
             }
+            val sleepTimerFadeOutTitle = stringResource(R.string.sleep_timer_fade_out)
+            row(sleepTimerFadeOutTitle, "sleep", "timer", "fade") {
+                SettingsRow(
+                    icon = SfIcons.SleepTimer,
+                    title = sleepTimerFadeOutTitle,
+                    subtitle = stringResource(R.string.sleep_timer_fade_out_subtitle),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { sleepTimerFadeOutIsNew },
+                    trailing = {
+                        IosSwitch(
+                            checked = sleepTimerFadeOut,
+                            onCheckedChange = {
+                                AppSettings.markFeatureSeen(AppSettings.FEATURE_SLEEP_TIMER_FADE_OUT)
+                                AppSettings.setSleepTimerFadeOut(it)
+                            },
+                        )
+                    },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_SLEEP_TIMER_FADE_OUT)
+                        AppSettings.setSleepTimerFadeOut(!sleepTimerFadeOut)
+                    },
+                )
+            }
             val spatialAudioTitle = stringResource(R.string.spatial_audio)
             row(spatialAudioTitle, "surround", "3d") {
                 BypassedByBitPerfect(bitPerfectReady) {
@@ -1502,18 +1553,15 @@ fun SettingsScreen(
                     icon = SfIcons.PlayNext,
                     title = skipUnplayableTitle,
                     subtitle = stringResource(R.string.skip_unplayable_tracks_subtitle),
-                    badge = stringResource(R.string.settings_badge_new).takeIf { skipUnplayableIsNew },
                     trailing = {
                         IosSwitch(
                             checked = skipUnplayableTracks,
                             onCheckedChange = {
-                                AppSettings.markFeatureSeen(AppSettings.FEATURE_SKIP_UNPLAYABLE)
                                 AppSettings.setSkipUnplayableTracks(it)
                             },
                         )
                     },
                     onClick = {
-                        AppSettings.markFeatureSeen(AppSettings.FEATURE_SKIP_UNPLAYABLE)
                         AppSettings.setSkipUnplayableTracks(!skipUnplayableTracks)
                     },
                 )
@@ -1601,9 +1649,7 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = SfIcons.BlurOn,
                     title = accentTitle,
-                    badge = stringResource(R.string.settings_badge_new).takeIf { accentColorIsNew },
                     onClick = {
-                        AppSettings.markFeatureSeen(AppSettings.FEATURE_ACCENT_COLOR)
                         onOpenChoice(SettingsChoiceKind.ACCENT)
                     },
                     trailing = {
@@ -2321,6 +2367,28 @@ fun SettingsScreen(
                 )
             }
             if ((section == null && searching) || section == SettingsCategory.MISCELLANEOUS) {
+                val bestPartTitle = stringResource(R.string.show_best_part)
+                row(bestPartTitle, "best part", "chorus", "skip", "replayed", "highlight") {
+                    SettingsRow(
+                        icon = SfIcons.MusicNote,
+                        title = bestPartTitle,
+                        subtitle = stringResource(R.string.show_best_part_subtitle),
+                        badge = stringResource(R.string.settings_badge_new).takeIf { bestPartIsNew },
+                        trailing = {
+                            IosSwitch(
+                                checked = bestPart,
+                                onCheckedChange = {
+                                    AppSettings.markFeatureSeen(AppSettings.FEATURE_BEST_PART)
+                                    AppSettings.setShowBestPart(it)
+                                },
+                            )
+                        },
+                        onClick = {
+                            AppSettings.markFeatureSeen(AppSettings.FEATURE_BEST_PART)
+                            AppSettings.setShowBestPart(!bestPart)
+                        },
+                    )
+                }
                 val showNerdStatsTitle = stringResource(R.string.show_nerd_stats)
                 row(showNerdStatsTitle, "debug", "bitrate", "codec") {
                     SettingsRow(
@@ -3021,7 +3089,9 @@ private inline fun SearchableSettingsGroup(
                 // has nothing to sit under, so it is given that room back.
                 index == 0 && !entry.divided -> Spacer(Modifier.height(10.dp))
             }
-            entry.content()
+            CompositionLocalProvider(LocalSubRowStandalone provides entry.divided) {
+                entry.content()
+            }
         }
     }
 }
@@ -3246,9 +3316,19 @@ private fun CoverAnimationToggle(
 }
 
 /**
+ * Whether the [SettingsSubRow] being drawn is a row of its own, under a
+ * divider or at the top of its card, rather than hanging off the row above.
+ * Set per row by [SearchableSettingsGroup], which knows which rows are divided.
+ */
+private val LocalSubRowStandalone = staticCompositionLocalOf { false }
+
+/**
  * A toggle that reads as part of the option above it rather than a setting
  * of its own: no icon, no divider, and pulled up close against its parent
  * instead of getting the same breathing room a full [SettingsRow] gets.
+ *
+ * Also drawn as a plain toggle row of its own, under a divider. There it gets
+ * the same gap above its title as below it, or the title sits on the line.
  */
 @Composable
 internal fun SettingsSubRow(
@@ -3264,7 +3344,12 @@ internal fun SettingsSubRow(
             .fillMaxWidth()
             .clickable(enabled = enabled) { onCheckedChange(!checked) }
             .alpha(if (enabled) 1f else 0.45f)
-            .padding(start = ROW_INSET, end = ROW_INSET, top = 0.dp, bottom = 10.dp),
+            .padding(
+                start = ROW_INSET,
+                end = ROW_INSET,
+                top = if (LocalSubRowStandalone.current) 10.dp else 0.dp,
+                bottom = 10.dp,
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {

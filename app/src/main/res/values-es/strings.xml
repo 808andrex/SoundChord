@@ -172,6 +172,8 @@
     <string name="testing">Probando…</string>
     <string name="connected">Conectado</string>
     <string name="account_integrations">Cuenta e integraciones</string>
+    <string name="youtube_premium_audio">Audio de YouTube Premium</string>
+    <string name="youtube_premium_audio_subtitle">Tengo Premium: reproducir el Opus de mayor calidad a ~256 kbps en lugar de los 160 kbps habituales</string>
     <string name="account_scrobbling">Cuenta y registro de reproducciones</string>
     <string name="rich_presence">Presencia enriquecida</string>
     <string name="scrobbling">Registro de reproducciones</string>
@@ -299,6 +301,8 @@
     <string name="skip_silence_float_subtitle">No disponible con salida float de 32 bits</string>
     <string name="equalizer">Ecualizador</string>
     <string name="equalizer_subtitle">El panel de audio del sistema</string>
+    <string name="show_best_part">Botón Mejor parte</string>
+    <string name="show_best_part_subtitle">Un botón en la portada que salta a la parte de la canción que más se reproduce</string>
     <string name="show_nerd_stats">Mostrar datos técnicos</string>
     <string name="show_nerd_stats_subtitle">Códec, tasa de bits y frecuencia de muestreo en el reproductor</string>
     <string name="theme">Tema</string>
@@ -593,6 +597,8 @@
     <string name="sleep_timer">Temporizador</string>
     <string name="sleep_timer_custom">Personalizado</string>
     <string name="start_sleep_timer">Iniciar temporizador</string>
+    <string name="sleep_timer_fade_out">Bajar el volumen antes de pausar</string>
+    <string name="sleep_timer_fade_out_subtitle">Baja el volumen poco a poco en los últimos 30 segundos</string>
     <string name="sources_no_lossless">Ninguna fuente activa ofrece audio lossless. Agrega un módulo personalizado para reproducir archivos lossless disponibles sin transcodificarlos.</string>
     <string name="sources_order_footer">Si una fuente no tiene una canción o no responde, BitChord prueba la siguiente. Las fuentes situadas antes de YouTube pueden reemplazar su grabación si devuelven una versión mejor.</string>
     <string name="sources_order_header">Fuentes, en orden de prioridad</string>
@@ -961,6 +967,8 @@
     <string name="export_compatible_downloads">Exportar descargas compatibles</string>
     <string name="sync_downloaded_playlists">Mantener playlists actualizadas</string>
     <string name="sync_downloaded_playlists_subtitle">Comprueba dos veces al día y descarga las canciones nuevas de tus playlists descargadas</string>
+    <string name="download_liked_songs">Descargar canciones que te gustan</string>
+    <string name="download_liked_songs_subtitle">Descarga tus canciones que te gustan y cada canción que marques a partir de ahora</string>
     <string name="playlist_sync_ask_title">Canciones nuevas en %1$s: %2$d</string>
     <string name="playlist_sync_ask_text">Toca para descargar</string>
     <string name="playlist_sync_done_title">Añadidas a %1$s: %2$d</string>

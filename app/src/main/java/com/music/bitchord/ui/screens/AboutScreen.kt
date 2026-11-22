@@ -92,9 +92,6 @@ fun AboutScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    LaunchedEffect(Unit) {
-        AppSettings.markFeatureSeen(AppSettings.FEATURE_ABOUT_WHATS_NEW)
-    }
     val scope = rememberCoroutineScope()
     val autoUpdates by AppSettings.autoUpdateCheck.collectAsState()
     var checking by remember { mutableStateOf(false) }

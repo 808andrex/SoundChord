@@ -66,6 +66,9 @@ fun AccountAndScrobblingScreen(
     val discordUsername by AppSettings.discordUsername.collectAsStateWithLifecycle()
     val discordRpcEnabled by AppSettings.discordRpcEnabled.collectAsStateWithLifecycle()
     val spotifyConnected by AppSettings.spotifySpdcToken.collectAsStateWithLifecycle()
+    val youtubePremiumAudio by AppSettings.youtubePremiumAudio.collectAsStateWithLifecycle()
+    val seenNewFeatures by AppSettings.seenNewFeatures.collectAsStateWithLifecycle()
+    val youtubePremiumIsNew = AppSettings.FEATURE_YOUTUBE_PREMIUM_AUDIO !in seenNewFeatures
 
     Column(
         modifier = modifier
@@ -95,6 +98,28 @@ fun AccountAndScrobblingScreen(
                     title = stringResource(R.string.listen_as),
                     subtitle = channelName ?: stringResource(R.string.default_youtube_profile),
                     onClick = onSwitchChannel,
+                )
+                // With the account because it is a claim about the account: only a
+                // signed-in Premium session is offered the higher Opus rung.
+                RowDivider()
+                SettingsRow(
+                    icon = SfIcons.AutoAwesome,
+                    title = stringResource(R.string.youtube_premium_audio),
+                    subtitle = stringResource(R.string.youtube_premium_audio_subtitle),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { youtubePremiumIsNew },
+                    trailing = {
+                        IosSwitch(
+                            checked = youtubePremiumAudio,
+                            onCheckedChange = {
+                                AppSettings.markFeatureSeen(AppSettings.FEATURE_YOUTUBE_PREMIUM_AUDIO)
+                                AppSettings.setYoutubePremiumAudio(it)
+                            },
+                        )
+                    },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_YOUTUBE_PREMIUM_AUDIO)
+                        AppSettings.setYoutubePremiumAudio(!youtubePremiumAudio)
+                    },
                 )
                 FullWidthDivider()
                 DestructiveRow(label = stringResource(R.string.sign_out), onClick = onSignOut)

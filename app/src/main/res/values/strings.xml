@@ -205,6 +205,8 @@
     <string name="testing">Testing…</string>
     <string name="connected">Connected</string>
     <string name="account_integrations">Account &amp; integrations</string>
+    <string name="youtube_premium_audio">YouTube Premium audio</string>
+    <string name="youtube_premium_audio_subtitle">I have Premium: stream the higher-quality ~256 kbps Opus instead of the standard 160 kbps</string>
     <string name="spotify">Spotify</string>
     <string name="spotify_connect_subtitle">Sign in to load your playlists. Playback uses YouTube Music.</string>
     <string name="spotify_sign_in">Sign in with Spotify</string>
@@ -419,6 +421,8 @@
     <string name="eq_preset_small_speakers">Small speakers</string>
     <string name="eq_preset_late_night">Late night</string>
     <string name="eq_preset_custom">Custom</string>
+    <string name="show_best_part">Best Part button</string>
+    <string name="show_best_part_subtitle">A button on the artwork that skips to the part of the song people replay most</string>
     <string name="show_nerd_stats">Show stats for nerds</string>
     <string name="show_nerd_stats_subtitle">Codec, bitrate and sample rate on the player</string>
     <string name="show_listen_together_button">Show Listen Together button</string>
@@ -825,6 +829,8 @@
     <string name="sleep_timer">Sleep timer</string>
     <string name="sleep_timer_custom">Custom</string>
     <string name="start_sleep_timer">Start timer</string>
+    <string name="sleep_timer_fade_out">Fade out before pausing</string>
+    <string name="sleep_timer_fade_out_subtitle">Gradually lowers volume over the last 30 seconds</string>
     <string name="sources_no_lossless">No enabled source can provide lossless audio. Add an addon to play lossless files without transcoding.</string>
     <string name="sources_order_footer">If a source does not have a track or cannot be reached, SoundChord tries the next one. Sources above YouTube can replace its recording when they return a better version.</string>
     <string name="sources_order_header">Sources, tried in this order</string>
@@ -1179,6 +1185,8 @@
     <string name="export_compatible_downloads">Export compatible downloads</string>
     <string name="sync_downloaded_playlists">Keep playlists updated</string>
     <string name="sync_downloaded_playlists_subtitle">Checks twice a day and downloads songs newly added to your downloaded playlists</string>
+    <string name="download_liked_songs">Download liked songs</string>
+    <string name="download_liked_songs_subtitle">Downloads your Liked Music and every song you like from now on</string>
     <string name="playlist_sync_ask_title">New songs in %1$s: %2$d</string>
     <string name="playlist_sync_ask_text">Tap to download</string>
     <string name="playlist_sync_done_title">Added to %1$s: %2$d</string>

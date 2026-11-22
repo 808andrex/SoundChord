@@ -11,6 +11,7 @@ import androidx.media3.common.Player
 import com.music.bitchord.BuildConfig
 import com.music.bitchord.auth.AuthStore
 import com.music.bitchord.data.canvas.SpotifyToken
+import com.music.bitchord.data.innertube.StreamResolver
 import com.music.bitchord.data.lyrics.LyricsSource
 import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.playback.EqLayout
@@ -203,9 +204,10 @@ enum class SongSort {
  * no restart, no rebinding.
  */
 object AppSettings {
-    const val FEATURE_ACCENT_COLOR = "accent_color"
-    const val FEATURE_SKIP_UNPLAYABLE = "skip_unplayable"
-    const val FEATURE_ABOUT_WHATS_NEW = "about_whats_new"
+    const val FEATURE_YOUTUBE_PREMIUM_AUDIO = "youtube_premium_audio"
+    const val FEATURE_DOWNLOAD_LIKED_SONGS = "download_liked_songs"
+    const val FEATURE_BEST_PART = "show_best_part"
+    const val FEATURE_SLEEP_TIMER_FADE_OUT = "sleep_timer_fade_out"
     const val FEATURE_COVER_ANIMATION_MENU = "cover_animation_menu"
     const val FEATURE_COVER_ANIM_SLIDE = "cover_anim_slide"
     const val FEATURE_COVER_ANIM_FLUID = "cover_anim_fluid"
@@ -214,7 +216,6 @@ object AppSettings {
     const val FEATURE_ICON_MONOCHROME = "icon_monochrome"
     const val FEATURE_ICON_RED = "icon_red"
     const val FEATURE_ICON_GREEN = "icon_green"
-
 
     private lateinit var prefs: SharedPreferences
 
@@ -284,6 +285,14 @@ object AppSettings {
      */
     val syncDownloadedPlaylists = MutableStateFlow(false)
 
+    /**
+     * Keep every liked song downloaded: the account's Liked Music is fetched
+     * whole once, then each new like follows it. Off by default for the same
+     * reason as [syncDownloadedPlaylists], which does the work for it — see
+     * [com.music.bitchord.download.PlaylistSync].
+     */
+    val downloadLikedSongs = MutableStateFlow(false)
+
     /** Whether the active network charges for data. `null` while offline. */
     val meteredConnection = MutableStateFlow<Boolean?>(null)
 
@@ -309,6 +318,7 @@ object AppSettings {
      * See [com.music.bitchord.playback.smart.TransitionPlanner].
      */
     val smartFadeEnabled = MutableStateFlow(false)
+    val sleepTimerFadeOut = MutableStateFlow(true)
 
     /** The CPU budget used by Beat This! and vocal analysis for Automix. */
     val automixPerformanceMode = MutableStateFlow(AutomixPerformanceMode.BALANCED)
@@ -398,6 +408,19 @@ object AppSettings {
     val directSourceStream = MutableStateFlow(false)
 
     /**
+     * The listener's word that their YouTube account has Premium, and that
+     * YouTube playback should take the signed-in route that reaches Premium's
+     * ~256kbps Opus (itag 774) instead of the anonymous 251 — the route
+     * age-restricted tracks already take. See
+     * [InnerTubeXResolver.extract][com.music.bitchord.data.innertube.InnerTubeXResolver.extract].
+     *
+     * Off by default and asked rather than detected: nothing InnerTubeX
+     * exposes confirms the entitlement, and claiming it for an account
+     * without Premium only costs that account the faster anonymous route.
+     */
+    val youtubePremiumAudio = MutableStateFlow(false)
+
+    /**
      * Widens stereo output via [com.music.bitchord.playback.SpatialAudioProcessor],
      * a stereo widening + cross-feed effect running inside ExoPlayer's own
      * pipeline. Not true object-based spatial audio — YouTube only ever hands
@@ -460,6 +483,12 @@ object AppSettings {
 
     /** Put the playing track's codec, bitrate and sample rate on the player. */
     val showNerdStats = MutableStateFlow(false)
+
+    /**
+     * The "Best Part" button on the player's artwork, which skips to the part of
+     * the song listeners replay most. On unless turned off.
+     */
+    val showBestPart = MutableStateFlow(true)
 
     /** Show the output / Listen Together pill under the player's transport. */
     val showListenTogetherButton = MutableStateFlow(false)
@@ -1032,9 +1061,11 @@ object AppSettings {
         wifiOnlyDownloads.value = prefs.getBoolean(KEY_WIFI_ONLY_DOWNLOADS, true)
         exportDownloads.value = prefs.getBoolean(KEY_EXPORT_DOWNLOADS, false)
         syncDownloadedPlaylists.value = prefs.getBoolean(KEY_SYNC_DOWNLOADED_PLAYLISTS, false)
+        downloadLikedSongs.value = prefs.getBoolean(KEY_DOWNLOAD_LIKED_SONGS, false)
         crossfadeSeconds.value = prefs.getInt(KEY_CROSSFADE, 0)
         crossfadeOnSkip.value = prefs.getBoolean(KEY_CROSSFADE_ON_SKIP, true)
         smartFadeEnabled.value = prefs.getBoolean(KEY_SMART_FADE, false)
+        sleepTimerFadeOut.value = prefs.getBoolean(KEY_SLEEP_TIMER_FADE_OUT, true)
         automixPerformanceMode.value = runCatching {
             AutomixPerformanceMode.valueOf(
                 prefs.getString(KEY_AUTOMIX_PERFORMANCE_MODE, null) ?: AutomixPerformanceMode.BALANCED.name,
@@ -1057,6 +1088,7 @@ object AppSettings {
         loudnessOffOnSpeaker.value = prefs.getBoolean(KEY_LOUDNESS_OFF_ON_SPEAKER, true)
         dolbyAtmos.value = prefs.getBoolean(KEY_DOLBY_ATMOS, true)
         directSourceStream.value = prefs.getBoolean(KEY_DIRECT_SOURCE_STREAM, false)
+        youtubePremiumAudio.value = prefs.getBoolean(KEY_YOUTUBE_PREMIUM_AUDIO, false)
         spatialAudio.value = prefs.getBoolean(KEY_SPATIAL_AUDIO, false)
         equalizerEnabled.value = prefs.getBoolean(KEY_EQ_ENABLED, false)
         equalizerMode.value = runCatching {
@@ -1082,6 +1114,7 @@ object AppSettings {
         shuffleEnabled.value = prefs.getBoolean(KEY_SHUFFLE_ENABLED, false)
         repeatMode.value = prefs.getInt(KEY_REPEAT_MODE, Player.REPEAT_MODE_OFF)
         showNerdStats.value = prefs.getBoolean(KEY_NERD_STATS, false)
+        showBestPart.value = prefs.getBoolean(KEY_BEST_PART, true)
         showListenTogetherButton.value = prefs.getBoolean(KEY_LISTEN_TOGETHER_BUTTON, false)
         reduceAnimation.value = prefs.getBoolean(KEY_REDUCE_ANIMATION, false)
         coverSlideAnimation.value = prefs.getBoolean(KEY_COVER_SLIDE_ANIMATION, false)
@@ -1382,6 +1415,11 @@ object AppSettings {
         prefs.edit().putBoolean(KEY_SMART_FADE, value).apply()
     }
 
+    fun setSleepTimerFadeOut(value: Boolean) {
+        sleepTimerFadeOut.value = value
+        prefs.edit().putBoolean(KEY_SLEEP_TIMER_FADE_OUT, value).apply()
+    }
+
     fun setAutomixPerformanceMode(value: AutomixPerformanceMode) {
         automixPerformanceMode.value = value
         prefs.edit().putString(KEY_AUTOMIX_PERFORMANCE_MODE, value.name).apply()
@@ -1400,6 +1438,13 @@ object AppSettings {
     fun setDirectSourceStream(value: Boolean) {
         directSourceStream.value = value
         prefs.edit().putBoolean(KEY_DIRECT_SOURCE_STREAM, value).apply()
+    }
+
+    fun setYoutubePremiumAudio(value: Boolean) {
+        youtubePremiumAudio.value = value
+        prefs.edit().putBoolean(KEY_YOUTUBE_PREMIUM_AUDIO, value).apply()
+        // Remembered URLs were picked under the old route; the next play asks again.
+        StreamResolver.forgetResolved()
     }
 
     fun setSpatialAudio(value: Boolean) {
@@ -1479,6 +1524,11 @@ object AppSettings {
     fun setShowNerdStats(value: Boolean) {
         showNerdStats.value = value
         prefs.edit().putBoolean(KEY_NERD_STATS, value).apply()
+    }
+
+    fun setShowBestPart(value: Boolean) {
+        showBestPart.value = value
+        prefs.edit().putBoolean(KEY_BEST_PART, value).apply()
     }
 
     fun setShowListenTogetherButton(value: Boolean) {
@@ -1976,6 +2026,11 @@ object AppSettings {
         prefs.edit().putBoolean(KEY_SYNC_DOWNLOADED_PLAYLISTS, value).apply()
     }
 
+    fun setDownloadLikedSongs(value: Boolean) {
+        downloadLikedSongs.value = value
+        prefs.edit().putBoolean(KEY_DOWNLOAD_LIKED_SONGS, value).apply()
+    }
+
     fun setLastfmPrimaryArtistOnly(value: Boolean) {
         lastfmPrimaryArtistOnly.value = value
         prefs.edit().putBoolean(KEY_LASTFM_PRIMARY_ARTIST_ONLY, value).apply()
@@ -2394,9 +2449,11 @@ object AppSettings {
     private const val KEY_WIFI_ONLY_DOWNLOADS = "wifi_only_downloads"
     private const val KEY_EXPORT_DOWNLOADS = "export_downloads"
     private const val KEY_SYNC_DOWNLOADED_PLAYLISTS = "sync_downloaded_playlists"
+    private const val KEY_DOWNLOAD_LIKED_SONGS = "download_liked_songs"
     private const val KEY_CROSSFADE = "crossfade_seconds"
     private const val KEY_CROSSFADE_ON_SKIP = "crossfade_on_skip"
     private const val KEY_SMART_FADE = "smart_fade_enabled"
+    private const val KEY_SLEEP_TIMER_FADE_OUT = "sleep_timer_fade_out"
     private const val KEY_AUTOMIX_PERFORMANCE_MODE = "automix_performance_mode"
     private const val KEY_SKIP_SILENCE = "skip_silence"
     private const val KEY_OUTPUT_PCM_MODE = "output_pcm_mode"
@@ -2408,6 +2465,7 @@ object AppSettings {
     private const val KEY_LOUDNESS_OFF_ON_SPEAKER = "loudness_off_on_speaker"
     private const val KEY_DOLBY_ATMOS = "dolby_atmos"
     private const val KEY_DIRECT_SOURCE_STREAM = "direct_source_stream"
+    private const val KEY_YOUTUBE_PREMIUM_AUDIO = "youtube_premium_audio"
     private const val KEY_SPATIAL_AUDIO = "spatial_audio"
     private const val KEY_EQ_ENABLED = "equalizer_enabled"
     private const val KEY_EQ_MODE = "equalizer_mode"
@@ -2425,6 +2483,7 @@ object AppSettings {
     private const val KEY_SHUFFLE_ENABLED = "shuffle_enabled"
     private const val KEY_REPEAT_MODE = "repeat_mode"
     private const val KEY_NERD_STATS = "show_nerd_stats"
+    private const val KEY_BEST_PART = "show_best_part"
     private const val KEY_LISTEN_TOGETHER_BUTTON = "show_listen_together_button"
     private const val KEY_CACHE_LIMIT = "audio_cache_limit_bytes"
     private const val KEY_REDUCE_ANIMATION = "reduce_animation"
