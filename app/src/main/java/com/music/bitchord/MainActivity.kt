@@ -278,6 +278,7 @@ import com.music.bitchord.ui.components.LastfmLoginAlert
 import com.music.bitchord.ui.components.LocalAppBackdrop
 import com.music.bitchord.ui.components.LocalLiquidGlassEnabled
 import com.music.bitchord.ui.components.backdrop.backdrops.LayerBackdrop
+import com.music.bitchord.ui.components.backdrop.backdrops.SnapshotBackdrop
 import com.music.bitchord.ui.components.backdrop.backdrops.layerBackdrop
 import com.music.bitchord.ui.components.backdrop.backdrops.rememberLayerBackdrop
 import com.music.bitchord.ui.components.backdrop.backdrops.rememberSnapshotBackdrop
@@ -457,6 +458,10 @@ import com.music.bitchord.ui.app.BitChordAppActions
 import com.music.bitchord.ui.app.BitChordNavState
 import com.music.bitchord.ui.app.BitChordPlayerUiState
 import com.music.bitchord.ui.app.BitChordSheetsUiState
+import com.music.bitchord.ui.app.BitChordSheetStateHolder
+import com.music.bitchord.ui.app.rememberBitChordSheetStateHolder
+import com.music.bitchord.ui.app.rememberBitChordPlayerUiState
+import com.music.bitchord.ui.app.rememberBitChordSheetsUiState
 import androidx.compose.runtime.saveable.SaveableStateHolder
 import com.music.bitchord.auth.GoogleAccountSession
 import com.music.bitchord.ui.components.floatingtabbar.FloatingTabBarScrollConnection
@@ -727,11 +732,7 @@ private fun BitChordApp(
     val glassSamplesBackdrop = glassActive && !reduceDynamicBlur
     val navBarScroll = rememberFloatingTabBarScrollConnection()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    var recognitionOpen by rememberSaveable { mutableStateOf(false) }
-    var showRecognitionHistoryClearConfirmation by remember { mutableStateOf(false) }
-    var showRadioHistoryClearConfirmation by remember { mutableStateOf(false) }
-    var radioSubpageBack by remember { mutableStateOf<(() -> Unit)?>(null) }
-    var recognitionFabVisible by rememberSaveable { mutableStateOf(true) }
+    val sheetHolder = rememberBitChordSheetStateHolder()
     var showNowPlaying by remember { mutableStateOf(false) }
     androidx.compose.runtime.SideEffect { VolumeHud.suppressed = showNowPlaying }
     val appForeground = com.music.bitchord.ui.rememberIsForeground()
@@ -757,81 +758,15 @@ private fun BitChordApp(
         if (reducePlayerMotion) showNowPlaying = false else playerSheetMotion.close()
     }
     val openPlayerRequested by PlayerDeepLink.pending.collectAsStateWithLifecycle()
-    var webSession by remember { mutableStateOf<WebSessionMode?>(null) }
-    var replayLandingPage by rememberSaveable { mutableStateOf(ReplayStoryPage.INTRO) }
-    var replayStory by rememberSaveable { mutableStateOf<ReplayStoryPage?>(null) }
-    var showReplayShare by rememberSaveable { mutableStateOf(false) }
-    var replaySharePage by rememberSaveable { mutableStateOf<ReplayStoryPage?>(null) }
-    var showSpotifyCanvasAuth by remember { mutableStateOf(false) }
-
-    var editingSource by remember { mutableStateOf<SourceConfig?>(null) }
-    var choosingSourceQuality by remember { mutableStateOf<SourceConfig?>(null) }
-    var explainingOutdatedAddon by remember { mutableStateOf<SourceConfig?>(null) }
-    var confirmJioSaavn by remember { mutableStateOf(false) }
-    var confirmBitPerfect by remember { mutableStateOf<BitPerfectMode?>(null) }
-    var confirmFixedVolume by remember { mutableStateOf(false) }
-    var blockedAddonSong by remember { mutableStateOf<com.music.bitchord.data.model.Song?>(null) }
-    var addonLeftOutOfDownload by remember {
-        mutableStateOf<Pair<String, SourceRegistry.DownloadExclusion>?>(null)
-    }
-    var editingPartyServer by remember { mutableStateOf(false) }
-    var editingSignatureApi by remember { mutableStateOf(false) }
-    var showLyricsSources by remember { mutableStateOf(false) }
-    var showAppLanguage by remember { mutableStateOf(false) }
-    var showTranslationLanguage by remember { mutableStateOf(false) }
-    var showAccountSelector by remember { mutableStateOf(false) }
-    var showListenBrainzLogin by remember { mutableStateOf(false) }
-    var showLastfmLogin by remember { mutableStateOf(false) }
-    var showWebDavEditor by remember { mutableStateOf(false) }
-    var showSmbEditor by remember { mutableStateOf(false) }
-    var showDiscordLogin by remember { mutableStateOf(false) }
-    var showSpotifyLogin by remember { mutableStateOf(false) }
-    var discordDialog by remember { mutableStateOf<DiscordDialog?>(null) }
-    var songActions by remember { mutableStateOf<Song?>(null) }
-    var stationActions by remember { mutableStateOf<StationMenuTarget?>(null) }
-    var showLyricsOffset by remember { mutableStateOf(false) }
-    var menuFromPlayer by remember { mutableStateOf(false) }
-    var menuFromHistory by remember { mutableStateOf(false) }
-    var songMenuOrigin by remember { mutableStateOf<HeldItem?>(null) }
-    var songMenuAnchor by remember { mutableStateOf<Rect?>(null) }
     val playerBackdrop = rememberSnapshotBackdrop()
     val livePlayerBackdrop = rememberLayerBackdrop()
     var playerLiveCanvas by remember { mutableStateOf(false) }
     val pageBackdrop = rememberSnapshotBackdrop()
-    val openSongMenu: (Song) -> Unit = { song ->
-        menuFromPlayer = false
-        songMenuOrigin = LongPressOrigin.consume()
-        songMenuAnchor = MenuAnchor.consume()
-        songActions = song
-    }
-    var linksLoading by remember { mutableStateOf(false) }
-    var playlistTarget by remember { mutableStateOf<Song?>(null) }
-    var creatingPlaylist by remember { mutableStateOf(false) }
-    var offlinePlaylistTarget by remember { mutableStateOf<Song?>(null) }
-    var creatingOfflinePlaylist by remember { mutableStateOf(false) }
-    var showSpotifyImportDialog by remember { mutableStateOf(false) }
-    var browseActions by remember { mutableStateOf<BrowseTarget?>(null) }
-    var browseMenuOrigin by remember { mutableStateOf<HeldItem?>(null) }
-    var browseMenuAnchor by remember { mutableStateOf<Rect?>(null) }
-    var browseRenameInSheet by remember { mutableStateOf(false) }
-    var editPlaylistTarget by remember { mutableStateOf<UserPlaylist?>(null) }
-    var reorderTarget by remember { mutableStateOf<UserPlaylist?>(null) }
-    var reorderEntries by remember { mutableStateOf<UiState<List<Song>>>(UiState.Loading) }
-    var reorderSaving by remember { mutableStateOf(false) }
-    val openBrowseMenu: (BrowseTarget) -> Unit = { target ->
-        browseMenuOrigin = LongPressOrigin.consume()
-        browseMenuAnchor = MenuAnchor.consume()
-        browseRenameInSheet = false
-        browseActions = target
-    }
     val autoplay by AppSettings.autoplay.collectAsStateWithLifecycle()
     val partyState by ListenTogether.state.collectAsStateWithLifecycle()
     val autoplayEnabled = autoplayEnabledFor(partyState, autoplay)
     val partyServerStatus by ListenTogether.serverConnectionState.collectAsStateWithLifecycle()
     val listenBrainzToken by AppSettings.listenBrainzToken.collectAsStateWithLifecycle()
-    var searchFocusRequested by remember { mutableStateOf(false) }
-    var playRequestGeneration by remember { mutableIntStateOf(0) }
-    var activeRadioSeed by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     val onboardingComplete by AppSettings.onboardingComplete.collectAsStateWithLifecycle()
     val onboardingShown = remember { MutableTransitionState(!onboardingComplete) }
@@ -841,8 +776,6 @@ private fun BitChordApp(
     val diwaliFestive = remember(appForeground) {
         DiwaliGate.isIndianTimezone() && DiwaliGate.isDiwaliDay()
     }
-    var showDiwali by rememberSaveable { mutableStateOf(false) }
-    var diwaliAutoShown by rememberSaveable { mutableStateOf(false) }
 
     val navigator = viewModel.navigator
     val detailStack by viewModel.detailStack.collectAsStateWithLifecycle()
@@ -855,7 +788,7 @@ private fun BitChordApp(
     val detail = topDetail?.takeIf { visibleEntry == null }
 
     SystemBarIcons(
-        dark = !darkTheme && !showNowPlaying && route != AppRoute.Replay && replayStory == null && !onboardingVisible && !showDiwali,
+        dark = !darkTheme && !showNowPlaying && route != AppRoute.Replay && sheetHolder.replayStory == null && !onboardingVisible && !sheetHolder.showDiwali,
     )
 
     val homeState by viewModel.home.collectAsStateWithLifecycle()
@@ -879,9 +812,6 @@ private fun BitChordApp(
     val topPicks by viewModel.topPicks.collectAsStateWithLifecycle()
     val topPicksLoading by viewModel.topPicksLoading.collectAsStateWithLifecycle()
 
-    var updateDialogShown by rememberSaveable { mutableStateOf(false) }
-    var showUpdateDialog by remember { mutableStateOf(false) }
-    var showAboutWhatsNew by remember { mutableStateOf(false) }
     val updateAvailable by viewModel.updateAvailable.collectAsStateWithLifecycle()
 
     val updateNotice = updateAvailable
@@ -905,8 +835,6 @@ private fun BitChordApp(
     val signedIn by viewModel.signedIn.collectAsStateWithLifecycle()
     val incomingJamInvite by JamInviteLink.pending.collectAsStateWithLifecycle()
     val linkRequest by MusicLink.pending.collectAsStateWithLifecycle()
-    var activeJamInviteCode by rememberSaveable { mutableStateOf<String?>(null) }
-    var activeJamInviteServer by rememberSaveable { mutableStateOf<String?>(null) }
 
     val account by viewModel.account.collectAsStateWithLifecycle()
     val selectedChannelName by viewModel.selectedChannelName.collectAsStateWithLifecycle()
@@ -930,7 +858,6 @@ private fun BitChordApp(
     val isReleaseDetail = detail != null && !isLocalDetail && detail.type != BrowseType.ARTIST
     val detailSongSorts by AppSettings.detailSongSorts.collectAsStateWithLifecycle()
     val songSort = topDetail?.browseId?.let { detailSongSorts[it] } ?: SongSort.DEFAULT
-    var songSortMenuOpen by remember { mutableStateOf(false) }
     val downloadedMusicSort by AppSettings.downloadedMusicSort.collectAsStateWithLifecycle()
     val localMusicSort by AppSettings.localMusicSort.collectAsStateWithLifecycle()
     val downloadedMusicViewType by AppSettings.downloadedMusicViewType.collectAsStateWithLifecycle()
@@ -941,7 +868,6 @@ private fun BitChordApp(
     val folderViewTypeOf: (String) -> LibraryViewType = { id ->
         if (id == "local:downloads") downloadedMusicViewType else localMusicViewType
     }
-    var folderMenuOpen by remember { mutableStateOf(false) }
     var detailSearching by rememberSaveable(topDetail?.browseId) { mutableStateOf(false) }
     val likeStatuses by viewModel.likeStatuses.collectAsStateWithLifecycle()
     val radioFavoritesStore = remember(context) { PreferencesRadioFavoritesStore(context) }
@@ -1117,7 +1043,7 @@ private fun BitChordApp(
     }
 
     val replayEntryId = navigator.entries.lastOrNull { it.route == AppRoute.Replay }?.id
-    val replayListState = remember(replayEntryId, replayLandingPage) { LazyListState() }
+    val replayListState = remember(replayEntryId, sheetHolder.replayLandingPage) { LazyListState() }
     val replayScrolled by remember(replayListState) {
         derivedStateOf {
             replayListState.firstVisibleItemIndex > 0 ||
@@ -1165,18 +1091,18 @@ private fun BitChordApp(
 
 
     val onSelectTab: (Int) -> Unit = { index ->
-        if (recognitionOpen) {
-            recognitionOpen = false
+        if (sheetHolder.recognitionOpen) {
+            sheetHolder.recognitionOpen = false
             MusicRecognitionService.reset()
         }
         navigator.clear()
         viewModel.closeMoodGenre()
-        radioSubpageBack = null
+        sheetHolder.radioSubpageBack = null
         selectedTab = index
 
         if (index == TAB_SEARCH) {
             viewModel.onQueryChange("")
-            searchFocusRequested = true
+            sheetHolder.searchFocusRequested = true
         }
     }
 
@@ -1203,79 +1129,18 @@ private fun BitChordApp(
         showHostOnlyNotice = showHostOnlyNotice,
         dismissPlayer = dismissPlayer,
         togglePlayPause = togglePlayPause,
-        openSongMenu = openSongMenu,
-        openBrowseMenu = openBrowseMenu,
         downloadIdFor = downloadIdFor,
         folderSortOf = folderSortOf,
         folderViewTypeOf = folderViewTypeOf,
         likeStatusOf = likeStatusOf,
         toggleLikeOf = toggleLikeOf,
-        activeRadioSeed = activeRadioSeed,
-        onActiveRadioSeedChanged = { activeRadioSeed = it },
+        sheetHolder = sheetHolder,
+        playerBackdrop = playerBackdrop,
+        playerLiveCanvas = playerLiveCanvas,
         onSelectTab = onSelectTab,
-        onRecognitionOpenChange = { recognitionOpen = it },
-        onShowRecognitionHistoryClearConfirmationChange = { showRecognitionHistoryClearConfirmation = it },
-        onShowRadioHistoryClearConfirmationChange = { showRadioHistoryClearConfirmation = it },
-        onRadioSubpageBackChange = { radioSubpageBack = it },
-        onReplayStoryChange = { replayStory = it },
-        onShowReplayShareChange = { showReplayShare = it },
-        onReplaySharePageChange = { replaySharePage = it },
-        onReplayLandingPageChange = { replayLandingPage = it },
-        onShowSpotifyCanvasAuthChange = { showSpotifyCanvasAuth = it },
-        onEditingSourceChange = { editingSource = it },
-        onChoosingSourceQualityChange = { choosingSourceQuality = it },
-        onExplainingOutdatedAddonChange = { explainingOutdatedAddon = it },
-        onConfirmJioSaavnChange = { confirmJioSaavn = it },
-        onConfirmBitPerfectChange = { confirmBitPerfect = it },
-        onConfirmFixedVolumeChange = { confirmFixedVolume = it },
-        onBlockedAddonSongChange = { blockedAddonSong = it },
-        onAddonLeftOutOfDownloadChange = { addonLeftOutOfDownload = it },
-        onEditingPartyServerChange = { editingPartyServer = it },
-        onEditingSignatureApiChange = { editingSignatureApi = it },
-        onShowLyricsSourcesChange = { showLyricsSources = it },
-        onSongSortMenuOpenChange = { songSortMenuOpen = it },
-        onFolderMenuOpenChange = { folderMenuOpen = it },
         onDetailSearchingChange = { detailSearching = it },
-        onShowAccountSelectorChange = { showAccountSelector = it },
-        onShowAppLanguageChange = { showAppLanguage = it },
-        onShowTranslationLanguageChange = { showTranslationLanguage = it },
-        onShowListenBrainzLoginChange = { showListenBrainzLogin = it },
-        onShowLastfmLoginChange = { showLastfmLogin = it },
-        onShowWebDavEditorChange = { showWebDavEditor = it },
-        onShowSmbEditorChange = { showSmbEditor = it },
-        onShowDiscordLoginChange = { showDiscordLogin = it },
-        onShowSpotifyLoginChange = { showSpotifyLogin = it },
-        onDiscordDialogChange = { discordDialog = it },
-        onShowAboutWhatsNewChange = { showAboutWhatsNew = it },
-        onPlaylistTargetChange = { playlistTarget = it },
-        onCreatingPlaylistChange = { creatingPlaylist = it },
-        onOfflinePlaylistTargetChange = { offlinePlaylistTarget = it },
-        onCreatingOfflinePlaylistChange = { creatingOfflinePlaylist = it },
-        onEditPlaylistTargetChange = { editPlaylistTarget = it },
-        onShowSpotifyImportDialogChange = { showSpotifyImportDialog = it },
-        onSongActionsChange = { songActions = it },
-        onSongMenuOriginChange = { songMenuOrigin = it },
-        onSongMenuAnchorChange = { songMenuAnchor = it },
-        onMenuFromPlayerChange = { menuFromPlayer = it },
-        onMenuFromHistoryChange = { menuFromHistory = it },
-        onBrowseActionsChange = { browseActions = it },
-        onBrowseMenuOriginChange = { browseMenuOrigin = it },
-        onBrowseMenuAnchorChange = { browseMenuAnchor = it },
-        onBrowseRenameInSheetChange = { browseRenameInSheet = it },
-        onStationActionsChange = { stationActions = it },
-        onSearchFocusRequestedChange = { searchFocusRequested = it },
-        onReorderTargetChange = { reorderTarget = it },
-        onReorderEntriesChange = { reorderEntries = it },
-        onReorderSavingChange = { reorderSaving = it },
         onShowNowPlayingChange = { showNowPlaying = it },
         onPlayerLiveCanvasChange = { playerLiveCanvas = it },
-        onShowDiwaliChange = { showDiwali = it },
-        onShowUpdateDialogChange = { showUpdateDialog = it },
-        onWebSessionChange = { webSession = it },
-        onActiveJamInviteCodeChange = { activeJamInviteCode = it },
-        onActiveJamInviteServerChange = { activeJamInviteServer = it },
-        onRecognitionFabVisibleChange = { recognitionFabVisible = it },
-        onShowLyricsOffsetChange = { showLyricsOffset = it },
         onOptimisticVersionSongChange = { optimisticVersionSong = it },
         onConvertedFromVideoChange = { song, id ->
             convertedFromVideo = song
@@ -1303,7 +1168,7 @@ private fun BitChordApp(
         keyColors = detailApple?.keyColors(),
     )
 
-    val replayOpen = route == AppRoute.Replay || replayStory != null || showReplayShare ||
+    val replayOpen = route == AppRoute.Replay || sheetHolder.replayStory != null || sheetHolder.showReplayShare ||
         (selectedTab == TAB_LIBRARY && detail == null && route == null)
     val (replay, setReplayPeriod) = rememberReplayState(replayOpen)
     val replayCards = remember(replay.summary) {
@@ -1333,12 +1198,12 @@ private fun BitChordApp(
         player = player,
         listPadding = listPadding,
         artworkMotion = artworkMotion,
-        radioSubpageBack = radioSubpageBack,
-        recognitionOpen = recognitionOpen,
-        showDiwali = showDiwali,
+        radioSubpageBack = sheetHolder.radioSubpageBack,
+        recognitionOpen = sheetHolder.recognitionOpen,
+        showDiwali = sheetHolder.showDiwali,
         diwaliFestive = diwaliFestive,
         searchSource = searchSource,
-        searchFocusRequested = searchFocusRequested,
+        searchFocusRequested = sheetHolder.searchFocusRequested,
         searchScrollReset = searchScrollReset,
         query = query,
         filter = filter,
@@ -1356,8 +1221,8 @@ private fun BitChordApp(
         offlinePlaylistGroups = offlinePlaylistGroups,
         localPlaylistItems = localPlaylistItems,
         webdavUrl = webdavUrl,
-        activeJamInviteCode = activeJamInviteCode,
-        activeJamInviteServer = activeJamInviteServer,
+        activeJamInviteCode = sheetHolder.activeJamInviteCode,
+        activeJamInviteServer = sheetHolder.activeJamInviteServer,
         homeState = homeState,
         visibleHomeState = visibleHomeState,
         homeLoadingMore = homeLoadingMore,
@@ -1376,16 +1241,16 @@ private fun BitChordApp(
         recognitionHistory = recognitionHistory,
         replay = replay,
         replayCards = replayCards,
-        replayLandingPage = replayLandingPage,
+        replayLandingPage = sheetHolder.replayLandingPage,
         detailActiveShelf = detailActiveShelf,
         detailSearching = detailSearching,
         isLocalDetail = isLocalDetail,
         refreshing = refreshing,
-        showRecognitionHistoryClearConfirmation = showRecognitionHistoryClearConfirmation,
-        showRadioHistoryClearConfirmation = showRadioHistoryClearConfirmation,
-        reorderTarget = reorderTarget,
-        reorderEntries = reorderEntries,
-        reorderSaving = reorderSaving,
+        showRecognitionHistoryClearConfirmation = sheetHolder.showRecognitionHistoryClearConfirmation,
+        showRadioHistoryClearConfirmation = sheetHolder.showRadioHistoryClearConfirmation,
+        reorderTarget = sheetHolder.reorderTarget,
+        reorderEntries = sheetHolder.reorderEntries,
+        reorderSaving = sheetHolder.reorderSaving,
         glassActive = glassActive,
         glassSamplesBackdrop = glassSamplesBackdrop,
         detailListStates = detailListStates,
@@ -1433,12 +1298,13 @@ private fun BitChordApp(
         scrolled = scrolled,
         partyServerStatus = partyServerStatus,
         updateNotice = updateNotice,
-        recognitionFabVisible = recognitionFabVisible,
+        recognitionFabVisible = sheetHolder.recognitionFabVisible,
         librarySort = librarySort,
         reduceDynamicBlur = reduceDynamicBlur,
     )
 
-    val playerUiState = BitChordPlayerUiState(
+    val playerUiState = rememberBitChordPlayerUiState(
+        sheetHolder = sheetHolder,
         playerRaised = playerShowing && playerSong != null,
         playerSong = playerSong,
         showNowPlaying = showNowPlaying,
@@ -1452,13 +1318,8 @@ private fun BitChordApp(
         convertedAudioId = convertedAudioId,
         convertedVideoId = convertedVideoId,
         keepVideoId = keepVideoId,
-        activeRadioSeed = activeRadioSeed,
         partyState = partyState,
         account = account,
-        songActions = songActions,
-        songMenuOrigin = songMenuOrigin,
-        songMenuAnchor = songMenuAnchor,
-        menuFromPlayer = menuFromPlayer,
         controlsLocked = controlsLocked,
         shuffleEnabled = shuffleEnabled,
         autoplayEnabled = autoplayEnabled,
@@ -1471,7 +1332,6 @@ private fun BitChordApp(
         lyricsSource = lyricsSource,
         lyricsProviderStates = lyricsProviderStates,
         lyricsChecked = lyricsChecked,
-        showLyricsOffset = showLyricsOffset,
         queueLabel = queueLabel,
         queueNotice = queueNotice,
         convertedFromVideo = convertedFromVideo,
@@ -1488,34 +1348,17 @@ private fun BitChordApp(
         livePlayerBackdrop = livePlayerBackdrop,
     )
 
-    val sheetsUiState = BitChordSheetsUiState(
+    val sheetsUiState = rememberBitChordSheetsUiState(
+        sheetHolder = sheetHolder,
         pageBackdrop = pageBackdrop,
         reduceDynamicBlur = reduceDynamicBlur,
         playerRaised = playerShowing && playerSong != null,
-        songActions = songActions,
-        songMenuOrigin = songMenuOrigin,
-        songMenuAnchor = songMenuAnchor,
-        menuFromPlayer = menuFromPlayer,
-        browseActions = browseActions,
-        browseMenuOrigin = browseMenuOrigin,
-        browseMenuAnchor = browseMenuAnchor,
-        browseRenameInSheet = browseRenameInSheet,
-        stationActions = stationActions,
         replay = replay,
-        replayStory = replayStory,
-        showReplayShare = showReplayShare,
-        replaySharePage = replaySharePage,
         account = account,
-        playlistTarget = playlistTarget,
-        creatingPlaylist = creatingPlaylist,
         playlists = playlists,
         playlistsLoading = playlistsLoading,
-        offlinePlaylistTarget = offlinePlaylistTarget,
-        creatingOfflinePlaylist = creatingOfflinePlaylist,
         offlinePlaylists = offlinePlaylists,
-        showSpotifyImportDialog = showSpotifyImportDialog,
         signedIn = signedIn,
-        editPlaylistTarget = editPlaylistTarget,
         detailStack = detailStack,
         libraryState = libraryState,
         likeStatuses = likeStatuses,
@@ -1523,43 +1366,14 @@ private fun BitChordApp(
         results = results,
         filter = filter,
         onboardingShown = onboardingShown,
-        webSession = webSession,
         googleAccounts = googleAccounts,
         activeAccountId = activeAccountId,
         activeProfileId = activeProfileId,
-        showDiwali = showDiwali,
-        showUpdateDialog = showUpdateDialog,
         onboardingComplete = onboardingComplete,
         updateAvailable = updateAvailable,
-        showLyricsSources = showLyricsSources,
-        songSortMenuOpen = songSortMenuOpen,
         songSort = songSort,
         detail = detail,
-        folderMenuOpen = folderMenuOpen,
-        showAccountSelector = showAccountSelector,
-        showAppLanguage = showAppLanguage,
-        showTranslationLanguage = showTranslationLanguage,
-        showListenBrainzLogin = showListenBrainzLogin,
         listenBrainzToken = listenBrainzToken,
-        showLastfmLogin = showLastfmLogin,
-        showWebDavEditor = showWebDavEditor,
-        showSmbEditor = showSmbEditor,
-        showDiscordLogin = showDiscordLogin,
-        showSpotifyLogin = showSpotifyLogin,
-        showSpotifyCanvasAuth = showSpotifyCanvasAuth,
-        discordDialog = discordDialog,
-        editingPartyServer = editingPartyServer,
-        editingSignatureApi = editingSignatureApi,
-        editingSource = editingSource,
-        choosingSourceQuality = choosingSourceQuality,
-        explainingOutdatedAddon = explainingOutdatedAddon,
-        confirmJioSaavn = confirmJioSaavn,
-        confirmBitPerfect = confirmBitPerfect,
-        confirmFixedVolume = confirmFixedVolume,
-        blockedAddonSong = blockedAddonSong,
-        addonLeftOutOfDownload = addonLeftOutOfDownload,
-        showAboutWhatsNew = showAboutWhatsNew,
-        recognitionOpen = recognitionOpen,
     )
 
     val appState = BitChordAppState(
@@ -1578,10 +1392,10 @@ private fun BitChordApp(
         versionSwitch = versionSwitch,
         context = context,
         openPlayerRequested = openPlayerRequested,
-        diwaliAutoShown = diwaliAutoShown,
-        onSetDiwaliAutoShown = { diwaliAutoShown = it },
-        updateDialogShown = updateDialogShown,
-        onSetUpdateDialogShown = { updateDialogShown = it },
+        diwaliAutoShown = sheetHolder.diwaliAutoShown,
+        onSetDiwaliAutoShown = { sheetHolder.diwaliAutoShown = it },
+        updateDialogShown = sheetHolder.updateDialogShown,
+        onSetUpdateDialogShown = { sheetHolder.updateDialogShown = it },
         incomingJamInvite = incomingJamInvite,
         syncedLyricsEnabled = syncedLyricsEnabled,
         lyricsSources = lyricsSources,
@@ -1594,7 +1408,7 @@ private fun BitChordApp(
         playerShowing = playerShowing,
         playerSong = playerSong,
         onSetLinks = { links = it },
-        onSetLinksLoading = { linksLoading = it },
+        onSetLinksLoading = { sheetHolder.linksLoading = it },
         onClearQueueNotice = { queueNotice = null },
         appForeground = appForeground,
         savedDownloads = savedDownloads,
@@ -1602,9 +1416,9 @@ private fun BitChordApp(
         filterNonMusicAudio = filterNonMusicAudio,
         smbHost = smbHost,
         livePageKeys = livePageKeys,
-        onActiveJamInviteCodeChange = { activeJamInviteCode = it },
-        onActiveJamInviteServerChange = { activeJamInviteServer = it },
-        onRecognitionFabVisibleChange = { recognitionFabVisible = it },
+        onActiveJamInviteCodeChange = { sheetHolder.activeJamInviteCode = it },
+        onActiveJamInviteServerChange = { sheetHolder.activeJamInviteServer = it },
+        onRecognitionFabVisibleChange = { sheetHolder.recognitionFabVisible = it },
     )
     BitChordAppContent(
         state = appState,
@@ -1648,79 +1462,18 @@ private fun rememberBitChordAppActions(
     showHostOnlyNotice: () -> Unit,
     dismissPlayer: () -> Unit,
     togglePlayPause: () -> Unit,
-    openSongMenu: (Song) -> Unit,
-    openBrowseMenu: (BrowseTarget) -> Unit,
     downloadIdFor: (String?) -> String?,
     folderSortOf: (String) -> LocalMusicSort,
     folderViewTypeOf: (String) -> LibraryViewType,
     likeStatusOf: (Song) -> LikeStatus,
     toggleLikeOf: (Song) -> Unit,
-    activeRadioSeed: Pair<String, String>?,
-    onActiveRadioSeedChanged: (Pair<String, String>?) -> Unit,
+    sheetHolder: BitChordSheetStateHolder,
+    playerBackdrop: SnapshotBackdrop,
+    playerLiveCanvas: Boolean,
     onSelectTab: (Int) -> Unit,
-    onRecognitionOpenChange: (Boolean) -> Unit,
-    onShowRecognitionHistoryClearConfirmationChange: (Boolean) -> Unit,
-    onShowRadioHistoryClearConfirmationChange: (Boolean) -> Unit,
-    onRadioSubpageBackChange: ((() -> Unit)?) -> Unit,
-    onReplayStoryChange: (ReplayStoryPage?) -> Unit,
-    onShowReplayShareChange: (Boolean) -> Unit,
-    onReplaySharePageChange: (ReplayStoryPage?) -> Unit,
-    onReplayLandingPageChange: (ReplayStoryPage) -> Unit,
-    onShowSpotifyCanvasAuthChange: (Boolean) -> Unit,
-    onEditingSourceChange: (SourceConfig?) -> Unit,
-    onChoosingSourceQualityChange: (SourceConfig?) -> Unit,
-    onExplainingOutdatedAddonChange: (SourceConfig?) -> Unit,
-    onConfirmJioSaavnChange: (Boolean) -> Unit,
-    onConfirmBitPerfectChange: (BitPerfectMode?) -> Unit,
-    onConfirmFixedVolumeChange: (Boolean) -> Unit,
-    onBlockedAddonSongChange: (Song?) -> Unit,
-    onAddonLeftOutOfDownloadChange: (Pair<String, SourceRegistry.DownloadExclusion>?) -> Unit,
-    onEditingPartyServerChange: (Boolean) -> Unit,
-    onEditingSignatureApiChange: (Boolean) -> Unit,
-    onShowLyricsSourcesChange: (Boolean) -> Unit,
-    onSongSortMenuOpenChange: (Boolean) -> Unit,
-    onFolderMenuOpenChange: (Boolean) -> Unit,
-    onShowAccountSelectorChange: (Boolean) -> Unit,
-    onShowAppLanguageChange: (Boolean) -> Unit,
-    onShowTranslationLanguageChange: (Boolean) -> Unit,
-    onShowListenBrainzLoginChange: (Boolean) -> Unit,
-    onShowLastfmLoginChange: (Boolean) -> Unit,
-    onShowWebDavEditorChange: (Boolean) -> Unit,
-    onShowSmbEditorChange: (Boolean) -> Unit,
-    onShowDiscordLoginChange: (Boolean) -> Unit,
-    onShowSpotifyLoginChange: (Boolean) -> Unit,
-    onDiscordDialogChange: (DiscordDialog?) -> Unit,
-    onShowAboutWhatsNewChange: (Boolean) -> Unit,
-    onPlaylistTargetChange: (Song?) -> Unit,
-    onCreatingPlaylistChange: (Boolean) -> Unit,
-    onOfflinePlaylistTargetChange: (Song?) -> Unit,
-    onCreatingOfflinePlaylistChange: (Boolean) -> Unit,
-    onEditPlaylistTargetChange: (UserPlaylist?) -> Unit,
-    onShowSpotifyImportDialogChange: (Boolean) -> Unit,
-    onSongActionsChange: (Song?) -> Unit,
-    onSongMenuOriginChange: (HeldItem?) -> Unit,
-    onSongMenuAnchorChange: (Rect?) -> Unit,
-    onMenuFromPlayerChange: (Boolean) -> Unit,
-    onMenuFromHistoryChange: (Boolean) -> Unit,
-    onBrowseActionsChange: (BrowseTarget?) -> Unit,
-    onBrowseMenuOriginChange: (HeldItem?) -> Unit,
-    onBrowseMenuAnchorChange: (Rect?) -> Unit,
-    onBrowseRenameInSheetChange: (Boolean) -> Unit,
-    onStationActionsChange: (StationMenuTarget?) -> Unit,
-    onSearchFocusRequestedChange: (Boolean) -> Unit,
     onDetailSearchingChange: (Boolean) -> Unit,
-    onReorderTargetChange: (UserPlaylist?) -> Unit,
-    onReorderEntriesChange: (UiState<List<Song>>) -> Unit,
-    onReorderSavingChange: (Boolean) -> Unit,
     onShowNowPlayingChange: (Boolean) -> Unit,
     onPlayerLiveCanvasChange: (Boolean) -> Unit,
-    onShowDiwaliChange: (Boolean) -> Unit,
-    onShowUpdateDialogChange: (Boolean) -> Unit,
-    onWebSessionChange: (WebSessionMode?) -> Unit,
-    onActiveJamInviteCodeChange: (String?) -> Unit,
-    onActiveJamInviteServerChange: (String?) -> Unit,
-    onRecognitionFabVisibleChange: (Boolean) -> Unit,
-    onShowLyricsOffsetChange: (Boolean) -> Unit,
     onOptimisticVersionSongChange: (Song?) -> Unit,
     onConvertedFromVideoChange: (Song?, String?) -> Unit,
     onConvertedFromAudioChange: (Song?, String?) -> Unit,
@@ -1728,6 +1481,28 @@ private fun rememberBitChordAppActions(
 ): BitChordAppActions {
     val scope = rememberCoroutineScope()
     var playRequestGeneration by remember { mutableIntStateOf(0) }
+
+    val openSongMenu: (Song) -> Unit = { song ->
+        sheetHolder.menuFromPlayer = false
+        sheetHolder.songMenuOrigin = LongPressOrigin.consume()
+        sheetHolder.songMenuAnchor = MenuAnchor.consume()
+        sheetHolder.songActions = song
+    }
+    val openPlayerSongMenu: (Song) -> Unit = { song ->
+        sheetHolder.menuFromPlayer = true
+        sheetHolder.songMenuOrigin = null
+        sheetHolder.songMenuAnchor = MenuAnchor.consume()
+        sheetHolder.songActions = song
+        if (!AppSettings.reduceDynamicBlur.value && !playerLiveCanvas) {
+            playerBackdrop.capture()
+        }
+    }
+    val openBrowseMenu: (BrowseTarget) -> Unit = { target ->
+        sheetHolder.browseMenuOrigin = LongPressOrigin.consume()
+        sheetHolder.browseMenuAnchor = MenuAnchor.consume()
+        sheetHolder.browseRenameInSheet = false
+        sheetHolder.browseActions = target
+    }
 
     fun uploadToWebDav(songs: List<Song>) {
         uploadTracksToWebDav(scope, context, songs, topDetail?.browseId, viewModel, showQueueNotice)
@@ -1760,7 +1535,7 @@ private fun rememberBitChordAppActions(
             refusedByHost = refusedByHost,
             onPlayRequested = {
                 playRequestGeneration++
-                onActiveRadioSeedChanged(null)
+                sheetHolder.activeRadioSeed = null
             },
         )
     }
@@ -1787,7 +1562,7 @@ private fun rememberBitChordAppActions(
      */
     val playRadio: (Song, QueueSource) -> Unit = { song, source ->
         playRequestGeneration++
-        onActiveRadioSeedChanged(null)
+        sheetHolder.activeRadioSeed = null
         scope.launch {
             if (refusedByHost()) return@launch
             val c = controller ?: return@launch
@@ -1807,7 +1582,7 @@ private fun rememberBitChordAppActions(
 
     val playRecognizedSong: (RecognitionResult) -> Unit = { result ->
         navigator.clear()
-        onRecognitionOpenChange(false)
+        sheetHolder.recognitionOpen = false
         val videoId = result.youtubeVideoId
         if (!videoId.isNullOrBlank()) {
             onSelectTab(TAB_HOME)
@@ -1831,7 +1606,7 @@ private fun rememberBitChordAppActions(
 
     val playRecognitionHistoryEntry: (RecognitionHistoryEntry) -> Unit = { entry ->
         navigator.clear()
-        onShowRecognitionHistoryClearConfirmationChange(false)
+        sheetHolder.showRecognitionHistoryClearConfirmation = false
         val videoId = entry.videoId
         if (!videoId.isNullOrBlank()) {
             onSelectTab(TAB_HOME)
@@ -1869,7 +1644,7 @@ private fun rememberBitChordAppActions(
             refusedByHost = refusedByHost,
             onPlayRequested = { ++playRequestGeneration },
             isCurrentRequest = { it == playRequestGeneration },
-            onActiveRadioSeedChanged = onActiveRadioSeedChanged,
+            onActiveRadioSeedChanged = { sheetHolder.activeRadioSeed = it },
         )
     }
 
@@ -1884,7 +1659,7 @@ private fun rememberBitChordAppActions(
             refusedByHost = refusedByHost,
             onPlayRequested = { ++playRequestGeneration },
             isCurrentRequest = { it == playRequestGeneration },
-            onActiveRadioSeedChanged = onActiveRadioSeedChanged,
+            onActiveRadioSeedChanged = { sheetHolder.activeRadioSeed = it },
         )
     }
 
@@ -2182,7 +1957,7 @@ private fun rememberBitChordAppActions(
             if (!songs.all { Downloads.servableFromCache(it.videoId) }) {
                 SourceRegistry.addonsLeftOutOfDownloads()
                     .firstOrNull { (config, why) -> explainedDownloadExclusions.add("${config.id}:$why") }
-                    ?.let { (config, why) -> onAddonLeftOutOfDownloadChange(config.displayName to why) }
+                    ?.let { (config, why) -> sheetHolder.addonLeftOutOfDownload = config.displayName to why }
             }
         }
         // Recorded for everything that was asked for, not just what still has to
@@ -2297,6 +2072,7 @@ private fun rememberBitChordAppActions(
         removeFromCache = removeFromCache,
         downloadSong = downloadSong,
         openSongMenu = openSongMenu,
+        openPlayerSongMenu = openPlayerSongMenu,
         openBrowseMenu = openBrowseMenu,
         folderSortOf = folderSortOf,
         folderViewTypeOf = folderViewTypeOf,
@@ -2316,71 +2092,71 @@ private fun rememberBitChordAppActions(
             scope.launch { switchToVideo(song, pause) }
         },
         onSelectTab = onSelectTab,
-        onRecognitionOpenChange = onRecognitionOpenChange,
+        onRecognitionOpenChange = { sheetHolder.recognitionOpen = it },
         onResetRecognition = {
-            onRecognitionOpenChange(false)
+            sheetHolder.recognitionOpen = false
             MusicRecognitionService.reset()
         },
-        onShowRecognitionHistoryClearConfirmationChange = onShowRecognitionHistoryClearConfirmationChange,
-        onShowRadioHistoryClearConfirmationChange = onShowRadioHistoryClearConfirmationChange,
-        onRadioSubpageBackChange = onRadioSubpageBackChange,
-        onReplayStoryChange = onReplayStoryChange,
-        onShowReplayShareChange = onShowReplayShareChange,
-        onReplaySharePageChange = onReplaySharePageChange,
-        onReplayLandingPageChange = onReplayLandingPageChange,
-        onShowSpotifyCanvasAuthChange = onShowSpotifyCanvasAuthChange,
-        onEditingSourceChange = onEditingSourceChange,
-        onChoosingSourceQualityChange = onChoosingSourceQualityChange,
-        onExplainingOutdatedAddonChange = onExplainingOutdatedAddonChange,
-        onConfirmJioSaavnChange = onConfirmJioSaavnChange,
-        onConfirmBitPerfectChange = onConfirmBitPerfectChange,
-        onConfirmFixedVolumeChange = onConfirmFixedVolumeChange,
-        onBlockedAddonSongChange = onBlockedAddonSongChange,
-        onAddonLeftOutOfDownloadChange = onAddonLeftOutOfDownloadChange,
-        onEditingPartyServerChange = onEditingPartyServerChange,
-        onEditingSignatureApiChange = onEditingSignatureApiChange,
-        onShowLyricsSourcesChange = onShowLyricsSourcesChange,
-        onShowAppLanguageChange = onShowAppLanguageChange,
-        onShowTranslationLanguageChange = onShowTranslationLanguageChange,
-        onShowAccountSelectorChange = onShowAccountSelectorChange,
-        onShowListenBrainzLoginChange = onShowListenBrainzLoginChange,
-        onShowLastfmLoginChange = onShowLastfmLoginChange,
-        onShowDiscordLoginChange = onShowDiscordLoginChange,
-        onShowSpotifyLoginChange = onShowSpotifyLoginChange,
-        onShowWebDavEditorChange = onShowWebDavEditorChange,
-        onShowSmbEditorChange = onShowSmbEditorChange,
-        onDiscordDialogChange = onDiscordDialogChange,
-        onShowLyricsOffsetChange = onShowLyricsOffsetChange,
-        onStationActionsChange = onStationActionsChange,
-        onSongActionsChange = onSongActionsChange,
-        onSongMenuOriginChange = onSongMenuOriginChange,
-        onSongMenuAnchorChange = onSongMenuAnchorChange,
-        onMenuFromPlayerChange = onMenuFromPlayerChange,
-        onMenuFromHistoryChange = onMenuFromHistoryChange,
-        onBrowseActionsChange = onBrowseActionsChange,
-        onBrowseMenuOriginChange = onBrowseMenuOriginChange,
-        onBrowseMenuAnchorChange = onBrowseMenuAnchorChange,
-        onBrowseRenameInSheetChange = onBrowseRenameInSheetChange,
-        onEditPlaylistTargetChange = onEditPlaylistTargetChange,
-        onPlaylistTargetChange = onPlaylistTargetChange,
-        onCreatingPlaylistChange = onCreatingPlaylistChange,
-        onOfflinePlaylistTargetChange = onOfflinePlaylistTargetChange,
-        onCreatingOfflinePlaylistChange = onCreatingOfflinePlaylistChange,
-        onShowSpotifyImportDialogChange = onShowSpotifyImportDialogChange,
-        onWebSessionChange = onWebSessionChange,
-        onShowAboutWhatsNewChange = onShowAboutWhatsNewChange,
-        onShowUpdateDialogChange = onShowUpdateDialogChange,
-        onShowDiwaliChange = onShowDiwaliChange,
-        onSongSortMenuOpenChange = onSongSortMenuOpenChange,
-        onFolderMenuOpenChange = onFolderMenuOpenChange,
+        onShowRecognitionHistoryClearConfirmationChange = { sheetHolder.showRecognitionHistoryClearConfirmation = it },
+        onShowRadioHistoryClearConfirmationChange = { sheetHolder.showRadioHistoryClearConfirmation = it },
+        onRadioSubpageBackChange = { sheetHolder.radioSubpageBack = it },
+        onReplayStoryChange = { sheetHolder.replayStory = it },
+        onShowReplayShareChange = { sheetHolder.showReplayShare = it },
+        onReplaySharePageChange = { sheetHolder.replaySharePage = it },
+        onReplayLandingPageChange = { sheetHolder.replayLandingPage = it },
+        onShowSpotifyCanvasAuthChange = { sheetHolder.showSpotifyCanvasAuth = it },
+        onEditingSourceChange = { sheetHolder.editingSource = it },
+        onChoosingSourceQualityChange = { sheetHolder.choosingSourceQuality = it },
+        onExplainingOutdatedAddonChange = { sheetHolder.explainingOutdatedAddon = it },
+        onConfirmJioSaavnChange = { sheetHolder.confirmJioSaavn = it },
+        onConfirmBitPerfectChange = { sheetHolder.confirmBitPerfect = it },
+        onConfirmFixedVolumeChange = { sheetHolder.confirmFixedVolume = it },
+        onBlockedAddonSongChange = { sheetHolder.blockedAddonSong = it },
+        onAddonLeftOutOfDownloadChange = { sheetHolder.addonLeftOutOfDownload = it },
+        onEditingPartyServerChange = { sheetHolder.editingPartyServer = it },
+        onEditingSignatureApiChange = { sheetHolder.editingSignatureApi = it },
+        onShowLyricsSourcesChange = { sheetHolder.showLyricsSources = it },
+        onShowAppLanguageChange = { sheetHolder.showAppLanguage = it },
+        onShowTranslationLanguageChange = { sheetHolder.showTranslationLanguage = it },
+        onShowAccountSelectorChange = { sheetHolder.showAccountSelector = it },
+        onShowListenBrainzLoginChange = { sheetHolder.showListenBrainzLogin = it },
+        onShowLastfmLoginChange = { sheetHolder.showLastfmLogin = it },
+        onShowDiscordLoginChange = { sheetHolder.showDiscordLogin = it },
+        onShowSpotifyLoginChange = { sheetHolder.showSpotifyLogin = it },
+        onShowWebDavEditorChange = { sheetHolder.showWebDavEditor = it },
+        onShowSmbEditorChange = { sheetHolder.showSmbEditor = it },
+        onDiscordDialogChange = { sheetHolder.discordDialog = it },
+        onShowLyricsOffsetChange = { sheetHolder.showLyricsOffset = it },
+        onStationActionsChange = { sheetHolder.stationActions = it },
+        onSongActionsChange = { sheetHolder.songActions = it },
+        onSongMenuOriginChange = { sheetHolder.songMenuOrigin = it },
+        onSongMenuAnchorChange = { sheetHolder.songMenuAnchor = it },
+        onMenuFromPlayerChange = { sheetHolder.menuFromPlayer = it },
+        onMenuFromHistoryChange = { sheetHolder.menuFromHistory = it },
+        onBrowseActionsChange = { sheetHolder.browseActions = it },
+        onBrowseMenuOriginChange = { sheetHolder.browseMenuOrigin = it },
+        onBrowseMenuAnchorChange = { sheetHolder.browseMenuAnchor = it },
+        onBrowseRenameInSheetChange = { sheetHolder.browseRenameInSheet = it },
+        onEditPlaylistTargetChange = { sheetHolder.editPlaylistTarget = it },
+        onPlaylistTargetChange = { sheetHolder.playlistTarget = it },
+        onCreatingPlaylistChange = { sheetHolder.creatingPlaylist = it },
+        onOfflinePlaylistTargetChange = { sheetHolder.offlinePlaylistTarget = it },
+        onCreatingOfflinePlaylistChange = { sheetHolder.creatingOfflinePlaylist = it },
+        onShowSpotifyImportDialogChange = { sheetHolder.showSpotifyImportDialog = it },
+        onWebSessionChange = { sheetHolder.webSession = it },
+        onShowAboutWhatsNewChange = { sheetHolder.showAboutWhatsNew = it },
+        onShowUpdateDialogChange = { sheetHolder.showUpdateDialog = it },
+        onShowDiwaliChange = { sheetHolder.showDiwali = it },
+        onSongSortMenuOpenChange = { sheetHolder.songSortMenuOpen = it },
+        onFolderMenuOpenChange = { sheetHolder.folderMenuOpen = it },
         onDetailSearchingChange = onDetailSearchingChange,
         onShowNowPlayingChange = onShowNowPlayingChange,
         onPlayerLiveCanvasChange = onPlayerLiveCanvasChange,
-        onActiveRadioSeedChange = onActiveRadioSeedChanged,
-        onReorderTargetChange = onReorderTargetChange,
-        onReorderEntriesChange = onReorderEntriesChange,
-        onReorderSavingChange = onReorderSavingChange,
-        onSearchFocusRequestedChange = onSearchFocusRequestedChange,
+        onActiveRadioSeedChange = { sheetHolder.activeRadioSeed = it },
+        onReorderTargetChange = { sheetHolder.reorderTarget = it },
+        onReorderEntriesChange = { sheetHolder.reorderEntries = it },
+        onReorderSavingChange = { sheetHolder.reorderSaving = it },
+        onSearchFocusRequestedChange = { sheetHolder.searchFocusRequested = it },
         onOptimisticVersionSongChange = onOptimisticVersionSongChange,
         onConvertedFromVideoChange = onConvertedFromVideoChange,
         onConvertedFromAudioChange = onConvertedFromAudioChange,
@@ -3022,6 +2798,7 @@ private fun BitChordAppContent(
             onUpdateConvertedVideo = actions.onConvertedFromVideoChange,
             onUpdateConvertedAudio = actions.onConvertedFromAudioChange,
             onUpdateKeepVideoId = actions.onKeepVideoIdChange,
+            onOpenLyricsOffset = { actions.onShowLyricsOffsetChange(true) },
         )
 
         BitChordPlayerUi(
@@ -3067,10 +2844,13 @@ private fun BitChordAppContent(
             actions = rememberMainPlayerSheetActions(
                 onDismissRequest = { actions.onShowNowPlayingChange(false) },
                 onLiveCanvasChanged = actions.onPlayerLiveCanvasChange,
-                onDismissSongActions = { actions.onSongActionsChange(null) },
+                onDismissSongActions = {
+                    actions.onSongActionsChange(null)
+                    actions.onMenuFromPlayerChange(false)
+                },
                 onTogglePlayPause = actions.togglePlayPause,
                 onBlockedControl = actions.showHostOnlyNotice,
-                onOpenSongMenu = actions.openSongMenu,
+                onOpenSongMenu = actions.openPlayerSongMenu,
                 onDismissPlayer = actions.dismissPlayer,
                 onToggleLike = { song -> actions.toggleLikeOf(song) },
                 onLikeStatusOf = actions.likeStatusOf,

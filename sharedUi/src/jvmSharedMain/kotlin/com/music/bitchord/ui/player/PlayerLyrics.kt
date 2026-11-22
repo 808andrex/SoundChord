@@ -22,6 +22,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -2121,6 +2122,7 @@ internal fun LyricsPanel(
             val step = distance.coerceAtMost(falloff.lastIndex)
             val blur by animateDpAsState(
                 targetValue = when {
+                    picking -> 0.dp
                     !isSynced || reduceDynamicBlur || !lyricsBlur || browsing || isActive -> 0.dp
                     else -> LINE_FALLOFF_BLUR[step.coerceAtMost(LINE_FALLOFF_BLUR.lastIndex)]
                 },
@@ -2129,6 +2131,7 @@ internal fun LyricsPanel(
             )
             val lineAlpha by animateFloatAsState(
                 targetValue = when {
+                    picking -> if (index in picked) 1f else 0.50f
                     !isSynced -> 0.95f
                     isActive -> 1f
                     // Reading by hand is not following along: the stack flattens
@@ -2263,6 +2266,7 @@ internal fun LyricsPanel(
                 val scale by animateFloatAsState(
                     targetValue = when {
                         pressed -> PRESSED_SCALE
+                        picking -> if (index in picked) 1f else INACTIVE_SCALE
                         isActive -> 1f
                         else -> INACTIVE_SCALE
                     },
@@ -2276,7 +2280,7 @@ internal fun LyricsPanel(
                 // the line rather than switching, so a handover is one line's
                 // light going down as the next one's comes up.
                 val glow by animateFloatAsState(
-                    targetValue = if (isActive && glowing) GLOW_ALPHA else 0f,
+                    targetValue = if (!picking && isActive && glowing) GLOW_ALPHA else 0f,
                     animationSpec = tween(durationMillis = 420),
                     label = "lyricGlow",
                 )
@@ -2323,6 +2327,17 @@ internal fun LyricsPanel(
                     }
                     .blur(blur, BlurredEdgeTreatment.Unbounded)
                     .clip(RoundedCornerShape(10.dp))
+                    .then(
+                        if (picking && index in picked) {
+                            Modifier.border(
+                                width = 1.dp,
+                                color = Color.White.copy(alpha = 0.45f),
+                                shape = RoundedCornerShape(10.dp),
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
                     // The chosen lines are marked on the row itself rather
                     // than with a mark beside it: a lane down the side would
                     // have to be reserved for every line whether or not
@@ -2331,8 +2346,8 @@ internal fun LyricsPanel(
                     // is picked is read against what isn't.
                     .background(
                         when {
-                            index in picked -> Color.White.copy(alpha = 0.16f)
-                            picking -> Color.White.copy(alpha = 0.05f)
+                            picking && index in picked -> Color.White.copy(alpha = 0.28f)
+                            picking -> Color.White.copy(alpha = 0.06f)
                             else -> Color.Transparent
                         },
                     )
@@ -2436,6 +2451,7 @@ internal fun LyricsPanel(
                         room = GLOW_ROOM,
                         alignEnd = alignEnd,
                         laneLocked = duet,
+                        picking = picking,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     // A line the service handed back unchanged ("falling
@@ -2454,6 +2470,7 @@ internal fun LyricsPanel(
                             alignEnd = alignEnd,
                             laneLocked = duet,
                             rise = false,
+                            picking = picking,
                             // Only the rows actually in front of the reader get the
                             // particle pass. Sixty rows' worth of glyph boxes is a
                             // layout walk per frame for text nobody is looking at.
@@ -2573,6 +2590,7 @@ private fun PanelVoice(
      * movement competes with the line being read and makes the row look busy.
      */
     rise: Boolean = true,
+    picking: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     // Vazirmatn for Persian/Arabic-script lines; Latin lines keep the player's font.
@@ -2581,7 +2599,16 @@ private fun PanelVoice(
         val vazirmatn = Font(Res.font.vazirmatn_regular)
         remember(style, vazirmatn) { style.copy(fontFamily = FontFamily(vazirmatn)) }
     } else style
-    if (line.isWordSynced && !browsing) {
+    if (picking) {
+        var layout by remember(line.text) { mutableStateOf<TextLayoutResult?>(null) }
+        Text(
+            text = line.text,
+            style = lyricStyle,
+            color = Color.White,
+            onTextLayout = { layout = it },
+            modifier = modifier.lyricParticles(layout, translationProgress, room).padding(room),
+        )
+    } else if (line.isWordSynced && !browsing) {
         // Every word-synced line goes through the sweep, not just the playing
         // one — a line that has already been sung is fully revealed and one
         // still to come is not, which falls out of the same arithmetic.

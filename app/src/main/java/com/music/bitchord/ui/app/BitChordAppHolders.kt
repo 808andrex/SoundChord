@@ -9,6 +9,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Dp
@@ -363,6 +368,7 @@ internal class BitChordAppActions(
     val removeFromCache: (List<Song>) -> Unit,
     val downloadSong: (Song) -> Unit,
     val openSongMenu: (Song) -> Unit,
+    val openPlayerSongMenu: (Song) -> Unit,
     val openBrowseMenu: (BrowseTarget) -> Unit,
     val folderSortOf: (String) -> LocalMusicSort,
     val folderViewTypeOf: (String) -> LibraryViewType,
@@ -445,4 +451,268 @@ internal class BitChordAppActions(
     val onConvertedFromVideoChange: (Song?, String?) -> Unit,
     val onConvertedFromAudioChange: (Song?, String?) -> Unit,
     val onKeepVideoIdChange: (String?) -> Unit,
+)
+
+@Stable
+internal class BitChordSheetStateHolder {
+    var webSession by mutableStateOf<WebSessionMode?>(null)
+    var replayLandingPage by mutableStateOf(ReplayStoryPage.INTRO)
+    var replayStory by mutableStateOf<ReplayStoryPage?>(null)
+    var showReplayShare by mutableStateOf(false)
+    var replaySharePage by mutableStateOf<ReplayStoryPage?>(null)
+    var showSpotifyCanvasAuth by mutableStateOf(false)
+    var editingSource by mutableStateOf<SourceConfig?>(null)
+    var choosingSourceQuality by mutableStateOf<SourceConfig?>(null)
+    var explainingOutdatedAddon by mutableStateOf<SourceConfig?>(null)
+    var confirmJioSaavn by mutableStateOf(false)
+    var confirmBitPerfect by mutableStateOf<BitPerfectMode?>(null)
+    var confirmFixedVolume by mutableStateOf(false)
+    var blockedAddonSong by mutableStateOf<Song?>(null)
+    var addonLeftOutOfDownload by mutableStateOf<Pair<String, SourceRegistry.DownloadExclusion>?>(null)
+    var editingPartyServer by mutableStateOf(false)
+    var editingSignatureApi by mutableStateOf(false)
+    var showLyricsSources by mutableStateOf(false)
+    var showAppLanguage by mutableStateOf(false)
+    var showTranslationLanguage by mutableStateOf(false)
+    var showAccountSelector by mutableStateOf(false)
+    var showListenBrainzLogin by mutableStateOf(false)
+    var showLastfmLogin by mutableStateOf(false)
+    var showWebDavEditor by mutableStateOf(false)
+    var showSmbEditor by mutableStateOf(false)
+    var showDiscordLogin by mutableStateOf(false)
+    var showSpotifyLogin by mutableStateOf(false)
+    var discordDialog by mutableStateOf<DiscordDialog?>(null)
+    var songActions by mutableStateOf<Song?>(null)
+    var stationActions by mutableStateOf<StationMenuTarget?>(null)
+    var showLyricsOffset by mutableStateOf(false)
+    var menuFromPlayer by mutableStateOf(false)
+    var menuFromHistory by mutableStateOf(false)
+    var songMenuOrigin by mutableStateOf<HeldItem?>(null)
+    var songMenuAnchor by mutableStateOf<Rect?>(null)
+    var linksLoading by mutableStateOf(false)
+    var playlistTarget by mutableStateOf<Song?>(null)
+    var creatingPlaylist by mutableStateOf(false)
+    var offlinePlaylistTarget by mutableStateOf<Song?>(null)
+    var creatingOfflinePlaylist by mutableStateOf(false)
+    var showSpotifyImportDialog by mutableStateOf(false)
+    var browseActions by mutableStateOf<BrowseTarget?>(null)
+    var browseMenuOrigin by mutableStateOf<HeldItem?>(null)
+    var browseMenuAnchor by mutableStateOf<Rect?>(null)
+    var browseRenameInSheet by mutableStateOf(false)
+    var editPlaylistTarget by mutableStateOf<UserPlaylist?>(null)
+    var reorderTarget by mutableStateOf<UserPlaylist?>(null)
+    var reorderEntries by mutableStateOf<UiState<List<Song>>>(UiState.Loading)
+    var reorderSaving by mutableStateOf(false)
+    var songSortMenuOpen by mutableStateOf(false)
+    var folderMenuOpen by mutableStateOf(false)
+    var showUpdateDialog by mutableStateOf(false)
+    var updateDialogShown by mutableStateOf(false)
+    var showAboutWhatsNew by mutableStateOf(false)
+    var showDiwali by mutableStateOf(false)
+    var diwaliAutoShown by mutableStateOf(false)
+    var recognitionOpen by mutableStateOf(false)
+    var showRecognitionHistoryClearConfirmation by mutableStateOf(false)
+    var showRadioHistoryClearConfirmation by mutableStateOf(false)
+    var radioSubpageBack by mutableStateOf<(() -> Unit)?>(null)
+    var recognitionFabVisible by mutableStateOf(true)
+    var activeJamInviteCode by mutableStateOf<String?>(null)
+    var activeJamInviteServer by mutableStateOf<String?>(null)
+    var activeRadioSeed by mutableStateOf<Pair<String, String>?>(null)
+    var searchFocusRequested by mutableStateOf(false)
+}
+
+@Composable
+internal fun rememberBitChordSheetStateHolder(): BitChordSheetStateHolder = remember { BitChordSheetStateHolder() }
+
+internal fun rememberBitChordSheetsUiState(
+    sheetHolder: BitChordSheetStateHolder,
+    pageBackdrop: SnapshotBackdrop,
+    reduceDynamicBlur: Boolean,
+    playerRaised: Boolean,
+    replay: ReplayState,
+    account: Account?,
+    playlists: List<UserPlaylist>,
+    playlistsLoading: Boolean,
+    offlinePlaylists: List<OfflinePlaylist>,
+    signedIn: Boolean,
+    detailStack: List<DetailPage>,
+    libraryState: UiState<LibraryPage>,
+    likeStatuses: Map<String, LikeStatus>,
+    query: String,
+    results: UiState<List<SearchResult>>?,
+    filter: SearchFilter,
+    onboardingShown: MutableTransitionState<Boolean>,
+    googleAccounts: List<GoogleAccountSession>,
+    activeAccountId: String?,
+    activeProfileId: String?,
+    onboardingComplete: Boolean,
+    updateAvailable: AppUpdateChecker.UpdateInfo?,
+    songSort: SongSort,
+    detail: DetailPage?,
+    listenBrainzToken: String,
+): BitChordSheetsUiState = BitChordSheetsUiState(
+    pageBackdrop = pageBackdrop,
+    reduceDynamicBlur = reduceDynamicBlur,
+    playerRaised = playerRaised,
+    songActions = sheetHolder.songActions,
+    songMenuOrigin = sheetHolder.songMenuOrigin,
+    songMenuAnchor = sheetHolder.songMenuAnchor,
+    menuFromPlayer = sheetHolder.menuFromPlayer,
+    browseActions = sheetHolder.browseActions,
+    browseMenuOrigin = sheetHolder.browseMenuOrigin,
+    browseMenuAnchor = sheetHolder.browseMenuAnchor,
+    browseRenameInSheet = sheetHolder.browseRenameInSheet,
+    stationActions = sheetHolder.stationActions,
+    replay = replay,
+    replayStory = sheetHolder.replayStory,
+    showReplayShare = sheetHolder.showReplayShare,
+    replaySharePage = sheetHolder.replaySharePage,
+    account = account,
+    playlistTarget = sheetHolder.playlistTarget,
+    creatingPlaylist = sheetHolder.creatingPlaylist,
+    playlists = playlists,
+    playlistsLoading = playlistsLoading,
+    offlinePlaylistTarget = sheetHolder.offlinePlaylistTarget,
+    creatingOfflinePlaylist = sheetHolder.creatingOfflinePlaylist,
+    offlinePlaylists = offlinePlaylists,
+    showSpotifyImportDialog = sheetHolder.showSpotifyImportDialog,
+    signedIn = signedIn,
+    editPlaylistTarget = sheetHolder.editPlaylistTarget,
+    detailStack = detailStack,
+    libraryState = libraryState,
+    likeStatuses = likeStatuses,
+    query = query,
+    results = results,
+    filter = filter,
+    onboardingShown = onboardingShown,
+    webSession = sheetHolder.webSession,
+    googleAccounts = googleAccounts,
+    activeAccountId = activeAccountId,
+    activeProfileId = activeProfileId,
+    showDiwali = sheetHolder.showDiwali,
+    showUpdateDialog = sheetHolder.showUpdateDialog,
+    onboardingComplete = onboardingComplete,
+    updateAvailable = updateAvailable,
+    showLyricsSources = sheetHolder.showLyricsSources,
+    songSortMenuOpen = sheetHolder.songSortMenuOpen,
+    songSort = songSort,
+    detail = detail,
+    folderMenuOpen = sheetHolder.folderMenuOpen,
+    showAccountSelector = sheetHolder.showAccountSelector,
+    showAppLanguage = sheetHolder.showAppLanguage,
+    showTranslationLanguage = sheetHolder.showTranslationLanguage,
+    showListenBrainzLogin = sheetHolder.showListenBrainzLogin,
+    listenBrainzToken = listenBrainzToken,
+    showLastfmLogin = sheetHolder.showLastfmLogin,
+    showWebDavEditor = sheetHolder.showWebDavEditor,
+    showSmbEditor = sheetHolder.showSmbEditor,
+    showDiscordLogin = sheetHolder.showDiscordLogin,
+    showSpotifyLogin = sheetHolder.showSpotifyLogin,
+    showSpotifyCanvasAuth = sheetHolder.showSpotifyCanvasAuth,
+    discordDialog = sheetHolder.discordDialog,
+    editingPartyServer = sheetHolder.editingPartyServer,
+    editingSignatureApi = sheetHolder.editingSignatureApi,
+    editingSource = sheetHolder.editingSource,
+    choosingSourceQuality = sheetHolder.choosingSourceQuality,
+    explainingOutdatedAddon = sheetHolder.explainingOutdatedAddon,
+    confirmJioSaavn = sheetHolder.confirmJioSaavn,
+    confirmBitPerfect = sheetHolder.confirmBitPerfect,
+    confirmFixedVolume = sheetHolder.confirmFixedVolume,
+    blockedAddonSong = sheetHolder.blockedAddonSong,
+    addonLeftOutOfDownload = sheetHolder.addonLeftOutOfDownload,
+    showAboutWhatsNew = sheetHolder.showAboutWhatsNew,
+    recognitionOpen = sheetHolder.recognitionOpen,
+)
+
+internal fun rememberBitChordPlayerUiState(
+    sheetHolder: BitChordSheetStateHolder,
+    playerRaised: Boolean,
+    playerSong: Song?,
+    showNowPlaying: Boolean,
+    reducePlayerMotion: Boolean,
+    reduceDynamicBlur: Boolean,
+    playerLiveCanvas: Boolean,
+    player: PlayerState,
+    playPauseBusy: Boolean,
+    switchingAudioVersion: Boolean,
+    optimisticVersionSong: Song?,
+    convertedAudioId: String?,
+    convertedVideoId: String?,
+    keepVideoId: String?,
+    partyState: ListenTogether.State,
+    account: Account?,
+    controlsLocked: Boolean,
+    shuffleEnabled: Boolean,
+    autoplayEnabled: Boolean,
+    signedIn: Boolean,
+    likeStatuses: Map<String, LikeStatus>,
+    query: String,
+    filter: SearchFilter,
+    results: UiState<List<SearchResult>>?,
+    lyrics: List<LyricLine>?,
+    lyricsSource: LyricsSource?,
+    lyricsProviderStates: Map<LyricsSource, LyricsProviderState>,
+    lyricsChecked: Boolean,
+    queueLabel: String,
+    queueNotice: QueueActionNotice?,
+    convertedFromVideo: Song?,
+    convertedFromAudio: Song?,
+    playlists: List<UserPlaylist>,
+    playlistsLoading: Boolean,
+    offlinePlaylists: List<OfflinePlaylist>,
+    addonCeiling: AudioQuality,
+    detail: DetailPage?,
+    versionContext: Context,
+    coveredByPlayer: Boolean,
+    activeDock: PlayerDock?,
+    playerBackdrop: SnapshotBackdrop,
+    livePlayerBackdrop: LayerBackdrop,
+): BitChordPlayerUiState = BitChordPlayerUiState(
+    playerRaised = playerRaised,
+    playerSong = playerSong,
+    showNowPlaying = showNowPlaying,
+    reducePlayerMotion = reducePlayerMotion,
+    reduceDynamicBlur = reduceDynamicBlur,
+    playerLiveCanvas = playerLiveCanvas,
+    player = player,
+    playPauseBusy = playPauseBusy,
+    switchingAudioVersion = switchingAudioVersion,
+    optimisticVersionSong = optimisticVersionSong,
+    convertedAudioId = convertedAudioId,
+    convertedVideoId = convertedVideoId,
+    keepVideoId = keepVideoId,
+    activeRadioSeed = sheetHolder.activeRadioSeed,
+    partyState = partyState,
+    account = account,
+    songActions = sheetHolder.songActions,
+    songMenuOrigin = sheetHolder.songMenuOrigin,
+    songMenuAnchor = sheetHolder.songMenuAnchor,
+    menuFromPlayer = sheetHolder.menuFromPlayer,
+    controlsLocked = controlsLocked,
+    shuffleEnabled = shuffleEnabled,
+    autoplayEnabled = autoplayEnabled,
+    signedIn = signedIn,
+    likeStatuses = likeStatuses,
+    query = query,
+    filter = filter,
+    results = results,
+    lyrics = lyrics,
+    lyricsSource = lyricsSource,
+    lyricsProviderStates = lyricsProviderStates,
+    lyricsChecked = lyricsChecked,
+    showLyricsOffset = sheetHolder.showLyricsOffset,
+    queueLabel = queueLabel,
+    queueNotice = queueNotice,
+    convertedFromVideo = convertedFromVideo,
+    convertedFromAudio = convertedFromAudio,
+    playlists = playlists,
+    playlistsLoading = playlistsLoading,
+    offlinePlaylists = offlinePlaylists,
+    addonCeiling = addonCeiling,
+    detail = detail,
+    versionContext = versionContext,
+    coveredByPlayer = coveredByPlayer,
+    activeDock = activeDock,
+    playerBackdrop = playerBackdrop,
+    livePlayerBackdrop = livePlayerBackdrop,
 )

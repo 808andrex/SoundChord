@@ -3257,7 +3257,7 @@ internal fun SettingsRow(
                     modifier = Modifier.weight(1f, fill = false),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (badge != null) {
@@ -3356,9 +3356,10 @@ internal fun SettingsSubRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = title,
+                    modifier = Modifier.weight(1f, fill = false),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (badge != null) {
@@ -3390,6 +3391,8 @@ internal fun Badge(text: String) {
         text = text.uppercase(Locale.ROOT),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.primary,
+        maxLines = 1,
+        softWrap = false,
         modifier = Modifier
             .clip(RoundedCornerShape(5.dp))
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
@@ -3404,6 +3407,8 @@ private fun AppIconNewBadge(text: String) {
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.Bold,
         color = Color(0xFF111113),
+        maxLines = 1,
+        softWrap = false,
         modifier = Modifier
             .clip(RoundedCornerShape(5.dp))
             .background(Color.White.copy(alpha = 0.94f))
@@ -3523,8 +3528,9 @@ internal fun SegmentedControl(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    disabled: Set<Int> = emptySet(),
 ) {
-    PillSegmentedControl(options, selectedIndex, onSelect, modifier, enabled)
+    PillSegmentedControl(options, selectedIndex, onSelect, modifier, enabled, disabled)
 }
 
 // ---- Pages ------------------------------------------------------------------

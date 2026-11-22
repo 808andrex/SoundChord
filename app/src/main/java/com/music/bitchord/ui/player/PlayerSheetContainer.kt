@@ -708,7 +708,7 @@ internal fun MainPlayerSheet(
                         onMoveInQueue = { from, to -> controller?.moveMediaItem(from, to) },
                         onQueueDragActiveChange = { active -> controller?.setQueueDragActive(active) },
                         onOpenMenu = {
-                            actions.onOpenSongMenu(song)
+                            actions.onOpenSongMenu(displayedSong)
                         },
                         onOpenAlbum = { id ->
                             actions.onDismissPlayer()

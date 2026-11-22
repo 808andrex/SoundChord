@@ -48,8 +48,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -64,6 +66,7 @@ import com.music.bitchord.data.AppUpdateChecker
 import com.music.bitchord.data.LocalGroups
 import com.music.bitchord.data.OfflinePlaylist
 import com.music.bitchord.data.OfflinePlaylists
+import com.music.bitchord.data.TrackLog
 import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.model.Account
@@ -251,6 +254,7 @@ data class SongMenuActions(
     val onUpdateConvertedVideo: (Song?, String?) -> Unit,
     val onUpdateConvertedAudio: (Song?, String?) -> Unit,
     val onUpdateKeepVideoId: (String?) -> Unit,
+    val onOpenLyricsOffset: () -> Unit = {},
 )
 
 @Composable
@@ -263,6 +267,7 @@ internal fun SongMenuContent(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
     val fromPlayer = state.menuFromPlayer
 
     val needsLinks = !fromPlayer && !heldSong.isLiveRadioStream &&
@@ -540,6 +545,34 @@ internal fun SongMenuContent(
         isAudioVersion = menuIsAudioVersion,
         audioVersionMissing = false,
         onShare = share.takeIf { song.videoId.isNotBlank() },
+        onLyricsOffset = if (fromPlayer) {
+            {
+                actions.onDismissActions()
+                actions.onOpenLyricsOffset()
+            }
+        } else {
+            null
+        },
+        onCopyLog = if (fromPlayer) {
+            {
+                actions.onDismissActions()
+                scope.launch {
+                    val text = TrackLog.forTrack(song, NerdStats.current.value)
+                    clipboard.setText(AnnotatedString(text))
+                    Toast.makeText(
+                        context,
+                        context.resources.getQuantityString(
+                            R.plurals.log_copied_line_count,
+                            text.lineSequence().count(),
+                            text.lineSequence().count(),
+                        ),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+        } else {
+            null
+        },
         onAutomixOverview = if (fromPlayer && automixOn) {
             {
                 actions.onDismissActions()
