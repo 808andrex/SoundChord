@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -234,12 +236,12 @@ fun RadioScreen(
                 is RadioUiState.Error -> item { Text(searchState.message, color = MaterialTheme.colorScheme.error) }
                 is RadioUiState.Success -> if (searchState.stations.isEmpty()) {
                     item { Text(stringResource(R.string.radio_search_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                } else items(searchState.stations, key = { "radio_search_${it.uuid}" }) { station ->
+                } else itemsIndexed(searchState.stations, key = { _, it -> "radio_search_${it.uuid}" }) { index, station ->
                     StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
                         playStation(station)
                     }, onLongPress = { bounds ->
                         onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
-                    })
+                    }, showDivider = index < searchState.stations.lastIndex)
                 }
             }
         } else if (searchQuery != null) {
@@ -254,12 +256,12 @@ fun RadioScreen(
             if (favorites.isEmpty()) {
                 item { Text(stringResource(R.string.radio_favorites_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             } else {
-                items(favorites, key = { "all_favorite_${it.uuid}" }) { station ->
+                itemsIndexed(favorites, key = { _, it -> "all_favorite_${it.uuid}" }) { index, station ->
                     StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
                         playStation(station)
                     }, onLongPress = { bounds ->
                         onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
-                    })
+                    }, showDivider = index < favorites.lastIndex)
                 }
             }
         } else if (detailStateActive) {
@@ -272,12 +274,12 @@ fun RadioScreen(
                 is RadioUiState.Success -> {
                     val stations = (state as RadioUiState.Success).stations
                     if (stations.isEmpty()) item { Text(stringResource(R.string.radio_category_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    items(stations, key = { "detail_${it.uuid}" }) { station ->
+                    itemsIndexed(stations, key = { _, it -> "detail_${it.uuid}" }) { index, station ->
                         StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
                             playStation(station)
                         }, onLongPress = { bounds ->
                             onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
-                        })
+                        }, showDivider = index < stations.lastIndex)
                     }
                 }
             }
@@ -362,12 +364,12 @@ fun RadioScreen(
                 NearbyStationsState.Ready -> if (nearby.isEmpty()) {
                     item { Text(stringResource(R.string.radio_no_local_stations), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 } else {
-                    items(nearby, key = { "nearby_${it.uuid}" }) { station ->
+                    itemsIndexed(nearby, key = { _, it -> "nearby_${it.uuid}" }) { index, station ->
                         StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
                             playStation(station)
                         }, onLongPress = { bounds ->
                             onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
-                        })
+                        }, showDivider = index < nearby.lastIndex)
                     }
                 }
             }
@@ -488,50 +490,67 @@ private fun CategoryGridRow(categories: List<CategoryOption>, onClick: (Int) -> 
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun StationRow(station: RadioStation, isPlaying: Boolean, isFavorite: Boolean, onFavorite: () -> Unit, onClick: () -> Unit, onLongPress: (Rect) -> Unit) {
+private fun StationRow(
+    station: RadioStation,
+    isPlaying: Boolean,
+    isFavorite: Boolean,
+    onFavorite: () -> Unit,
+    onClick: () -> Unit,
+    onLongPress: (Rect) -> Unit,
+    showDivider: Boolean = false,
+) {
     var artworkFailed by remember(station.uuid) { mutableStateOf(false) }
     var rowBounds by remember(station.uuid) { mutableStateOf<Rect?>(null) }
     val haptics = LocalHapticFeedback.current
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        shape = RoundedCornerShape(18.dp),
-        color = if (isPlaying) Color.White.copy(alpha = .16f) else Color.Transparent,
-        border = if (isPlaying) BorderStroke(1.dp, Color.White) else null,
-    ) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .onGloballyPositioned { rowBounds = it.boundsInWindow() }
-                    .combinedClickable(
-                        onClick = onClick,
-                        onLongClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            rowBounds?.let(onLongPress)
-                        },
-                    ),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Surface(Modifier.size(52.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-                    Box(contentAlignment = Alignment.Center) {
-                        if (!station.favicon.isNullOrBlank() && !artworkFailed) {
-                            AsyncImage(station.favicon, contentDescription = null, modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop, onError = { artworkFailed = true })
-                        } else {
-                            Icon(Icons.Rounded.Radio, null, Modifier.size(30.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(Modifier.fillMaxWidth()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            shape = RoundedCornerShape(18.dp),
+            color = if (isPlaying) Color.White.copy(alpha = .16f) else Color.Transparent,
+            border = if (isPlaying) BorderStroke(1.dp, Color.White) else null,
+        ) {
+            Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .onGloballyPositioned { rowBounds = it.boundsInWindow() }
+                        .combinedClickable(
+                            onClick = onClick,
+                            onLongClick = {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                rowBounds?.let(onLongPress)
+                            },
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Surface(Modifier.size(52.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (!station.favicon.isNullOrBlank() && !artworkFailed) {
+                                AsyncImage(station.favicon, contentDescription = null, modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop, onError = { artworkFailed = true })
+                            } else {
+                                Icon(Icons.Rounded.Radio, null, Modifier.size(30.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(station.name, style = MaterialTheme.typography.bodyLarge, fontWeight = if (isPlaying) FontWeight.SemiBold else FontWeight.Normal, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(stationMetadata(station), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (isPlaying) Text(stringResource(R.string.radio_now_playing), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
                 }
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(station.name, style = MaterialTheme.typography.bodyLarge, fontWeight = if (isPlaying) FontWeight.SemiBold else FontWeight.Normal, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(stationMetadata(station), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (isPlaying) Text(stringResource(R.string.radio_now_playing), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                IconButton(onClick = onFavorite) {
+                    Icon(if (isFavorite) BitChordIcons.StarFilled else BitChordIcons.Star, stringResource(if (isFavorite) R.string.radio_remove_favorite else R.string.radio_add_favorite), tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            IconButton(onClick = onFavorite) {
-                Icon(if (isFavorite) BitChordIcons.StarFilled else BitChordIcons.Star, stringResource(if (isFavorite) R.string.radio_remove_favorite else R.string.radio_add_favorite), tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        }
+        if (showDivider) {
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 76.dp),
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outline,
+            )
         }
     }
 }

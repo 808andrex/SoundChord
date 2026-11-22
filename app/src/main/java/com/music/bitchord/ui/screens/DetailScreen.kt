@@ -746,7 +746,7 @@ fun DetailScreen(
                             ) {
                                 items(top.chunked(SONGS_PER_COLUMN)) { column ->
                                     Column(Modifier.width(columnWidth)) {
-                                        column.forEach { song ->
+                                        column.forEachIndexed { index, song ->
                                             CompactSongRow(
                                                 song = song,
                                                 palette = palette,
@@ -756,6 +756,15 @@ fun DetailScreen(
                                                 isCurrent = isCurrentRow(song),
                                                 isPlaying = isCurrentRow(song) && isPlaying,
                                             )
+                                            if (index < column.lastIndex) {
+                                                HorizontalDivider(
+                                                    modifier = Modifier.padding(
+                                                        start = if (song.isVideo) 97.dp else 60.dp,
+                                                    ),
+                                                    thickness = 0.5.dp,
+                                                    color = palette.divider,
+                                                )
+                                            }
                                         }
                                     }
                                 }

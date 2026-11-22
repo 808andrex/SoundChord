@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -330,7 +331,7 @@ private fun RecentShelf(
             ) {
                 items(shelf.items.chunked(RECENT_TRACKS_PER_COLUMN)) { column ->
                     Column(Modifier.width(columnWidth)) {
-                        column.forEach { item ->
+                        column.forEachIndexed { index, item ->
                             RecentTrackRow(
                                 item = item,
                                 onClick = { onItemClick(item) },
@@ -338,6 +339,15 @@ private fun RecentShelf(
                                 isCurrent = isCurrentItem(item),
                                 isPlaying = isCurrentItem(item) && isPlaying,
                             )
+                            if (index < column.lastIndex) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(
+                                        start = if (item.isVideo) 97.dp else 60.dp,
+                                    ),
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                            }
                         }
                     }
                 }

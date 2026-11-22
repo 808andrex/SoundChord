@@ -357,7 +357,7 @@ private fun Seed.toPalette(dark: Boolean): ArtworkPalette = if (dark) {
             saturation = { adaptedArtworkSaturation(it, minimum = 0.22f, maximum = 0.50f) },
             lightness = { 0.80f },
         ),
-        divider = Color.White.copy(alpha = 0.12f),
+        divider = Color.White.copy(alpha = 0.16f),
     )
 } else {
     ArtworkPalette(
@@ -383,7 +383,7 @@ private fun Seed.toPalette(dark: Boolean): ArtworkPalette = if (dark) {
             saturation = { adaptedArtworkSaturation(it, minimum = 0.22f, maximum = 0.55f) },
             lightness = { 0.34f },
         ),
-        divider = Color.Black.copy(alpha = 0.10f),
+        divider = Color.Black.copy(alpha = 0.12f),
     )
 }
 
