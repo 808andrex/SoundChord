@@ -44,4 +44,5 @@ object SoundChordIcons {
             )
         }.build()
     }
+
 }

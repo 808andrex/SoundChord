@@ -18,6 +18,14 @@
     <string name="explore_empty_moods">No hay estados de ánimo o géneros disponibles ahora.</string>
     <string name="radio_title">Radio</string>
     <string name="radio_favourites">Mis estaciones favoritas</string>
+    <string name="radio_search_stations">Buscar emisoras</string>
+    <string name="radio_close_search">Cerrar búsqueda</string>
+    <string name="radio_search_list">Buscar en esta lista</string>
+    <string name="radio_sort_stations">Ordenar emisoras</string>
+    <string name="radio_sort_default">Orden predeterminado</string>
+    <string name="radio_sort_name_asc">Nombre (A–Z)</string>
+    <string name="radio_sort_name_desc">Nombre (Z–A)</string>
+    <string name="radio_favorites_count">%1$d emisoras</string>
     <string name="radio_show_all">Ver todo</string>
     <string name="radio_personal_stations">Estaciones</string>
     <string name="radio_personal_station_empty">Escucha algunas canciones para crear tus estaciones.</string>

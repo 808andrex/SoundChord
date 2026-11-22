@@ -186,6 +186,7 @@ internal class BitChordNavState(
     val homePull: PullToRefreshState,
     val explorePull: PullToRefreshState,
     val libraryPull: PullToRefreshState,
+    val radioPull: PullToRefreshState,
     val historyLabel: String,
     val radioLabel: String,
     val replayLabel: String,

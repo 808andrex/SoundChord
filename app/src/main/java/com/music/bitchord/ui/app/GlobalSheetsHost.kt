@@ -553,6 +553,7 @@ internal fun SongMenuContent(
 
 @Immutable
 data class GlobalSheetsHostState(
+    val route: AppRoute?,
     val hazeState: HazeState,
     val pageBackdrop: SnapshotBackdrop,
     val reduceDynamicBlur: Boolean,
@@ -629,6 +630,7 @@ data class GlobalSheetsHostState(
 
 @Composable
 internal fun rememberGlobalSheetsHostState(
+    route: AppRoute?,
     hazeState: HazeState,
     pageBackdrop: SnapshotBackdrop,
     reduceDynamicBlur: Boolean,
@@ -702,6 +704,7 @@ internal fun rememberGlobalSheetsHostState(
     showAboutWhatsNew: Boolean,
     songMenuState: SongMenuState,
 ): GlobalSheetsHostState = GlobalSheetsHostState(
+    route = route,
     hazeState = hazeState,
     pageBackdrop = pageBackdrop,
     reduceDynamicBlur = reduceDynamicBlur,
@@ -1624,6 +1627,19 @@ internal fun GlobalSheetsHost(
                 val next = if (viewType == LibraryViewType.GRID) LibraryViewType.LIST else LibraryViewType.GRID
                 if (downloadsFolder) AppSettings.setDownloadedMusicViewType(next)
                 else AppSettings.setLocalMusicViewType(next)
+                actions.onDismissFolderMenu()
+            },
+            onDismiss = actions.onDismissFolderMenu,
+        )
+    }
+
+    if (state.folderMenuOpen && state.route == AppRoute.RadioFavorites) {
+        BackHandler { actions.onDismissFolderMenu() }
+        FrostedRadioFavoritesSortMenu(
+            hazeState = state.hazeState,
+            selected = AppSettings.librarySort.collectAsStateWithLifecycle().value,
+            onSelect = { option ->
+                AppSettings.librarySort.value = option
                 actions.onDismissFolderMenu()
             },
             onDismiss = actions.onDismissFolderMenu,

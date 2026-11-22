@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,13 +31,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +46,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -60,11 +64,14 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -72,6 +79,12 @@ import coil3.compose.AsyncImage
 import androidx.lifecycle.viewmodel.compose.viewModel as composeViewModel
 import androidx.core.content.ContextCompat
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.model.ShelfItem
+import com.music.bitchord.data.model.KeyedMix
+import com.music.bitchord.data.model.UiState
+import com.music.bitchord.data.model.artworkAt
+import com.music.bitchord.ui.components.LocalLiquidGlassEnabled
+import com.music.bitchord.ui.components.ShelfRow
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.soundchord.features.R
 import com.soundchord.features.radio.data.RadioStation
@@ -117,16 +130,13 @@ private val radioCountries = listOf(
     CountryOption("US", R.string.radio_country_us, listOf(Color(0xFF2855A6), Color(0xFFD83B4A))),
 )
 
-private val favoriteStationGradients = listOf(
-    listOf(Color(0xFF79566F), Color(0xFF493E53)), listOf(Color(0xFF48586D), Color(0xFF303B4A)),
-    listOf(Color(0xFF71684F), Color(0xFF494538)), listOf(Color(0xFF397074), Color(0xFF294B50)),
-    listOf(Color(0xFF596957), Color(0xFF3B493C)), listOf(Color(0xFF755B70), Color(0xFF4D3D4D)),
-)
-
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun RadioScreen(
     onPlayStation: (Song) -> Unit,
     currentSong: Song? = null,
+    onPlayMix: (browseId: String, title: String) -> Unit = { _, _ -> },
+    onRadioRefreshStateChanged: (Boolean) -> Unit = {},
     onStartStation: (Song) -> Unit = onPlayStation,
     viewModel: RadioViewModel? = null,
     stationsViewModel: PersonalStationsViewModel? = null,
@@ -134,12 +144,12 @@ fun RadioScreen(
     onStationLongPress: (RadioStation, Boolean, Rect, () -> Unit) -> Unit = { _, _, _, _ -> },
     contentPadding: PaddingValues = PaddingValues(),
     onSubpageBackHandlerChanged: ((() -> Unit)?) -> Unit = {},
+    pullToRefreshState: androidx.compose.material3.pulltorefresh.PullToRefreshState? = null,
 ) {
     val context = LocalContext.current
     val vm = viewModel ?: composeViewModel(factory = remember(context) { RadioViewModel.Factory(context) })
     val stationsVm = stationsViewModel ?: composeViewModel<PersonalStationsViewModel>()
     val state by vm.uiState.collectAsState()
-    val favorites by vm.favoriteStations.collectAsState()
     val favoriteUuids by vm.favoriteStationUuids.collectAsState(initial = emptySet())
     val recentStations by stationsVm.recentStations.collectAsState()
     val stationQueue by stationsVm.stationQueue.collectAsState()
@@ -149,6 +159,17 @@ fun RadioScreen(
     val nearbyState by vm.nearbyStationsState.collectAsState()
     val country by vm.countryCode.collectAsState()
     val genre by vm.genre.collectAsState()
+    val personalizedMixes by vm.personalizedMixes.collectAsState()
+    val radioListState = rememberLazyListState()
+    var showAllNearby by remember { mutableStateOf(false) }
+    // Only a user-requested refresh drives the pull/chrome indicator. Initial
+    // loads have their own inline placeholders and must not look like a refresh.
+    val refreshing = vm.isRefreshing.collectAsState().value
+    LaunchedEffect(refreshing) { onRadioRefreshStateChanged(refreshing) }
+    LaunchedEffect(showAllNearby) {
+        if (showAllNearby) radioListState.scrollToItem(0)
+    }
+    LaunchedEffect(searchQuery) { if (searchQuery == null) vm.loadPersonalizedMixes() }
     LaunchedEffect(searchQuery) { if (searchQuery != null) vm.onSearchQueryChanged(searchQuery) }
     LaunchedEffect(currentSong?.videoId) {
         stationsVm.includeCurrentSong(currentSong)
@@ -169,7 +190,6 @@ fun RadioScreen(
             }
         }
     }
-    var showAllFavorites by remember { mutableStateOf(false) }
     var selectedStationSeed by remember { mutableStateOf<Song?>(null) }
     val playStation: (RadioStation) -> Unit = { station ->
         RadioHistoryStore.record(context, station)
@@ -177,28 +197,32 @@ fun RadioScreen(
         onPlayStation(station.toSong(context))
     }
 
-    val detailTitle = when {
+    val categoryDetailTitle = when {
         genre != null -> localizedGenre(genre!!)
         country != null -> radioCountries.firstOrNull { it.code == country }?.let { stringResource(it.label) }
         else -> null
     }
+    val detailTitle = when {
+        showAllNearby -> stringResource(R.string.radio_nearby)
+        else -> categoryDetailTitle
+    }
     val detailStateActive = detailTitle != null
-    val subpageBack = remember(detailStateActive, showAllFavorites, vm) {
+    val subpageBack = remember(detailStateActive, showAllNearby, vm) {
         when {
+            showAllNearby -> ({ showAllNearby = false })
             detailStateActive -> ({
                 vm.onGenreChanged(null)
                 vm.onCountryCodeChanged(null)
             })
-            showAllFavorites -> ({ showAllFavorites = false })
             else -> null
         }
     }
     SideEffect { onSubpageBackHandlerChanged(subpageBack) }
-    BackHandler(enabled = selectedStationSeed != null || showAllFavorites || detailStateActive) {
+    BackHandler(enabled = selectedStationSeed != null || detailStateActive) {
         if (selectedStationSeed != null) {
             selectedStationSeed = null
-        } else if (showAllFavorites) {
-            showAllFavorites = false
+        } else if (showAllNearby) {
+            showAllNearby = false
         } else {
             vm.onGenreChanged(null)
             vm.onCountryCodeChanged(null)
@@ -217,7 +241,20 @@ fun RadioScreen(
         return
     }
 
+    val pullState = pullToRefreshState ?: rememberPullToRefreshState()
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            val hasLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            vm.refreshRadioData(context, hasLocation)
+            stationsVm.loadRecentStations(force = true)
+        },
+        state = pullState,
+        modifier = if (searchQuery != null) Modifier.fillMaxWidth().heightIn(max = 1600.dp) else Modifier.fillMaxSize(),
+        indicator = {},
+    ) {
     LazyColumn(
+        state = radioListState,
         modifier = if (searchQuery != null) Modifier.fillMaxWidth().heightIn(max = 1600.dp) else Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = 16.dp,
@@ -249,26 +286,44 @@ fun RadioScreen(
         }
         if (searchQuery != null) {
             // The integrated search results above are the whole page in this mode.
-        } else if (showAllFavorites) {
-            item(key = "favorites_header") {
-                RadioSubpageTitle(stringResource(R.string.radio_favourites))
-            }
-            if (favorites.isEmpty()) {
-                item { Text(stringResource(R.string.radio_favorites_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            } else {
-                itemsIndexed(favorites, key = { _, it -> "all_favorite_${it.uuid}" }) { index, station ->
-                    StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
-                        playStation(station)
-                    }, onLongPress = { bounds ->
-                        onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
-                    }, showDivider = index < favorites.lastIndex)
-                }
-            }
         } else if (detailStateActive) {
             item(key = "detail_header") {
-                RadioSubpageTitle(stringResource(R.string.radio_stations_for, detailTitle.orEmpty()))
+                RadioSubpageTitle(
+                    if (showAllNearby) detailTitle.orEmpty()
+                    else stringResource(R.string.radio_stations_for, detailTitle.orEmpty()),
+                )
             }
-            when (state) {
+            if (showAllNearby) {
+                when (nearbyState) {
+                    NearbyStationsState.PermissionRequired -> item {
+                        Text(stringResource(R.string.radio_location_permission_needed), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    NearbyStationsState.LocationUnavailable -> item {
+                        Text(stringResource(R.string.radio_location_enabled_needed), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    NearbyStationsState.Loading -> item {
+                        Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    }
+                    NearbyStationsState.Error -> item {
+                        Text(stringResource(R.string.radio_no_local_stations), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    NearbyStationsState.Ready -> if (nearby.isEmpty()) {
+                        item { Text(stringResource(R.string.radio_no_local_stations), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    } else itemsIndexed(nearby, key = { _, station -> "nearby_detail_${station.uuid}" }) { index, station ->
+                        StationRow(
+                            station = station,
+                            isPlaying = station.uuid == playing?.uuid,
+                            isFavorite = station.uuid in favoriteUuids,
+                            onFavorite = { vm.toggleFavorite(station) },
+                            onClick = { playStation(station) },
+                            onLongPress = { bounds ->
+                                onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
+                            },
+                            showDivider = index < nearby.lastIndex,
+                        )
+                    }
+                }
+            } else when (state) {
                 RadioUiState.Loading -> item { Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
                 is RadioUiState.Error -> item { Text((state as RadioUiState.Error).message, color = MaterialTheme.colorScheme.error) }
                 is RadioUiState.Success -> {
@@ -294,33 +349,15 @@ fun RadioScreen(
                 )
             }
 
-            item(key = "favorites") {
-                Column {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        SectionTitle(stringResource(R.string.radio_favourites), prominent = true, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { showAllFavorites = true }) {
-                            Text(stringResource(R.string.radio_show_all), color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    if (favorites.isEmpty()) {
-                        Text(stringResource(R.string.radio_favorites_empty), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 20.dp))
-                    } else {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            items(favorites, key = { "favorite_${it.uuid}" }) { station ->
-                                FavoriteStationCard(
-                                    station = station,
-                                    isFavorite = station.uuid in favoriteUuids,
-                                    onFavorite = { vm.toggleFavorite(station) },
-                                    onPlay = { playStation(station) },
-                                    onLongPress = { bounds ->
-                                        onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
+            item(key = "quick_mix_grid") {
+                PersonalizedMixesSection(
+                    state = personalizedMixes,
+                    onRetry = { vm.loadPersonalizedMixes(force = true) },
+                    onPlayMix = { mix -> mix.browseId?.let { onPlayMix(it, mix.title) } },
+                    glass = LocalLiquidGlassEnabled.current,
+                    showQuickGrid = true,
+                    showPersonalMixRows = false,
+                )
             }
 
             item(key = "personal_stations") {
@@ -335,50 +372,41 @@ fun RadioScreen(
                 )
             }
 
-            item(key = "nearby_title") { SectionTitle(stringResource(R.string.radio_nearby)) }
-            when (nearbyState) {
-                NearbyStationsState.PermissionRequired -> item {
-                    Column {
-                        Text(stringResource(R.string.radio_location_permission_needed), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick = { locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }) {
-                            Text(stringResource(R.string.radio_grant_location))
-                        }
-                    }
-                }
-                NearbyStationsState.LocationUnavailable -> item {
-                    Column {
-                        Text(stringResource(R.string.radio_location_enabled_needed), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick = {
-                            context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-                        }) { Text(stringResource(R.string.radio_enable_location)) }
-                    }
-                }
-                NearbyStationsState.Loading -> item {
-                    Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                }
-                NearbyStationsState.Error -> item {
-                    Text(stringResource(R.string.radio_no_local_stations), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                NearbyStationsState.Ready -> if (nearby.isEmpty()) {
-                    item { Text(stringResource(R.string.radio_no_local_stations), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                } else {
-                    itemsIndexed(nearby, key = { _, it -> "nearby_${it.uuid}" }) { index, station ->
-                        StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
-                            playStation(station)
-                        }, onLongPress = { bounds ->
-                            onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
-                        }, showDivider = index < nearby.lastIndex)
-                    }
-                }
+            item(key = "nearby_stations") {
+                NearbyStationsSection(
+                    stations = nearby,
+                    state = nearbyState,
+                    favoriteUuids = favoriteUuids,
+                    playing = playing,
+                    onFavorite = vm::toggleFavorite,
+                    onPlay = playStation,
+                    onLongPress = { station, bounds ->
+                        onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
+                    },
+                    onSeeAll = { showAllNearby = true },
+                    onRequestPermission = { locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
+                    onEnableLocation = { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) },
+                )
+            }
+
+            item(key = "personalized_mixes") {
+                PersonalizedMixesSection(
+                    state = personalizedMixes,
+                    onRetry = { vm.loadPersonalizedMixes(force = true) },
+                    onPlayMix = { mix ->
+                        mix.browseId?.let { id -> onPlayMix(id, mix.title) }
+                    },
+                    glass = LocalLiquidGlassEnabled.current,
+                    showQuickGrid = false,
+                    showPersonalMixRows = true,
+                )
             }
 
             item(key = "genres_title") { SectionTitle(stringResource(R.string.radio_genres)) }
             if (genres.isEmpty()) item { Text(stringResource(R.string.radio_genres_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             val availableTags = genres.map { it.name.lowercase().replace('-', ' ').trim() }.toSet()
             val displayedGenres = radioGenres.filter { it.tag in availableTags }.ifEmpty { radioGenres }
-            items(displayedGenres.chunked(2), key = { row -> "genre_${row.firstOrNull()?.tag.orEmpty()}" }) { row ->
+            if (displayedGenres.isNotEmpty()) items(displayedGenres.chunked(2), key = { row -> "genre_${row.firstOrNull()?.tag.orEmpty()}" }) { row ->
                 CategoryGridRow(row.map { CategoryOption(it.label, it.colors) }) { index -> vm.onGenreChanged(row[index].tag) }
             }
 
@@ -388,6 +416,314 @@ fun RadioScreen(
             }
         }
     }
+    }
+}
+
+private val QUICK_MIX_NAMES = listOf(
+    "my supermix", "discover mix", "new release mix", "replay mix", "archive mix", "liked music",
+)
+
+private val SIGNATURE_MIX_TITLE_HINTS = listOf(
+    listOf("my supermix", "mi supermix"),
+    listOf("discover mix", "mix de descubrimiento"),
+    listOf("new release mix", "mix de novedades"),
+    listOf("replay mix", "mix de temas escuchados", "mix de repetición"),
+    listOf("archive mix", "mix de archivo"),
+    listOf("liked music", "música que me gusta", "musica que me gusta"),
+)
+
+@Composable
+private fun PersonalizedMixesSection(
+    state: UiState<List<KeyedMix>>,
+    onRetry: () -> Unit,
+    onPlayMix: (ShelfItem) -> Unit,
+    glass: Boolean,
+    showQuickGrid: Boolean,
+    showPersonalMixRows: Boolean,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        when (state) {
+            UiState.Loading -> {
+                if (showQuickGrid) Box(Modifier.fillMaxWidth().height(104.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+            is UiState.Error -> {
+                if (showQuickGrid) Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(state.message, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = onRetry) { Text("Retry") }
+                }
+            }
+            is UiState.Success -> {
+                val unique = state.data.distinctBy { it.item.browseId ?: it.item.title }
+                val normalizedQuick = QUICK_MIX_NAMES.mapIndexed { index, _ ->
+                    val hints = SIGNATURE_MIX_TITLE_HINTS[index]
+                    unique.firstOrNull { keyed -> keyed.englishTitle.trim().lowercase() in hints }?.item
+                        ?: unique.firstOrNull { keyed -> keyed.item.title.trim().lowercase() in hints }?.item
+                        ?: unique.firstOrNull { keyed ->
+                            val title = keyed.item.title.trim().lowercase()
+                            when (index) {
+                                0 -> "supermix" in title
+                                1 -> "discover" in title || "descubr" in title
+                                2 -> "release" in title || "novedad" in title || "estreno" in title
+                                3 -> "replay" in title || "escuchad" in title || "repetici" in title
+                                4 -> "archive" in title || "archivo" in title
+                                else -> false
+                            }
+                        }?.item
+                        ?: if (index == 5) unique.firstOrNull {
+                        it.item.browseId == com.music.bitchord.data.YtMusicRepository.LIKED_MUSIC ||
+                            it.item.browseId == "LM" || it.item.browseId == "VLLM"
+                    }?.item ?: ShelfItem(
+                        title = "Liked music", subtitle = "Your liked songs", thumbnailUrl = null,
+                        videoId = null, browseId = com.music.bitchord.data.YtMusicRepository.LIKED_MUSIC,
+                    ) else ShelfItem(
+                        title = QUICK_MIX_NAMES[index].toQuickMixTitle(),
+                        subtitle = "", thumbnailUrl = null, videoId = null,
+                        browseId = null,
+                    )
+                }
+                if (showQuickGrid) BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        normalizedQuick.chunked(3).forEach { row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                row.forEach { item ->
+                                    QuickMixCard(item, glass, Modifier.weight(1f), onClick = { onPlayMix(item) })
+                                }
+                            }
+                        }
+                    }
+                }
+                val groups = remember(unique) { groupPersonalizedMixes(unique) }
+                if (showPersonalMixRows && groups.yours.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Tus mixes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+                        ShelfRow(
+                            contentPadding = PaddingValues(end = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            items(groups.yours, key = { it.browseId ?: it.title }) { item ->
+                                MixCarouselCard(item, glass, darkContainer = true, onClick = { onPlayMix(item) })
+                            }
+                        }
+                    }
+                }
+                if (showPersonalMixRows) {
+                    groups.moods.forEach { mood ->
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(mood.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+                            ShelfRow(
+                                contentPadding = PaddingValues(end = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                items(mood.items, key = { it.browseId ?: it.title }) { item ->
+                                    MixCarouselCard(item, glass, darkContainer = false, onClick = { onPlayMix(item) })
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NearbyStationsSection(
+    stations: List<RadioStation>,
+    state: NearbyStationsState,
+    favoriteUuids: Set<String>,
+    playing: RadioStation?,
+    onFavorite: (RadioStation) -> Unit,
+    onPlay: (RadioStation) -> Unit,
+    onLongPress: (RadioStation, Rect) -> Unit,
+    onSeeAll: () -> Unit,
+    onRequestPermission: () -> Unit,
+    onEnableLocation: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SectionTitle(stringResource(R.string.radio_nearby))
+            if (state == NearbyStationsState.Ready && stations.isNotEmpty()) {
+                TextButton(onClick = onSeeAll) { Text(stringResource(R.string.radio_show_all), color = MaterialTheme.colorScheme.primary) }
+            }
+        }
+        when (state) {
+            NearbyStationsState.PermissionRequired -> Column {
+                Text(stringResource(R.string.radio_location_permission_needed), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = onRequestPermission) { Text(stringResource(R.string.radio_grant_location)) }
+            }
+            NearbyStationsState.LocationUnavailable -> Column {
+                Text(stringResource(R.string.radio_location_enabled_needed), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = onEnableLocation) { Text(stringResource(R.string.radio_enable_location)) }
+            }
+            NearbyStationsState.Loading -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+            NearbyStationsState.Error -> Text(stringResource(R.string.radio_no_local_stations), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            NearbyStationsState.Ready -> if (stations.isEmpty()) {
+                Text(stringResource(R.string.radio_no_local_stations), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                stations.take(8).forEachIndexed { index, station ->
+                    StationRow(
+                        station = station,
+                        isPlaying = station.uuid == playing?.uuid,
+                        isFavorite = station.uuid in favoriteUuids,
+                        onFavorite = { onFavorite(station) },
+                        onClick = { onPlay(station) },
+                        onLongPress = { bounds -> onLongPress(station, bounds) },
+                        showDivider = index < minOf(stations.size, 8) - 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun QuickMixCard(item: ShelfItem, glass: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(if (glass) 18.dp else 12.dp)
+    Box(
+        modifier.aspectRatio(1f).clip(shape)
+            .background(Brush.linearGradient(quickMixGradient(item)))
+            .then(if (glass) Modifier else Modifier)
+            .combinedClickable(onClick = onClick)
+    ) {
+        item.thumbnailUrl?.let { url ->
+            AsyncImage(
+                model = url.artworkAt(48), contentDescription = null, contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f }.blur(24.dp),
+            )
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
+        }
+        Box(Modifier.fillMaxSize().clip(shape).background(Color.White.copy(alpha = if (glass) .22f else .14f)))
+        Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Spacer(Modifier.weight(1f))
+            Icon(
+                painter = painterResource(R.drawable.ic_soundchord_logo),
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(54.dp, 37.dp),
+            )
+            Spacer(Modifier.weight(1f))
+            Text(item.title, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MixCarouselCard(item: ShelfItem, glass: Boolean, darkContainer: Boolean, onClick: () -> Unit) {
+    val cardShape = RoundedCornerShape(if (glass) 20.dp else 12.dp)
+    Column(
+        Modifier.width(if (darkContainer) 280.dp else 150.dp)
+            .clip(cardShape)
+            .combinedClickable(onClick = onClick),
+    ) {
+        AsyncImage(
+            model = item.thumbnailUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)),
+        )
+        Column(
+            Modifier.fillMaxWidth()
+                .then(if (darkContainer) Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (glass) 0.58f else 1f)) else Modifier)
+                .padding(horizontal = if (darkContainer) 11.dp else 0.dp, vertical = 9.dp),
+        ) {
+            Text(item.title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(item.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+private fun String.toQuickMixTitle(): String = when (this) {
+    "my supermix" -> "My Supermix"
+    "discover mix" -> "Discover Mix"
+    "new release mix" -> "New Release Mix"
+    "replay mix" -> "Replay Mix"
+    "archive mix" -> "Archive Mix"
+    else -> "Liked Music"
+}
+
+private data class PersonalizedMoodMix(val name: String, val items: List<ShelfItem>)
+private data class PersonalizedMixGroups(val yours: List<ShelfItem>, val moods: List<PersonalizedMoodMix>)
+
+private fun groupPersonalizedMixes(mixes: List<KeyedMix>): PersonalizedMixGroups {
+    val numberedMix = Regex("^(.+?)\\s*(?:mix|mix de|mix para|mix de los|mix of)?\\s*(\\d+)$", RegexOption.IGNORE_CASE)
+    val supermix = Regex("^(.+?)\\s+(?:supermix|mix de descubrimiento|mix de novedades|mix de archivo|mix de temas escuchados)$", RegexOption.IGNORE_CASE)
+    val yours = mutableListOf<ShelfItem>()
+    val moods = LinkedHashMap<String, Pair<String, MutableList<Pair<Int, ShelfItem>>>>()
+    mixes.distinctBy { it.item.browseId ?: it.item.title }.forEach { keyed ->
+        val title = keyed.item.title.trim()
+        val canonical = keyed.englishTitle.trim().ifBlank { title }
+        val lower = canonical.lowercase()
+        val localizedTitle = title.lowercase()
+        val signatureByTitle = lower in QUICK_MIX_NAMES || SIGNATURE_MIX_TITLE_HINTS.any { hints ->
+            hints.any { hint -> lower == hint || localizedTitle == hint ||
+                (hint.contains("discover") && (lower.contains("discover") || localizedTitle.contains("descubr"))) ||
+                (hint.contains("archive") && (lower.contains("archive") || localizedTitle.contains("archivo"))) ||
+                (hint.contains("liked") && (lower.contains("liked") || localizedTitle.contains("gusta")))
+            }
+        }
+        if (signatureByTitle || keyed.item.browseId == "VLLM" || keyed.item.browseId == "LM" ||
+            keyed.item.browseId?.startsWith("RD") == true && localizedTitle.contains("discover")
+        ) return@forEach
+        val superMatch = supermix.matchEntire(canonical) ?: supermix.matchEntire(title)
+        val numbered = numberedMix.matchEntire(canonical) ?: numberedMix.matchEntire(title)
+        when {
+            superMatch != null -> {
+                val moodTitle = title
+                val mood = moodNameFromTitle(moodTitle, superMatch.groupValues[1].trim())
+                moods.getOrPut(mood.lowercase()) { mood to mutableListOf() }.second += 0 to keyed.item
+            }
+            numbered != null && numbered.groupValues[1].trim().lowercase() !in setOf("my", "mi", "mis") -> {
+                val mood = moodNameFromTitle(title, numbered.groupValues[1].trim().removeSuffix("-").trim())
+                moods.getOrPut(mood.lowercase()) { mood to mutableListOf() }.second += numbered.groupValues[2].toInt() to keyed.item
+            }
+            else -> yours += keyed.item
+        }
+    }
+    return PersonalizedMixGroups(
+        yours = yours,
+        moods = moods.values.map { (name, members) ->
+            val ordered = members.sortedBy { it.first }.map { it.second }
+            val heading = if (name.equals("My", true)) ordered.firstOrNull()?.title ?: name else {
+                name
+            }
+            PersonalizedMoodMix(heading, ordered)
+        },
+    )
+}
+
+private fun moodNameFromTitle(shownTitle: String, fallback: String): String {
+    val title = shownTitle.trim()
+    val numbered = Regex("\\s*(?:mix\\s*)?\\d+$", RegexOption.IGNORE_CASE)
+    val withoutNumber = title.replace(numbered, "").trim().trimEnd('-', '–', ':')
+    if (withoutNumber.isNotBlank()) return withoutNumber
+    val supermix = Regex("\\s+supermix$", RegexOption.IGNORE_CASE)
+    return title.replace(supermix, "").trim().ifBlank { fallback }
+}
+
+private fun quickMixGradient(item: ShelfItem): List<Color> {
+    val palettes = listOf(
+        listOf(Color(0xFF77766F), Color(0xFF454550)),
+        listOf(Color(0xFF262589), Color(0xFF252D50)),
+        listOf(Color(0xFFB76E48), Color(0xFF713A55)),
+        listOf(Color(0xFF96717D), Color(0xFF604F59)),
+        listOf(Color(0xFF155545), Color(0xFF172F2A)),
+        listOf(Color(0xFFA56BCB), Color(0xFFC66EAA)),
+    )
+    val index = QUICK_MIX_NAMES.indexOfFirst { name ->
+        item.title.equals(name.toQuickMixTitle(), ignoreCase = true) ||
+            (name == "liked music" && (item.browseId == "LM" || item.browseId == "VLLM"))
+    }.coerceAtLeast(0)
+    return palettes[index]
 }
 
 @Composable
@@ -410,60 +746,6 @@ private fun SectionTitle(title: String, prominent: Boolean = false, modifier: Mo
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.onSurface,
     )
-}
-
-@Composable
-@OptIn(ExperimentalFoundationApi::class)
-private fun FavoriteStationCard(station: RadioStation, isFavorite: Boolean, onFavorite: () -> Unit, onPlay: () -> Unit, onLongPress: (Rect) -> Unit) {
-    val gradient = favoriteStationGradients[(station.uuid.hashCode().and(Int.MAX_VALUE)) % favoriteStationGradients.size]
-    var artworkFailed by remember(station.uuid) { mutableStateOf(false) }
-    var cardBounds by remember(station.uuid) { mutableStateOf<Rect?>(null) }
-    val haptics = LocalHapticFeedback.current
-    Column(Modifier.width(250.dp)) {
-        Card(
-            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        ) {
-            Box(Modifier.fillMaxSize()) {
-                Box(
-                    Modifier.fillMaxSize()
-                        .clip(RoundedCornerShape(22.dp))
-                        .onGloballyPositioned { cardBounds = it.boundsInWindow() }
-                        .combinedClickable(
-                            onClick = onPlay,
-                            onLongClick = {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                cardBounds?.let(onLongPress)
-                            },
-                        )
-                        .background(Brush.verticalGradient(listOf(Color(0xFF101114), gradient.first(), Color(0xFF101114)))),
-                ) {
-                    if (!station.favicon.isNullOrBlank() && !artworkFailed) {
-                        AsyncImage(station.favicon, contentDescription = null, modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(22.dp)), contentScale = ContentScale.Crop, onError = { artworkFailed = true })
-                    } else {
-                        Icon(Icons.Rounded.Radio, null, Modifier.align(Alignment.Center).size(100.dp), tint = Color.White.copy(alpha = .88f))
-                    }
-                    Surface(Modifier.align(Alignment.BottomStart).padding(14.dp), color = Color(0xFFF44336), shape = CircleShape) {
-                        Text(stringResource(R.string.radio_live), modifier = Modifier.padding(horizontal = 13.dp, vertical = 7.dp), color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                    }
-                }
-                IconButton(onClick = onFavorite, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)) {
-                    Icon(if (isFavorite) BitChordIcons.StarFilled else BitChordIcons.Star, stringResource(if (isFavorite) R.string.radio_remove_favorite else R.string.radio_add_favorite), tint = Color.White)
-                }
-            }
-        }
-        Text(
-            text = station.name,
-            modifier = Modifier.padding(top = 10.dp),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(stationMetadata(station), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
 }
 
 @Composable

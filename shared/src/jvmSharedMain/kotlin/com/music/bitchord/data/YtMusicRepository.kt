@@ -12,6 +12,7 @@ import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.BrowseItem
 import com.music.bitchord.data.model.HomeFeed
 import com.music.bitchord.data.model.HomeShelf
+import com.music.bitchord.data.model.KeyedMix
 import com.music.bitchord.data.model.LibraryPage
 import com.music.bitchord.data.model.LibraryState
 import com.music.bitchord.data.model.LikeStatus
@@ -1214,6 +1215,13 @@ object YtMusicRepository {
     suspend fun mixedForYou(): Result<List<ShelfItem>> = call("mixedForYou") {
         if (Innertube.cookie == null) return@call emptyList()
         InnertubeParser.parseTwoRowItemsDeep(Innertube.browse("FEmusic_mixed_for_you"))
+    }
+
+    /** Signed-in personalized mixes, retaining localized display names and matching English names. */
+    suspend fun mixedForYouKeyed(): Result<List<KeyedMix>> = call("mixedForYouKeyed") {
+        if (Innertube.cookie == null) return@call emptyList()
+        InnertubeParser.parseTwoRowItemsDeep(Innertube.browse("FEmusic_mixed_for_you"))
+            .map { item -> KeyedMix(item, item.title) }
     }
 
     /**

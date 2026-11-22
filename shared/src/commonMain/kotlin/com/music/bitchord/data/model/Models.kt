@@ -416,6 +416,9 @@ data class ShelfItem(
     val isVideo: Boolean = false,
 )
 
+/** A personalized YouTube Music mix, with its canonical English name for grouping. */
+data class KeyedMix(val item: ShelfItem, val englishTitle: String)
+
 /** How a shelf's items are laid out — the web player's `ShelfLayout`, by the same rules. */
 enum class ShelfLayout {
     /** Square cards in one scrolling row. */

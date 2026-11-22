@@ -8,10 +8,13 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Lan
 import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -27,6 +30,7 @@ import com.music.bitchord.ui.components.ReplayCardRowSkeleton
 import com.music.bitchord.ui.replay.ReplayCardRow
 import com.music.bitchord.ui.replay.ReplayHeroCard
 import com.music.bitchord.ui.replay.ReplayStoryPage
+import com.soundchord.features.radio.data.PreferencesRadioFavoritesStore
 
 // The phone's halves of the shared Library page: its list of folders, what
 // sits on its "On device" shelf, and the way in to Replay at its head.
@@ -38,6 +42,9 @@ import com.music.bitchord.ui.replay.ReplayStoryPage
  */
 @Composable
 fun libraryLinks(): List<LibraryLink> {
+    val context = LocalContext.current
+    val radioFavoritesStore = remember(context) { PreferencesRadioFavoritesStore(context) }
+    val radioFavorites by radioFavoritesStore.stations.collectAsStateWithLifecycle(initialValue = emptyList())
     val webdavConfigured by AppSettings.webdavUrl.collectAsStateWithLifecycle()
     val smbHost by AppSettings.smbHost.collectAsStateWithLifecycle()
     val smbShare by AppSettings.smbShare.collectAsStateWithLifecycle()
@@ -59,6 +66,12 @@ fun libraryLinks(): List<LibraryLink> {
             stringResource(R.string.downloaded_songs),
             "local:downloads",
         ),
+        link(
+            stringResource(com.soundchord.features.R.string.radio_favourites),
+            "",
+            RADIO_FAVORITES_BROWSE_ID,
+            Icons.Rounded.Radio,
+        ).takeIf { radioFavorites.isNotEmpty() },
         link(
             stringResource(R.string.local_music),
             stringResource(R.string.audio_files_on_device),
@@ -91,6 +104,8 @@ fun libraryLinks(): List<LibraryLink> {
         ).takeIf { spotifyConnected.isNotBlank() }?.copy(logo = Res.drawable.spotify_logo),
     )
 }
+
+const val RADIO_FAVORITES_BROWSE_ID = "soundchord:radio-favorites"
 
 /**
  * The phone's "On device" shelf: the playlists and albums downloaded whole —

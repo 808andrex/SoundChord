@@ -1088,6 +1088,7 @@ private fun BitChordApp(
     val homePull = rememberPullToRefreshState()
     val explorePull = rememberPullToRefreshState()
     val libraryPull = rememberPullToRefreshState()
+    val radioPull = rememberPullToRefreshState()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val currentFeed = when {
         detail != null -> null
@@ -1096,6 +1097,7 @@ private fun BitChordApp(
         route != null -> null
         selectedTab == TAB_HOME -> MainViewModel.Feed.HOME
         selectedTab == TAB_EXPLORE -> MainViewModel.Feed.EXPLORE
+        selectedTab == TAB_RADIO -> MainViewModel.Feed.RADIO
         selectedTab == TAB_LIBRARY -> MainViewModel.Feed.LIBRARY
         else -> null
     }
@@ -1104,6 +1106,7 @@ private fun BitChordApp(
         MainViewModel.Feed.HOME -> homePull
         MainViewModel.Feed.EXPLORE -> explorePull
         MainViewModel.Feed.LIBRARY -> libraryPull
+        MainViewModel.Feed.RADIO -> radioPull
         null -> null
     }
     val scrolled by remember(currentListState) {
@@ -1232,6 +1235,7 @@ private fun BitChordApp(
         onShowLyricsSourcesChange = { showLyricsSources = it },
         onSongSortMenuOpenChange = { songSortMenuOpen = it },
         onFolderMenuOpenChange = { folderMenuOpen = it },
+        onDetailSearchingChange = { detailSearching = it },
         onShowAccountSelectorChange = { showAccountSelector = it },
         onShowAppLanguageChange = { showAppLanguage = it },
         onShowTranslationLanguageChange = { showTranslationLanguage = it },
@@ -1260,7 +1264,6 @@ private fun BitChordApp(
         onBrowseRenameInSheetChange = { browseRenameInSheet = it },
         onStationActionsChange = { stationActions = it },
         onSearchFocusRequestedChange = { searchFocusRequested = it },
-        onDetailSearchingChange = { detailSearching = it },
         onReorderTargetChange = { reorderTarget = it },
         onReorderEntriesChange = { reorderEntries = it },
         onReorderSavingChange = { reorderSaving = it },
@@ -1418,6 +1421,7 @@ private fun BitChordApp(
         homePull = homePull,
         explorePull = explorePull,
         libraryPull = libraryPull,
+        radioPull = radioPull,
         historyLabel = historyLabel,
         radioLabel = radioLabel,
         replayLabel = replayLabel,
@@ -2821,6 +2825,7 @@ private fun BitChordAppContent(
                         homePull = nav.homePull,
                         explorePull = nav.explorePull,
                         libraryPull = nav.libraryPull,
+                        radioPull = nav.radioPull,
                     ),
                     actions = rememberAppNavigationScreenActions(
                         onSelectTab = actions.onSelectTab,
@@ -3105,6 +3110,7 @@ private fun BitChordAppContent(
 
         BitChordGlobalSheetsUi(
             state = rememberGlobalSheetsHostState(
+                route = nav.route,
                 hazeState = hazeState,
                 pageBackdrop = sheets.pageBackdrop,
                 reduceDynamicBlur = sheets.reduceDynamicBlur,

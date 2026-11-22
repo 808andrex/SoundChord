@@ -66,12 +66,12 @@ import com.music.bitchord.data.model.TopPick
 import com.music.bitchord.data.model.TopPickMood
 import com.music.bitchord.data.model.UiState
 import com.music.bitchord.data.model.UserPlaylist
-import com.music.bitchord.data.model.toSong
 import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.AudioQuality
 import com.music.bitchord.data.settings.BitPerfectMode
 import com.music.bitchord.data.settings.LibraryViewType
+import com.music.bitchord.data.settings.LibrarySort
 import com.music.bitchord.data.settings.LocalMusicSort
 import com.music.bitchord.data.settings.SongSort
 import com.music.bitchord.data.sources.SourceConfig
@@ -100,6 +100,7 @@ import com.music.bitchord.ui.components.StationMenuTarget
 import com.music.bitchord.ui.navigation.AppDestination
 import com.music.bitchord.ui.navigation.AppNavigator
 import com.music.bitchord.ui.navigation.AppRoute
+import com.music.bitchord.ui.screens.RADIO_FAVORITES_BROWSE_ID
 import com.music.bitchord.ui.navigation.RouteEntry
 import com.music.bitchord.ui.player.AddSongsRequest
 import com.music.bitchord.ui.replay.ReplayHeroCard
@@ -126,6 +127,8 @@ import com.music.bitchord.ui.screens.ListenTogetherScreen
 import com.music.bitchord.ui.screens.MoodGenrePlaylistsScreen
 import com.music.bitchord.ui.screens.MoodGridPage
 import com.soundchord.features.radio.ui.RadioHistoryScreen
+import com.soundchord.features.radio.ui.RadioFavoritesScreen
+import com.soundchord.features.radio.data.RadioHistoryStore
 import com.soundchord.features.radio.playback.toSong
 import com.music.bitchord.ui.screens.RecognitionHistoryScreen
 import com.music.bitchord.ui.screens.SearchScreen
@@ -137,7 +140,6 @@ import com.music.bitchord.ui.screens.SourcesScreen
 import com.music.bitchord.ui.screens.SpotifyLibraryScreen
 import com.music.bitchord.ui.screens.WearOsScreen
 import com.soundchord.features.radio.data.RadioFavoritesStore
-import com.soundchord.features.radio.data.RadioHistoryStore
 import com.soundchord.features.radio.data.RadioStation
 import com.soundchord.features.radio.ui.RadioScreen
 import com.soundchord.features.recognition.RecognitionScreen
@@ -597,6 +599,7 @@ data class AppNavigationListStates(
     val homePull: PullToRefreshState,
     val explorePull: PullToRefreshState,
     val libraryPull: PullToRefreshState,
+    val radioPull: PullToRefreshState,
 )
 
 @OptIn(ExperimentalAnimationApi::class, ExperimentalMaterial3Api::class)
@@ -624,6 +627,7 @@ internal fun AppNavigationHost(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val radioSort = AppSettings.librarySort.collectAsStateWithLifecycle().value
 
     AnimatedContent(
         targetState = targetState,
@@ -713,6 +717,25 @@ internal fun AppNavigationHost(
                     },
                     dialogSurfaceModifier = historyDialogSurface(hazeState, states.reduceDynamicBlur),
                     contentPadding = states.listPadding,
+                )
+            } else if (pageRoute == AppRoute.RadioFavorites) {
+                RadioFavoritesScreen(
+                    stations = states.radioFavorites,
+                    onPlay = { station ->
+                        radioHistoryStore.record(context, station)
+                        actions.onPlayRadio(
+                            station.toSong(context),
+                            QueueSource(states.radioLabel, PlaybackSourceType.QUEUE, id = "radio:${station.uuid}"),
+                        )
+                    },
+                    onRemoveFavorite = { station -> radioFavoriteScope.launch { radioFavoritesStore.remove(station.uuid) } },
+                    contentPadding = states.listPadding,
+                    searching = states.detailSearching,
+                    sort = when (radioSort) {
+                        LibrarySort.TITLE_ASC -> com.soundchord.features.radio.ui.RadioFavoritesSort.NAME_ASC
+                        LibrarySort.TITLE_DESC -> com.soundchord.features.radio.ui.RadioFavoritesSort.NAME_DESC
+                        LibrarySort.DEFAULT -> com.soundchord.features.radio.ui.RadioFavoritesSort.DEFAULT
+                    },
                 )
             } else if (pageRoute == AppRoute.History) {
                 HistoryScreen(
@@ -1247,6 +1270,11 @@ internal fun AppNavigationHost(
                 TAB_RADIO -> RadioScreen(
                     currentSong = states.player.song,
                     contentPadding = states.listPadding,
+                    pullToRefreshState = lists.radioPull,
+                    onRadioRefreshStateChanged = { refreshing -> viewModel.setRadioRefreshing(refreshing) },
+                    onPlayMix = { browseId, title ->
+                        viewModel.openDetail(browseId, title, "YouTube Music mix", null, BrowseType.PLAYLIST)
+                    },
                     onSubpageBackHandlerChanged = actions.onRadioSubpageBackChanged,
                     onPlayStation = { song ->
                         actions.onPlayRadio(
@@ -1446,7 +1474,10 @@ internal fun AppNavigationHost(
                     signedIn = states.signedIn,
                     state = states.libraryState,
                     listState = lists.libraryListState,
-                    onShelfItemClick = actions.onLibraryItemClick,
+                    onShelfItemClick = { item ->
+                        if (item.browseId == RADIO_FAVORITES_BROWSE_ID) navigator.push(AppRoute.RadioFavorites)
+                        else actions.onLibraryItemClick(item)
+                    },
                     onShelfItemLongPress = actions.onBrowseLongPress,
                     onNewPlaylist = actions.onCreatingPlaylist,
                     onImportSpotifyPlaylist = actions.onShowSpotifyImport,

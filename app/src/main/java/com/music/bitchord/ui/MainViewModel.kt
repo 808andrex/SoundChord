@@ -1961,10 +1961,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * as one flag: a pull on Library while Home is still refreshing in the
      * background shouldn't leave the wrong tab showing a loader.
      */
-    enum class Feed { HOME, EXPLORE, LIBRARY }
+    enum class Feed { HOME, EXPLORE, RADIO, LIBRARY }
 
     private val _refreshing = MutableStateFlow(emptySet<Feed>())
     val refreshing: StateFlow<Set<Feed>> = _refreshing.asStateFlow()
+
+    fun setRadioRefreshing(refreshing: Boolean) {
+        _refreshing.value = if (refreshing) _refreshing.value + Feed.RADIO else _refreshing.value - Feed.RADIO
+    }
 
     /**
      * Re-fetches [feed] in place. Unlike the `load*` entry points this leaves
@@ -1982,6 +1986,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             when (feed) {
                 Feed.HOME -> refreshHome(identity)
                 Feed.EXPLORE -> fetchExplore()
+                Feed.RADIO -> Unit // Radio's feature ViewModels refresh their own repositories.
                 Feed.LIBRARY -> fetchLibrary(identity)
             }
             _refreshing.value = _refreshing.value - feed

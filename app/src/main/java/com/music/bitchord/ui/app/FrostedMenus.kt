@@ -149,6 +149,24 @@ internal fun SongSort.localizedLabel(): String = when (this) {
     SongSort.DATE_ADDED_DESC -> stringResource(R.string.sort_date_added)
 }
 
+@Composable
+internal fun FrostedRadioFavoritesSortMenu(
+    hazeState: HazeState,
+    selected: LibrarySort,
+    onSelect: (LibrarySort) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    FrostedMenuPanel(hazeState = hazeState, onDismiss = onDismiss) {
+        listOf(LibrarySort.DEFAULT, LibrarySort.TITLE_ASC, LibrarySort.TITLE_DESC).forEach { option ->
+            FrostedMenuRow(
+                label = option.localizedLabel(),
+                checked = option == selected,
+                onClick = { onSelect(option) },
+            )
+        }
+    }
+}
+
 /**
  * The track-list sort menu, styled after the account switcher: a full-screen
  * scrim to catch the dismissal tap, and the options on a frosted panel that
@@ -503,6 +521,7 @@ internal fun BitChordChrome(
                 AppRoute.History -> stringResource(R.string.history)
                 AppRoute.RecognitionHistory -> stringResource(R.string.recognition_history_title)
                 AppRoute.RadioHistory -> stringResource(com.soundchord.features.R.string.radio_history_title)
+                AppRoute.RadioFavorites -> stringResource(com.soundchord.features.R.string.radio_favourites)
                 is AppRoute.LibraryShowAll -> r.shelf.title
                 is AppRoute.ArtistShelf -> r.shelf.title
                 AppRoute.Moods -> stringResource(R.string.find_your_mood)
@@ -705,6 +724,24 @@ internal fun BitChordChrome(
                                     )
                                 }
                             }
+                        }
+                    }
+                    if (state.route == AppRoute.RadioFavorites) {
+                        IconButton(onClick = actions.onToggleDetailSearching) {
+                            Icon(
+                                if (state.detailSearching) Icons.Rounded.Close else BitChordIcons.Search,
+                                contentDescription = stringResource(
+                                    if (state.detailSearching) R.string.close_search else R.string.search_this_list,
+                                ),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                        IconButton(onClick = actions.onOpenFolderMenu) {
+                            Icon(
+                                Icons.Rounded.Sort,
+                                contentDescription = stringResource(com.soundchord.features.R.string.radio_sort_stations),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
                         }
                     }
                     if ((state.isReleaseDetail || state.isLocalDetail) && state.detail != null) {
