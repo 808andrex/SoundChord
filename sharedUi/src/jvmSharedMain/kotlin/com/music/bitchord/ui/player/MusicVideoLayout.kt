@@ -50,6 +50,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,6 +72,7 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.video_quality
 import com.music.bitchord.sharedui.resources.video_quality_auto
+import com.music.bitchord.ui.components.LocalLiquidGlassEnabled
 import com.music.bitchord.ui.haptics.Haptic
 import com.music.bitchord.ui.haptics.rememberHaptics
 import com.music.bitchord.ui.theme.HideSystemBars
@@ -81,28 +83,66 @@ import org.jetbrains.compose.resources.stringResource
 /** How long the controls stay over a playing video untouched. */
 private const val VIDEO_CONTROLS_IDLE_MS = 3_500L
 
+/** Check if Liquid Glass is supported on the current device (Android 12+ / API 31+). */
+fun isGlassSupported(): Boolean = try {
+    val clazz = Class.forName("android.os.Build\$VERSION")
+    clazz.getField("SDK_INT").getInt(null) >= 31
+} catch (_: Throwable) {
+    false
+}
+
+@Composable
+private fun rememberIsLiquidGlassActive(): Boolean {
+    if (!isGlassSupported()) return false
+    if (LocalLiquidGlassEnabled.current) return true
+
+    val flow = remember {
+        try {
+            val appSettings = Class.forName("com.music.bitchord.data.settings.AppSettings")
+            val instance = appSettings.getField("INSTANCE").get(null)
+            val method = appSettings.getMethod("getLiquidGlass")
+            method.invoke(instance) as? kotlinx.coroutines.flow.StateFlow<*>
+        } catch (_: Throwable) {
+            null
+        }
+    }
+    return (flow?.collectAsStateWithLifecycle()?.value as? Boolean) ?: false
+}
+
 /**
  * Superficie translúcida estilo Apple Music / Liquid Glass para los controles
- * flotantes sobre el video en pantalla completa.
+ * flotantes sobre el video en pantalla completa. Diferencia los dos estados:
+ * - Liquid Glass activo: gradiente translúcido con refracción/blur y borde especular fino.
+ * - Liquid Glass desactivado: fondo circular/cápsula gris oscuro mate uniforme sin borde.
  */
-private fun Modifier.appleMusicVideoGlass(shape: Shape): Modifier = this
-    .clip(shape)
-    .background(
-        Brush.verticalGradient(
-            0f to Color.White.copy(alpha = 0.22f),
-            0.45f to Color(0xFF1C1C1E).copy(alpha = 0.56f),
-            1f to Color(0xFF121214).copy(alpha = 0.68f),
-        ),
-    )
-    .border(
-        width = 0.85.dp,
-        brush = Brush.verticalGradient(
-            0f to Color.White.copy(alpha = 0.38f),
-            0.5f to Color.White.copy(alpha = 0.14f),
-            1f to Color.White.copy(alpha = 0.24f),
-        ),
-        shape = shape,
-    )
+@Composable
+private fun Modifier.appleMusicVideoGlass(shape: Shape): Modifier {
+    val isGlass = rememberIsLiquidGlassActive()
+    return if (isGlass) {
+        this
+            .clip(shape)
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = 0.22f),
+                    0.45f to Color(0xFF1C1C1E).copy(alpha = 0.56f),
+                    1f to Color(0xFF121214).copy(alpha = 0.68f),
+                ),
+            )
+            .border(
+                width = 0.85.dp,
+                brush = Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = 0.38f),
+                    0.5f to Color.White.copy(alpha = 0.14f),
+                    1f to Color.White.copy(alpha = 0.24f),
+                ),
+                shape = shape,
+            )
+    } else {
+        this
+            .clip(shape)
+            .background(Color(0xFF2A2A2D).copy(alpha = 0.92f))
+    }
+}
 
 @Composable
 private fun VideoGlassCircleButton(
@@ -440,7 +480,7 @@ private fun VideoQualityBox(
         ) { text ->
             Text(
                 text = text,
-                color = Color.White.copy(alpha = 0.92f),
+                color = Color.White,
                 fontSize = fontSize,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.4.sp,

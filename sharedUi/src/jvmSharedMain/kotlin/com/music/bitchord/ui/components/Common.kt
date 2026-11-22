@@ -24,6 +24,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.geometry.CornerRadius
@@ -716,6 +717,9 @@ const val MOTION_FRAME_GAP_MS = 25L
  * from there when the page is back.
  */
 val LocalPlayingBarsMotion = compositionLocalOf { true }
+
+/** Whether the liquid glass nav bar and chrome are turned on — see [AppSettings.liquidGlass]. */
+val LocalLiquidGlassEnabled = staticCompositionLocalOf { false }
 
 /** Each bar's lowest point; all three peak at full height. */
 private val PLAYING_BAR_MINIMUMS = floatArrayOf(0.38f, 0.78f, 0.52f)

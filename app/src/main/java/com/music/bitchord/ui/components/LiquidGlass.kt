@@ -38,9 +38,6 @@ import com.music.bitchord.ui.components.backdrop.internal.ShapeProvider
 import com.music.bitchord.ui.components.backdrop.shadow.Shadow
 import androidx.compose.ui.unit.dp
 
-/** Whether the liquid glass nav bar is turned on — see [AppSettings.liquidGlass]. */
-val LocalLiquidGlassEnabled = staticCompositionLocalOf { false }
-
 /** The backdrop content (app UI) that a liquid glass surface samples from. */
 val LocalAppBackdrop = staticCompositionLocalOf<Backdrop> { error("No AppBackdrop provided") }
 
