@@ -83,12 +83,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
+import com.music.bitchord.data.backup.DriveBackup
 import com.music.bitchord.data.model.PlaylistPrivacy
 import com.music.bitchord.data.model.ROW_ART_PX
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.UserPlaylist
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.ui.components.thumbnailBorder
+import com.music.bitchord.ui.components.ConfirmationAlert
 import com.music.bitchord.ui.components.InfoAlert
 import com.music.bitchord.ui.icons.BitChordIcons
 import java.util.Locale
@@ -129,6 +131,7 @@ fun PlaylistPickerSheet(
     song: Song? = null,
     startCreating: Boolean = false,
     offline: Boolean = false,
+    onOpenDriveBackup: (() -> Unit)? = null,
 ) {
     var creating by remember { mutableStateOf(startCreating) }
     // By id rather than by value: the list is re-fetched under an open sheet,
@@ -178,6 +181,7 @@ fun PlaylistPickerSheet(
                     onClose = { closeAfter {} },
                     onCreate = { name, privacy, cover -> closeAfter { onCreate(name, privacy, cover) } },
                     offline = offline,
+                    onOpenDriveBackup = onOpenDriveBackup,
                 )
             } else {
                 SheetTopBar(
@@ -363,6 +367,7 @@ private fun NewPlaylistForm(
     onClose: () -> Unit,
     onCreate: (String, PlaylistPrivacy, Uri?) -> Unit,
     offline: Boolean,
+    onOpenDriveBackup: (() -> Unit)? = null,
 ) {
     var name by remember { mutableStateOf("") }
     var selectedPrivacy by remember { mutableStateOf(PlaylistPrivacy.PRIVATE) }
@@ -496,16 +501,11 @@ private fun NewPlaylistForm(
 
     }
 
-    if (showCoverNotice) {
-        InfoAlert(
-            hazeState = androidx.compose.runtime.remember { HazeState() },
-            title = stringResource(R.string.playlist_cover_local_notice_title),
-            description = stringResource(R.string.playlist_cover_local_notice_message),
-            onDismiss = { showCoverNotice = false },
-            inOwnWindow = true,
-            actionLabel = stringResource(R.string.accept),
-        )
-    }
+    PlaylistCoverNoticeDialog(
+        visible = showCoverNotice,
+        onDismiss = { showCoverNotice = false },
+        onOpenDriveBackup = onOpenDriveBackup,
+    )
 }
 
 /**
@@ -606,6 +606,7 @@ internal fun EditPlaylistSheet(
     customCoverUri: Uri?,
     onDismiss: () -> Unit,
     onSave: (String, Uri?, Boolean) -> Unit,
+    onOpenDriveBackup: (() -> Unit)? = null,
 ) {
     var name by remember(playlist.playlistId) { mutableStateOf(playlist.title) }
     var selectedCover by remember(playlist.playlistId) { mutableStateOf<Uri?>(null) }
@@ -709,14 +710,44 @@ internal fun EditPlaylistSheet(
             Spacer(Modifier.height(20.dp))
         }
     }
-    if (showCoverNotice) {
+    PlaylistCoverNoticeDialog(
+        visible = showCoverNotice,
+        onDismiss = { showCoverNotice = false },
+        onOpenDriveBackup = onOpenDriveBackup,
+    )
+}
+
+@Composable
+internal fun PlaylistCoverNoticeDialog(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    onOpenDriveBackup: (() -> Unit)? = null,
+) {
+    if (!visible) return
+    val driveSettings by DriveBackup.settings.collectAsStateWithLifecycle()
+    val isDriveConnected = driveSettings.account != null && !driveSettings.needsSignIn
+    if (isDriveConnected) {
         InfoAlert(
             hazeState = remember { HazeState() },
             title = stringResource(R.string.playlist_cover_local_notice_title),
-            description = stringResource(R.string.playlist_cover_local_notice_message),
-            onDismiss = { showCoverNotice = false },
+            description = stringResource(R.string.playlist_cover_drive_connected_message),
+            onDismiss = onDismiss,
             inOwnWindow = true,
             actionLabel = stringResource(R.string.accept),
+        )
+    } else {
+        ConfirmationAlert(
+            hazeState = remember { HazeState() },
+            title = stringResource(R.string.playlist_cover_local_notice_title),
+            description = stringResource(R.string.playlist_cover_local_notice_message),
+            confirmLabel = stringResource(R.string.playlist_cover_configure_drive),
+            cancelLabel = stringResource(R.string.playlist_cover_understood),
+            onConfirm = {
+                onDismiss()
+                onOpenDriveBackup?.invoke()
+            },
+            onDismiss = onDismiss,
+            inOwnWindow = true,
         )
     }
 }

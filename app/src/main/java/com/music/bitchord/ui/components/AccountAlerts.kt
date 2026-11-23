@@ -671,8 +671,35 @@ fun ConfirmationAlert(
     confirmLabel: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
+    inOwnWindow: Boolean = false,
+    cancelLabel: String? = null,
 ) {
-    AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
+    if (inOwnWindow) {
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) {
+            val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+            SideEffect { window?.setDimAmount(0f) }
+            ConfirmationAlertFrame(hazeState, title, description, confirmLabel, onConfirm, onDismiss, frosted = false, cancelLabel = cancelLabel)
+        }
+    } else {
+        ConfirmationAlertFrame(hazeState, title, description, confirmLabel, onConfirm, onDismiss, frosted = true, cancelLabel = cancelLabel)
+    }
+}
+
+@Composable
+private fun ConfirmationAlertFrame(
+    hazeState: HazeState,
+    title: String,
+    description: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    frosted: Boolean,
+    cancelLabel: String?,
+) {
+    AlertScaffold(hazeState = hazeState, onDismiss = onDismiss, frosted = frosted) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -696,7 +723,7 @@ fun ConfirmationAlert(
         AlertRule()
         AlertAction(label = confirmLabel, emphasised = true, onClick = onConfirm)
         AlertRule()
-        AlertAction(label = stringResource(R.string.cancel), emphasised = false, onClick = onDismiss)
+        AlertAction(label = cancelLabel ?: stringResource(R.string.cancel), emphasised = false, onClick = onDismiss)
     }
 }
 

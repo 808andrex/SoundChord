@@ -548,7 +548,10 @@
     <string name="playlist_cover_remove">Quitar portada</string>
     <string name="playlist_cover_delete">Eliminar portada</string>
     <string name="playlist_cover_local_notice_title">Portada guardada localmente</string>
-    <string name="playlist_cover_local_notice_message">La lista y sus canciones se sincronizarán con tu cuenta de YouTube Music, pero la portada personalizada se guarda únicamente en este dispositivo. Si deseas una carátula permanente y sincronizada en todos tus dispositivos, cámbiala directamente desde la app o web oficial de YouTube Music.</string>
+    <string name="playlist_cover_local_notice_message">La portada personalizada se guarda únicamente en este dispositivo. Te recomendamos activar el respaldo en Google Drive para proteger tus portadas y no perderlas si cambias de teléfono.</string>
+    <string name="playlist_cover_drive_connected_message">La portada personalizada se guarda en este dispositivo y se incluirá automáticamente en tu copia de seguridad de Google Drive para mantenerla respaldada y sincronizada.</string>
+    <string name="playlist_cover_configure_drive">Configurar Google Drive</string>
+    <string name="playlist_cover_understood">Entendido</string>
     <string name="accept">Aceptar</string>
     <string name="playlist_privacy_private">Privada</string>
     <string name="playlist_privacy_private_subtitle">Solo tú</string>

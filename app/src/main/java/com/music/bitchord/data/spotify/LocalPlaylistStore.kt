@@ -133,6 +133,61 @@ object LocalPlaylistStore {
         return _playlists.value.firstOrNull { it.id == cleanId || it.id == id || it.browseId == id }
     }
 
+    fun refreshCovers() {
+        if (!this::prefs.isInitialized) return
+        val covers = PlaylistCovers.covers.value
+        val updated = _playlists.value.map { playlist ->
+            val coverUri = covers[PlaylistCovers.normalizePlaylistId(playlist.id)]?.toString()
+                ?: PlaylistCovers.getCoverUri(appContext, playlist.id)?.toString()
+                ?: playlist.customCoverUri
+            playlist.copy(customCoverUri = coverUri)
+        }
+        if (updated != _playlists.value) {
+            _playlists.value = updated
+            persist(updated)
+        }
+    }
+
+    fun exportPlaylistsJson(): String? = if (this::prefs.isInitialized) prefs.getString(KEY_PLAYLISTS, null) else null
+
+    fun importPlaylistsJson(raw: String?) {
+        if (raw.isNullOrBlank() || !this::prefs.isInitialized) return
+        runCatching {
+            val incoming = mutableListOf<LocalPlaylist>()
+            val jsonArray = JSONArray(raw)
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                val id = obj.getString("id")
+                val title = obj.getString("title")
+                val songsArray = obj.getJSONArray("songs")
+                val songs = mutableListOf<Song>()
+                for (j in 0 until songsArray.length()) {
+                    val sObj = songsArray.getJSONObject(j)
+                    val song = Song(
+                        videoId = sObj.optString("videoId", ""),
+                        title = sObj.optString("title", ""),
+                        artist = sObj.optString("artist", ""),
+                        thumbnailUrl = sObj.optString("thumbnailUrl", null).takeIf { !it.isNullOrBlank() && it != "null" },
+                        durationText = sObj.optString("durationText", null).takeIf { !it.isNullOrBlank() && it != "null" },
+                        artistId = sObj.optString("artistId", null).takeIf { !it.isNullOrBlank() && it != "null" },
+                        albumId = sObj.optString("albumId", null).takeIf { !it.isNullOrBlank() && it != "null" },
+                        albumName = sObj.optString("albumName", null).takeIf { !it.isNullOrBlank() && it != "null" },
+                        isVideo = sObj.optBoolean("isVideo", false),
+                    )
+                    songs.add(song)
+                }
+                val storedCover = obj.optString("customCoverUri", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
+                val cover = PlaylistCovers.getCoverUri(appContext, id)?.toString() ?: storedCover
+                incoming.add(LocalPlaylist(id, title, songs, cover))
+            }
+            val existingIds = _playlists.value.map { it.id }.toSet()
+            val newPlaylists = incoming.filter { it.id !in existingIds }
+            val merged = _playlists.value + newPlaylists
+            _playlists.value = merged
+            persist(merged)
+        }
+    }
+
     private fun persist(list: List<LocalPlaylist>) {
         if (!this::prefs.isInitialized) return
         runCatching {

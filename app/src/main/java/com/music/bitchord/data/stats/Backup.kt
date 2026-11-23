@@ -3,8 +3,15 @@ package com.music.bitchord.data.stats
 import android.content.Context
 import android.net.Uri
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.data.PlaylistCoverBackup
+import com.music.bitchord.data.PlaylistCovers
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.SearchHistory
+import com.music.bitchord.data.spotify.LocalPlaylistStore
+import com.soundchord.features.radio.data.PreferencesRadioFavoritesStore
+import com.soundchord.features.radio.data.RadioStation
+import com.soundchord.features.recognition.data.RecognitionHistoryEntry
+import com.soundchord.features.recognition.data.RecognitionHistoryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -71,7 +78,7 @@ object Backup {
     suspend fun exportTo(context: Context, target: Uri): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
             context.contentResolver.openOutputStream(target, "wt")
-                ?.use { writeTo(it, pretty = true) }
+                ?.use { writeTo(context, it, pretty = true) }
                 ?: error("Couldn't open that file for writing")
         }
     }
@@ -86,6 +93,30 @@ object Backup {
      * years in it. [pretty] is for a file someone may open and read; the Drive
      * copy is compressed and never read by a person, so it goes without.
      */
+    @OptIn(ExperimentalSerializationApi::class)
+    suspend fun writeTo(context: Context, out: OutputStream, pretty: Boolean): Int = withContext(Dispatchers.IO) {
+        val buckets = ListeningStats.exportAll()
+        val recognition = RecognitionHistoryStore.getAll(context)
+        val radio = PreferencesRadioFavoritesStore(context).getAll()
+        val covers = PlaylistCovers.exportCovers(context)
+        val localPlaylists = LocalPlaylistStore.exportPlaylistsJson()
+        val file = BackupFile(
+            versionName = BuildConfig.VERSION_NAME,
+            exportedAt = Instant.now().toString(),
+            settings = AppSettings.exportPrefs().mapNotNull { (key, value) ->
+                PrefValue.of(value)?.let { key to it }
+            }.toMap(),
+            listening = buckets,
+            recognitionHistory = recognition.takeIf { it.isNotEmpty() },
+            radioFavorites = radio.takeIf { it.isNotEmpty() },
+            playlistCovers = covers.takeIf { it.isNotEmpty() },
+            localPlaylists = localPlaylists,
+        )
+        (if (pretty) json else compactJson).encodeToStream(BackupFile.serializer(), file, out)
+        out.flush()
+        buckets.size
+    }
+
     @OptIn(ExperimentalSerializationApi::class)
     suspend fun writeTo(out: OutputStream, pretty: Boolean): Int = withContext(Dispatchers.IO) {
         val buckets = ListeningStats.exportAll()
@@ -113,7 +144,7 @@ object Backup {
     suspend fun importFrom(context: Context, source: Uri): Result<Summary> = withContext(Dispatchers.IO) {
         runCatching {
             context.contentResolver.openInputStream(source)
-                ?.use { readFrom(it) }
+                ?.use { readFrom(context, it) }
                 ?: error("Couldn't open that file")
         }
     }
@@ -123,8 +154,10 @@ object Backup {
      * rule as [importFrom]: everything is parsed and checked before anything on
      * this device is touched. [input] is left open: the caller owns it.
      */
+    suspend fun readFrom(input: InputStream): Summary = readFrom(null, input)
+
     @OptIn(ExperimentalSerializationApi::class)
-    suspend fun readFrom(input: InputStream): Summary = withContext(Dispatchers.IO) {
+    suspend fun readFrom(context: Context?, input: InputStream): Summary = withContext(Dispatchers.IO) {
         val file = runCatching { json.decodeFromStream(BackupFile.serializer(), input) }
             .getOrElse { error("That doesn't look like a BitChord backup") }
         require(file.app == APP_TAG) { "That backup is from another app" }
@@ -137,6 +170,14 @@ object Backup {
         // Shares AppSettings' preference file, so it has already been
         // overwritten by the line above — it just doesn't know yet.
         SearchHistory.reload()
+
+        context?.let { ctx ->
+            file.recognitionHistory?.let { RecognitionHistoryStore.restore(it, ctx) }
+            file.radioFavorites?.let { PreferencesRadioFavoritesStore(ctx).restore(it) }
+            file.localPlaylists?.let { LocalPlaylistStore.importPlaylistsJson(it) }
+            file.playlistCovers?.let { PlaylistCovers.importCovers(ctx, it) }
+        }
+
         Summary(
             months = file.listening.size,
             settings = file.settings.size,
@@ -171,6 +212,10 @@ object Backup {
         val exportedAt: String = "",
         val settings: Map<String, PrefValue> = emptyMap(),
         val listening: List<StoredBucket> = emptyList(),
+        val recognitionHistory: List<RecognitionHistoryEntry>? = null,
+        val radioFavorites: List<RadioStation>? = null,
+        val playlistCovers: List<PlaylistCoverBackup>? = null,
+        val localPlaylists: String? = null,
     )
 
     /** One preference, with the type it has to be restored as. */

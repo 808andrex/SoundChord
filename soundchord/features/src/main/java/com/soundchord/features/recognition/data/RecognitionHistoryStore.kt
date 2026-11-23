@@ -18,6 +18,7 @@ data class RecognitionHistoryEntry(
     val artist: String,
     val artworkUrl: String?,
     val timestamp: Long,
+    val album: String? = null,
 )
 
 /** Recognition records stay on this device and are independent of account history. */
@@ -47,6 +48,7 @@ object RecognitionHistoryStore {
             artist = result.artist,
             artworkUrl = result.coverArtHqUrl ?: result.coverArtUrl,
             timestamp = System.currentTimeMillis(),
+            album = result.album,
         )
         save(listOf(entry) + mutableEntries.value)
     }
@@ -56,6 +58,33 @@ object RecognitionHistoryStore {
 
     @Synchronized
     fun clear() = save(emptyList())
+
+    @Synchronized
+    fun getAll(context: Context? = null): List<RecognitionHistoryEntry> {
+        if (preferences == null && context != null) init(context)
+        val current = mutableEntries.value
+        return if (current.isNotEmpty()) current else read()
+    }
+
+    @Synchronized
+    fun restore(incoming: List<RecognitionHistoryEntry>, context: Context? = null) {
+        if (incoming.isEmpty()) return
+        if (preferences == null && context != null) init(context)
+        val current = mutableEntries.value.ifEmpty { read() }
+        val toAdd = incoming.filter { inc ->
+            current.none { cur ->
+                cur.id == inc.id ||
+                (!cur.videoId.isNullOrBlank() && cur.videoId == inc.videoId) ||
+                (cur.title.equals(inc.title, ignoreCase = true) &&
+                 cur.artist.equals(inc.artist, ignoreCase = true) &&
+                 Math.abs(cur.timestamp - inc.timestamp) < 60_000L)
+            }
+        }
+        if (toAdd.isNotEmpty()) {
+            val merged = (current + toAdd).sortedByDescending { it.timestamp }
+            save(merged)
+        }
+    }
 
     private fun read(): List<RecognitionHistoryEntry> = runCatching {
         json.decodeFromString(serializer, preferences?.getString(KEY_ENTRIES, null) ?: "[]")

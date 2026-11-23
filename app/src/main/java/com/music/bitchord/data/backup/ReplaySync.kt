@@ -2,13 +2,20 @@
 
 import android.content.Context
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.data.PlaylistCoverBackup
+import com.music.bitchord.data.PlaylistCovers
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.SearchHistory
+import com.music.bitchord.data.spotify.LocalPlaylistStore
 import com.music.bitchord.data.stats.Backup
 import com.music.bitchord.data.stats.BucketMath
 import com.music.bitchord.data.stats.ListeningStats
 import com.music.bitchord.data.stats.PeerListening
 import com.music.bitchord.data.stats.StoredBucket
+import com.soundchord.features.radio.data.PreferencesRadioFavoritesStore
+import com.soundchord.features.radio.data.RadioStation
+import com.soundchord.features.recognition.data.RecognitionHistoryEntry
+import com.soundchord.features.recognition.data.RecognitionHistoryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -57,6 +64,10 @@ data class DeviceManifest(
     val months: Map<String, String> = emptyMap(),
     /** That device's settings, restored only by restoring as it. */
     val settings: Map<String, Backup.PrefValue> = emptyMap(),
+    val recognitionHistory: List<RecognitionHistoryEntry>? = null,
+    val radioFavorites: List<RadioStation>? = null,
+    val playlistCovers: List<PlaylistCoverBackup>? = null,
+    val localPlaylists: String? = null,
 ) {
     companion object {
         const val SCHEMA = 1
@@ -268,6 +279,10 @@ object ReplaySync {
                 versionName = BuildConfig.VERSION_NAME,
                 months = hashes,
                 settings = AppSettings.exportPrefs().mapNotNull { (k, v) -> Backup.PrefValue.of(v)?.let { k to it } }.toMap(),
+                recognitionHistory = RecognitionHistoryStore.getAll(context).takeIf { it.isNotEmpty() },
+                radioFavorites = PreferencesRadioFavoritesStore(context).getAll().takeIf { it.isNotEmpty() },
+                playlistCovers = PlaylistCovers.exportCovers(context).takeIf { it.isNotEmpty() },
+                localPlaylists = LocalPlaylistStore.exportPlaylistsJson(),
             )
             val written = DriveApi.put(
                 token = token,
@@ -304,6 +319,9 @@ object ReplaySync {
             changed = true
         }
         devices.filter { it.deviceId != myId }.forEach { device ->
+            device.manifest.recognitionHistory?.let { RecognitionHistoryStore.restore(it, context) }
+            device.manifest.radioFavorites?.let { PreferencesRadioFavoritesStore(context).restore(it) }
+            device.manifest.playlistCovers?.let { PlaylistCovers.importCovers(context, it) }
             val files = listing.months[device.deviceId].orEmpty()
             val plan = SyncPlanner.pull(
                 listed = device.manifest.months.keys,
@@ -383,6 +401,11 @@ object ReplaySync {
         ListeningStats.importAll(combined)
         AppSettings.importPrefs(manifest.settings.mapValues { it.value.decoded() })
         SearchHistory.reload()
+
+        manifest.recognitionHistory?.let { RecognitionHistoryStore.restore(it, context) }
+        manifest.radioFavorites?.let { PreferencesRadioFavoritesStore(context).restore(it) }
+        manifest.localPlaylists?.let { LocalPlaylistStore.importPlaylistsJson(it) }
+        manifest.playlistCovers?.let { PlaylistCovers.importCovers(context, it) }
 
         // What is in Drive for this partition is exactly what came down, so
         // the next sync uploads only what this phone adds to it.

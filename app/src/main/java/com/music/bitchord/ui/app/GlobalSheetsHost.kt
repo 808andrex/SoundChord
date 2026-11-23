@@ -1095,6 +1095,10 @@ internal fun GlobalSheetsHost(
             song = target,
             startCreating = target == null,
             onDismiss = dismiss,
+            onOpenDriveBackup = {
+                dismiss()
+                navigator.push(AppRoute.DriveBackup)
+            },
             onAdd = { picked ->
                 target?.let { song ->
                     viewModel.addToPlaylists(picked, song) { added, alreadyThere, failed ->
@@ -1160,6 +1164,10 @@ internal fun GlobalSheetsHost(
             startCreating = target == null,
             offline = true,
             onDismiss = dismiss,
+            onOpenDriveBackup = {
+                dismiss()
+                navigator.push(AppRoute.DriveBackup)
+            },
             onAdd = { picked ->
                 target?.let { song ->
                     val result = OfflinePlaylists.add(picked.mapTo(HashSet()) { it.playlistId }, listOf(song))
@@ -1402,6 +1410,10 @@ internal fun GlobalSheetsHost(
                 playlist = playlist,
                 customCoverUri = customCover,
                 onDismiss = actions.onDismissEditPlaylist,
+                onOpenDriveBackup = {
+                    actions.onDismissEditPlaylist()
+                    navigator.push(AppRoute.DriveBackup)
+                },
                 onSave = { title, newCover, removeCover ->
                     if (title != playlist.title) viewModel.renamePlaylist(playlist, title)
                     if (newCover != null || removeCover) {

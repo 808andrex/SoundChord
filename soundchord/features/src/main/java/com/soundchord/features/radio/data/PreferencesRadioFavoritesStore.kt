@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -45,6 +46,27 @@ class PreferencesRadioFavoritesStore(context: Context) : RadioFavoritesStore {
         dataStore.edit { preferences ->
             val remaining = decode(preferences[favoritesKey]).filterNot { it.uuid == stationUuid }
             preferences[favoritesKey] = json.encodeToString(ListSerializer(RadioStation.serializer()), remaining)
+        }
+    }
+
+    suspend fun getAll(): List<RadioStation> = stations.firstOrNull() ?: emptyList()
+
+    suspend fun restore(incoming: List<RadioStation>) {
+        if (incoming.isEmpty()) return
+        dataStore.edit { preferences ->
+            val current = decode(preferences[favoritesKey])
+            val currentUuids = current.map { it.uuid }.toSet()
+            val currentUrls = current.map { it.streamUrl }.toSet()
+            val toAdd = incoming.filter { inc ->
+                inc.uuid !in currentUuids && inc.streamUrl !in currentUrls
+            }
+            if (toAdd.isNotEmpty()) {
+                val merged = current + toAdd
+                preferences[favoritesKey] = json.encodeToString(
+                    ListSerializer(RadioStation.serializer()),
+                    merged,
+                )
+            }
         }
     }
 
