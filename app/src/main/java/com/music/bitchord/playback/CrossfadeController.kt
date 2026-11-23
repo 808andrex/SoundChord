@@ -891,9 +891,14 @@ class CrossfadeController(
             }
         }
         val duration = out.duration
-        if (duration == C.TIME_UNSET || duration <= 0L) return false
-        val left = duration - out.currentPosition
-        val fade = minOf(skipFadeMs(), left / 2, duration / 3)
+        val remaining = duration.takeIf { it != C.TIME_UNSET && it > 0L }?.minus(out.currentPosition)
+        val fade = skipFadeMs().let { configured ->
+            if (remaining != null && duration != C.TIME_UNSET && duration > 0L) {
+                minOf(configured, remaining, duration / 3)
+            } else {
+                configured
+            }
+        }
         if (fade < SKIP_FADE_MIN_MS) return false
         if (!begin(fade = fade, endMs = out.currentPosition + fade, smart = false, targetIndex = target)) return false
         manualFade = true

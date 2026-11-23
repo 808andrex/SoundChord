@@ -4196,8 +4196,12 @@ class PlaybackService : MediaLibraryService() {
         // "sleep after this song" and stop reading ahead.
         onTrackBecameCurrent(
             incoming.currentMediaItem,
-            previousEnded = true,
-            reason = Player.MEDIA_ITEM_TRANSITION_REASON_AUTO,
+            previousEnded = crossfade?.skipFadeInFlight != true,
+            reason = if (crossfade?.skipFadeInFlight == true) {
+                Player.MEDIA_ITEM_TRANSITION_REASON_SEEK
+            } else {
+                Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
+            },
             alreadyAudible = true,
         )
 
@@ -9297,6 +9301,8 @@ class PlaybackService : MediaLibraryService() {
                 castPrevious()
                 return
             }
+            crossfade.onSkipRequested()
+            if (crossfade.trySkipWithCrossfade(forward = false)) return
             super.seekToPrevious()
         }
 
@@ -9319,6 +9325,9 @@ class PlaybackService : MediaLibraryService() {
         override fun setMediaItems(mediaItems: List<MediaItem>, resetPosition: Boolean) {
             if (locked()) return
             onAutoMixInterruptingIntent()
+            if (resetPosition && mediaItems.isNotEmpty() &&
+                crossfade.tryQueueSelectionWithCrossfade(mediaItems, 0, 0L)
+            ) return
             super.setMediaItems(mediaItems, resetPosition)
         }
 
@@ -9329,6 +9338,9 @@ class PlaybackService : MediaLibraryService() {
         ) {
             if (locked()) return
             onAutoMixInterruptingIntent()
+            if (mediaItems.isNotEmpty() && startIndex in mediaItems.indices &&
+                crossfade.tryQueueSelectionWithCrossfade(mediaItems, startIndex, startPositionMs)
+            ) return
             super.setMediaItems(mediaItems, startIndex, startPositionMs)
         }
 
@@ -9404,7 +9416,6 @@ class PlaybackService : MediaLibraryService() {
         override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
             if (locked()) return
             onUserIntent()
-            crossfade.onSkipRequested()
             if (mediaItemIndex !in 0 until wrappedPlayer.mediaItemCount) return
             // The track already on the receiver: a position in it is the
             // receiver's to seek, not the paused phone's.
@@ -9412,6 +9423,23 @@ class PlaybackService : MediaLibraryService() {
                 cast.seekTo(positionMs)
                 return
             }
+            val tiers = (0 until wrappedPlayer.mediaItemCount).map { wrappedPlayer.getMediaItemAt(it).queueTier }
+            val jump = QueueTimeline.computeJumpOrder(
+                tiers,
+                wrappedPlayer.currentMediaItemIndex,
+                mediaItemIndex,
+            )
+            if (jump != null) {
+                val originalItems = (0 until wrappedPlayer.mediaItemCount).map(wrappedPlayer::getMediaItemAt)
+                val selectedItems = jump.newOrderIndices.map { index ->
+                    val item = originalItems[index]
+                    if (index == mediaItemIndex && jump.promoteTargetToContext) {
+                        QueueShuffle.withQueueMetadata(item, newTier = QueueTier.CONTEXT)
+                    } else item
+                }
+                if (crossfade.tryQueueSelectionWithCrossfade(selectedItems, jump.newTargetIndex, positionMs)) return
+            }
+            crossfade.onSkipRequested()
             if (mediaItemIndex <= wrappedPlayer.currentMediaItemIndex) {
                 wrappedPlayer.seekTo(mediaItemIndex, positionMs)
                 return
@@ -9454,6 +9482,7 @@ class PlaybackService : MediaLibraryService() {
                 castPrevious()
                 return
             }
+            if (crossfade.trySkipWithCrossfade(forward = false)) return
             wrappedPlayer.seekToPrevious()
         }
 
@@ -9461,6 +9490,7 @@ class PlaybackService : MediaLibraryService() {
             if (locked()) return
             onUserIntent()
             crossfade.onSkipRequested()
+            if (crossfade.trySkipWithCrossfade(forward = true)) return
             wrappedPlayer.seekToNextMediaItem()
         }
 
@@ -9468,6 +9498,7 @@ class PlaybackService : MediaLibraryService() {
             if (locked()) return
             onUserIntent()
             crossfade.onSkipRequested()
+            if (crossfade.trySkipWithCrossfade(forward = true)) return
             wrappedPlayer.seekToNext()
         }
     }
