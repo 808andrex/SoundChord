@@ -283,7 +283,9 @@ fun SettingsScreen(
     val hideLyricsPreviewIsNew = AppSettings.FEATURE_HIDE_LYRICS_PREVIEW !in seenNewFeatures
     val disableSpotifyCanvas by AppSettings.disableSpotifyCanvas.collectAsStateWithLifecycle()
     val disableSpotifyCanvasIsNew = AppSettings.FEATURE_DISABLE_SPOTIFY_CANVAS !in seenNewFeatures
-    val playerLyricsIsNew = bestPartIsNew || coverAnimationMenuIsNew || coverAnimSlideIsNew || coverAnimFluidIsNew || coverAnimAutomixIsNew || showTotalDurationIsNew || hideLyricsPreviewIsNew || disableSpotifyCanvasIsNew
+    val showPlayerShuffleRepeatButtons by AppSettings.showPlayerShuffleRepeatButtons.collectAsStateWithLifecycle()
+    val playerShuffleRepeatIsNew = AppSettings.FEATURE_PLAYER_SHUFFLE_REPEAT !in seenNewFeatures
+    val playerLyricsIsNew = bestPartIsNew || coverAnimationMenuIsNew || coverAnimSlideIsNew || coverAnimFluidIsNew || coverAnimAutomixIsNew || showTotalDurationIsNew || hideLyricsPreviewIsNew || disableSpotifyCanvasIsNew || playerShuffleRepeatIsNew
     val audioPlaybackIsNew = sleepTimerFadeOutIsNew || crossfadeOnNextIsNew || automixModelIsNew
     val yourDataIsNew = driveBackupIsNew
     val accentIsDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -855,6 +857,27 @@ fun SettingsScreen(
                     onClick = {
                         AppSettings.markFeatureSeen(AppSettings.FEATURE_SHOW_TOTAL_DURATION)
                         AppSettings.setShowTotalDuration(!showTotalDuration)
+                    },
+                )
+                RowDivider()
+                val showPlayerShuffleRepeatButtonsTitle = stringResource(R.string.show_player_shuffle_repeat_buttons)
+                SettingsRow(
+                    icon = SfIcons.Shuffle,
+                    title = showPlayerShuffleRepeatButtonsTitle,
+                    subtitle = stringResource(R.string.show_player_shuffle_repeat_buttons_subtitle),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { playerShuffleRepeatIsNew },
+                    trailing = {
+                        IosSwitch(
+                            checked = showPlayerShuffleRepeatButtons,
+                            onCheckedChange = { checked ->
+                                AppSettings.markFeatureSeen(AppSettings.FEATURE_PLAYER_SHUFFLE_REPEAT)
+                                AppSettings.setShowPlayerShuffleRepeatButtons(checked)
+                            },
+                        )
+                    },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_PLAYER_SHUFFLE_REPEAT)
+                        AppSettings.setShowPlayerShuffleRepeatButtons(!showPlayerShuffleRepeatButtons)
                     },
                 )
                 RowDivider()
@@ -2555,6 +2578,28 @@ fun SettingsScreen(
                     onClick = {
                         AppSettings.markFeatureSeen(AppSettings.FEATURE_SHOW_TOTAL_DURATION)
                         AppSettings.setShowTotalDuration(!showTotalDuration)
+                    },
+                )
+            }
+            val showPlayerShuffleRepeatButtonsTitle = stringResource(R.string.show_player_shuffle_repeat_buttons)
+            row(showPlayerShuffleRepeatButtonsTitle, "shuffle", "repeat", "random", "aleatorio", "repetir", "loop", "transport") {
+                SettingsRow(
+                    icon = SfIcons.Shuffle,
+                    title = showPlayerShuffleRepeatButtonsTitle,
+                    subtitle = stringResource(R.string.show_player_shuffle_repeat_buttons_subtitle),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { playerShuffleRepeatIsNew },
+                    trailing = {
+                        IosSwitch(
+                            checked = showPlayerShuffleRepeatButtons,
+                            onCheckedChange = { checked ->
+                                AppSettings.markFeatureSeen(AppSettings.FEATURE_PLAYER_SHUFFLE_REPEAT)
+                                AppSettings.setShowPlayerShuffleRepeatButtons(checked)
+                            },
+                        )
+                    },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_PLAYER_SHUFFLE_REPEAT)
+                        AppSettings.setShowPlayerShuffleRepeatButtons(!showPlayerShuffleRepeatButtons)
                     },
                 )
             }

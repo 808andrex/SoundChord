@@ -227,6 +227,7 @@ object AppSettings {
     const val FEATURE_SHOW_TOTAL_DURATION = "show_total_duration"
     const val FEATURE_HIDE_LYRICS_PREVIEW = "hide_lyrics_preview"
     const val FEATURE_DISABLE_SPOTIFY_CANVAS = "disable_spotify_canvas"
+    const val FEATURE_PLAYER_SHUFFLE_REPEAT = "player_shuffle_repeat"
 
     private lateinit var prefs: SharedPreferences
 
@@ -701,6 +702,9 @@ object AppSettings {
 
     /** Shows the track's total duration at the end of the player scrubber. */
     val showTotalDuration = MutableStateFlow(false)
+
+    /** Shows shuffle and repeat buttons in the main transport controls row. */
+    val showPlayerShuffleRepeatButtons = MutableStateFlow(false)
 
     /**
      * What the main player stands on below the artwork.
@@ -1236,6 +1240,7 @@ object AppSettings {
         fullBleedArtwork.value = prefs.getBoolean(KEY_FULL_BLEED_ARTWORK, true)
         fullBleedDetailArtwork.value = prefs.getBoolean(KEY_FULL_BLEED_DETAIL_ARTWORK, false)
         showTotalDuration.value = prefs.getBoolean(KEY_SHOW_TOTAL_DURATION, false)
+        showPlayerShuffleRepeatButtons.value = prefs.getBoolean(KEY_SHOW_PLAYER_SHUFFLE_REPEAT_BUTTONS, false)
         // The old legacy mesh switch answers until a theme has been picked.
         playerTheme.value = runCatching {
             PlayerTheme.valueOf(prefs.getString(KEY_PLAYER_THEME, null).orEmpty())
@@ -1984,6 +1989,11 @@ object AppSettings {
         prefs.edit().putBoolean(KEY_SHOW_TOTAL_DURATION, value).apply()
     }
 
+    fun setShowPlayerShuffleRepeatButtons(value: Boolean) {
+        showPlayerShuffleRepeatButtons.value = value
+        prefs.edit().putBoolean(KEY_SHOW_PLAYER_SHUFFLE_REPEAT_BUTTONS, value).apply()
+    }
+
     fun setPlayerTheme(value: PlayerTheme) {
         playerTheme.value = value
         prefs.edit().putString(KEY_PLAYER_THEME, value.name).apply()
@@ -2617,6 +2627,7 @@ object AppSettings {
     private const val KEY_FULL_BLEED_ARTWORK = "full_bleed_artwork"
     private const val KEY_FULL_BLEED_DETAIL_ARTWORK = "full_bleed_detail_artwork"
     private const val KEY_SHOW_TOTAL_DURATION = "show_total_duration"
+    private const val KEY_SHOW_PLAYER_SHUFFLE_REPEAT_BUTTONS = "show_player_shuffle_repeat_buttons"
     private const val KEY_PLAYER_THEME = "player_theme"
     private const val KEY_LEGACY_MESH_GRADIENT = "legacy_mesh_gradient"
     private const val KEY_LAST_PLAYER_SCREEN = "last_player_screen"

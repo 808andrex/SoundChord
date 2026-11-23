@@ -349,6 +349,8 @@
     <string name="full_screen_detail_cover_subtitle">Lleva las portadas de álbumes y listas a los bordes de la página en lugar de enmarcarlas</string>
     <string name="show_total_duration">Mostrar duración total</string>
     <string name="show_total_duration_subtitle">Muestra la duración completa de la pista en lugar del tiempo restante</string>
+    <string name="show_player_shuffle_repeat_buttons">Mostrar botones de Aleatorio y Repetir</string>
+    <string name="show_player_shuffle_repeat_buttons_subtitle">Muestra los botones de aleatorio y repetir directamente en la barra de controles principal</string>
     <string name="hide_lyrics_preview">Ocultar vista previa de letras</string>
     <string name="hide_lyrics_preview_subtitle">Oculta la línea de letras en el reproductor principal</string>
     <string name="disable_spotify_canvas">Desactivar Spotify Canvas</string>

@@ -111,6 +111,7 @@ object Backup {
             radioFavorites = radio.takeIf { it.isNotEmpty() },
             playlistCovers = covers.takeIf { it.isNotEmpty() },
             localPlaylists = localPlaylists,
+            showPlayerShuffleRepeatButtons = AppSettings.showPlayerShuffleRepeatButtons.value,
         )
         (if (pretty) json else compactJson).encodeToStream(BackupFile.serializer(), file, out)
         out.flush()
@@ -127,6 +128,7 @@ object Backup {
                 PrefValue.of(value)?.let { key to it }
             }.toMap(),
             listening = buckets,
+            showPlayerShuffleRepeatButtons = AppSettings.showPlayerShuffleRepeatButtons.value,
         )
         (if (pretty) json else compactJson).encodeToStream(BackupFile.serializer(), file, out)
         out.flush()
@@ -167,6 +169,7 @@ object Backup {
 
         ListeningStats.importAll(file.listening)
         AppSettings.importPrefs(file.settings.mapValues { it.value.decoded() })
+        file.showPlayerShuffleRepeatButtons?.let { AppSettings.setShowPlayerShuffleRepeatButtons(it) }
         // Shares AppSettings' preference file, so it has already been
         // overwritten by the line above — it just doesn't know yet.
         SearchHistory.reload()
@@ -216,6 +219,7 @@ object Backup {
         val radioFavorites: List<RadioStation>? = null,
         val playlistCovers: List<PlaylistCoverBackup>? = null,
         val localPlaylists: String? = null,
+        val showPlayerShuffleRepeatButtons: Boolean? = null,
     )
 
     /** One preference, with the type it has to be restored as. */

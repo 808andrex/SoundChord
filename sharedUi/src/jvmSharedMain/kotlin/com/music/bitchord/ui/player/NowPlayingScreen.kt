@@ -967,6 +967,7 @@ fun NowPlayingScreen(
         onSeek(adjustedLyricsSeekTarget(lineTimeMs, lyricsOffsetMs))
     }
     val hideVolumeBar by PlayerSettings.hideVolumeBar.collectAsStateWithLifecycle()
+    val showPlayerShuffleRepeatButtons by PlayerSettings.showPlayerShuffleRepeatButtons.collectAsStateWithLifecycle()
     val disableBlendEffects by PlayerSettings.disableBlendEffects.collectAsStateWithLifecycle()
     // The lyric slot above the scrubber: the tallest line it holds — titleMedium's
     // own line box — and the 4dp each of them is padded by above and below.
@@ -2419,6 +2420,13 @@ fun NowPlayingScreen(
                                     onNext = onNext,
                                     compact = compact,
                                     radioPlaying = radioPlaying,
+                                    showShuffleRepeat = showPlayerShuffleRepeatButtons,
+                                    shuffleEnabled = shuffleEnabled,
+                                    repeatMode = repeatMode,
+                                    onToggleShuffle = onToggleShuffle,
+                                    onCycleRepeat = onCycleRepeat,
+                                    controlsLocked = controlsLocked,
+                                    onBlockedControl = onBlockedControl,
                                 )
                             },
                             volume = if (hideVolumeBar) {
@@ -4434,6 +4442,13 @@ fun NowPlayingScreen(
                             onPlayPause = onPlayPause,
                             onNext = onNext,
                             radioPlaying = radioPlaying,
+                            showShuffleRepeat = showPlayerShuffleRepeatButtons,
+                            shuffleEnabled = shuffleEnabled,
+                            repeatMode = repeatMode,
+                            onToggleShuffle = onToggleShuffle,
+                            onCycleRepeat = onCycleRepeat,
+                            controlsLocked = controlsLocked,
+                            onBlockedControl = onBlockedControl,
                         )
                     }
 

@@ -67,6 +67,7 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         override val disableSpotifyCanvas get() = AppSettings.disableSpotifyCanvas
         override val fullBleedArtwork get() = AppSettings.fullBleedArtwork
         override val showTotalDuration get() = AppSettings.showTotalDuration
+        override val showPlayerShuffleRepeatButtons get() = AppSettings.showPlayerShuffleRepeatButtons
         override val hideSongStatus get() = AppSettings.hideSongStatus
         override val hideLyricsPreview get() = AppSettings.hideLyricsPreview
         override val showQueueHistory get() = AppSettings.showQueueHistory

@@ -262,6 +262,7 @@ interface PlayerSettingsSource {
     val disableSpotifyCanvas: StateFlow<Boolean>
     val fullBleedArtwork: StateFlow<Boolean>
     val showTotalDuration: StateFlow<Boolean>
+    val showPlayerShuffleRepeatButtons: StateFlow<Boolean>
     val hideSongStatus: StateFlow<Boolean>
     /** Hides the lyrics preview strip on the main and mini player screens. */
     val hideLyricsPreview: StateFlow<Boolean>

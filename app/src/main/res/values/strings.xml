@@ -512,6 +512,8 @@
     <string name="full_screen_detail_cover_subtitle">Runs album and playlist covers to the edges of the page instead of a framed sleeve</string>
     <string name="show_total_duration">Show total duration</string>
     <string name="show_total_duration_subtitle">Shows the song\'s full length instead of the time remaining</string>
+    <string name="show_player_shuffle_repeat_buttons">Show shuffle and repeat buttons</string>
+    <string name="show_player_shuffle_repeat_buttons_subtitle">Display shuffle and repeat controls directly in the main transport bar</string>
     <string name="hide_lyrics_preview">Hide lyrics</string>
     <string name="hide_lyrics_preview_subtitle">Hides the lyrics line on the main player screen</string>
     <string name="disable_spotify_canvas">Disable Spotify Canvas</string>

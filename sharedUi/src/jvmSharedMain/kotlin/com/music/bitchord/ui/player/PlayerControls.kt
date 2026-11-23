@@ -704,35 +704,153 @@ internal fun TransportRow(
     onNext: () -> Unit,
     compact: Boolean = false,
     radioPlaying: Boolean = false,
+    showShuffleRepeat: Boolean = false,
+    shuffleEnabled: Boolean = false,
+    repeatMode: Int = RepeatModes.OFF,
+    onToggleShuffle: () -> Unit = {},
+    onCycleRepeat: () -> Unit = {},
+    controlsLocked: Boolean = false,
+    onBlockedControl: () -> Unit = {},
 ) {
-    val playSize = if (compact) 58.dp else 74.dp
-    val playTouch = if (compact) 76.dp else 92.dp
-    val skipSize = if (compact) 44.dp else PLAYER_SKIP_ICON_SIZE
+    if (!showShuffleRepeat) {
+        val playSize = if (compact) 58.dp else 74.dp
+        val playTouch = if (compact) 76.dp else 92.dp
+        val skipSize = if (compact) 44.dp else PLAYER_SKIP_ICON_SIZE
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            // SpaceAround, not SpaceEvenly: the outer margins take half a gap, so
+            // the three buttons spread a little further apart from each other.
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (!radioPlaying) TransportGlyph(
+                icon = Res.drawable.ic_player_previous,
+                contentDescription = stringResource(Res.string.widget_previous),
+                size = skipSize,
+                touchSize = PLAYER_SKIP_TOUCH_SIZE,
+                heightScale = PLAYER_SKIP_HEIGHT_SCALE,
+                onClick = onPrevious,
+                enabled = previousEnabled,
+                onBlocked = if (controlsLocked) onBlockedControl else null,
+                haptic = Haptic.SkipPrevious,
+            )
+            if (isLoading) {
+                // Same footprint as the play/pause target — a smaller box here
+                // would shunt everything below it on every load.
+                Box(Modifier.size(playTouch), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(if (compact) 30.dp else 38.dp),
+                    )
+                }
+            } else {
+                TransportGlyph(
+                    icon = if (isPlaying) Res.drawable.ic_player_pause else Res.drawable.ic_player_play,
+                    contentDescription = stringResource(if (isPlaying) Res.string.pause else Res.string.play),
+                    size = playSize,
+                    touchSize = playTouch,
+                    onClick = if (controlsLocked) onBlockedControl else onPlayPause,
+                    haptic = if (isPlaying) Haptic.Pause else Haptic.Resume,
+                )
+            }
+            if (!radioPlaying) TransportGlyph(
+                icon = Res.drawable.ic_player_next,
+                contentDescription = stringResource(Res.string.widget_next),
+                size = skipSize,
+                touchSize = PLAYER_SKIP_TOUCH_SIZE,
+                heightScale = PLAYER_SKIP_HEIGHT_SCALE,
+                onClick = onNext,
+                enabled = nextEnabled,
+                onBlocked = if (controlsLocked) onBlockedControl else null,
+                haptic = Haptic.SkipNext,
+            )
+        }
+        return
+    }
+
+    val playSize = if (compact) 50.dp else 64.dp
+    val playTouch = if (compact) 60.dp else 74.dp
+    val skipSize = if (compact) 36.dp else 42.dp
+    val skipTouch = if (compact) 44.dp else 50.dp
+    val sideIconSize = if (compact) 22.dp else 26.dp
+    val sideTouchSize = if (compact) 42.dp else 48.dp
+
+    val haptics = rememberHaptics()
+    val lastShuffleTap = remember { mutableLongStateOf(-SHUFFLE_TAP_WINDOW_MS) }
+    val lastRepeatTap = remember { mutableLongStateOf(-SHUFFLE_TAP_WINDOW_MS) }
+
+    val onShuffleClick = {
+        if (controlsLocked) {
+            onBlockedControl()
+        } else {
+            val now = System.currentTimeMillis()
+            if (now - lastShuffleTap.longValue >= SHUFFLE_TAP_WINDOW_MS) {
+                lastShuffleTap.longValue = now
+                haptics.play(if (shuffleEnabled) Haptic.ToggleOff else Haptic.ToggleOn)
+                onToggleShuffle()
+            }
+        }
+    }
+
+    val onRepeatClick = {
+        if (controlsLocked) {
+            onBlockedControl()
+        } else {
+            val now = System.currentTimeMillis()
+            if (now - lastRepeatTap.longValue >= SHUFFLE_TAP_WINDOW_MS) {
+                lastRepeatTap.longValue = now
+                haptics.play(Haptic.Select)
+                onCycleRepeat()
+            }
+        }
+    }
+
+    val repeatActive = repeatMode == RepeatModes.ALL || repeatMode == RepeatModes.ONE
+    val repeatIcon = if (repeatMode == RepeatModes.ONE) BitChordIcons.RepeatOne else BitChordIcons.Repeat
+    val repeatDescription = stringResource(
+        when (repeatMode) {
+            RepeatModes.ONE -> Res.string.repeat_one
+            RepeatModes.ALL -> Res.string.repeat_all
+            else -> Res.string.repeat_off
+        }
+    )
+
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        // SpaceAround, not SpaceEvenly: the outer margins take half a gap, so
-        // the three buttons spread a little further apart from each other.
-        horizontalArrangement = Arrangement.SpaceAround,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = if (compact) 8.dp else 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (!radioPlaying) TransportGlyph(
-            icon = Res.drawable.ic_player_previous,
-            contentDescription = stringResource(Res.string.widget_previous),
-            size = skipSize,
-            touchSize = PLAYER_SKIP_TOUCH_SIZE,
-            heightScale = PLAYER_SKIP_HEIGHT_SCALE,
-            onClick = onPrevious,
-            enabled = previousEnabled,
-            haptic = Haptic.SkipPrevious,
-        )
+        if (!radioPlaying) {
+            ModeIndicatorGlyph(
+                vector = BitChordIcons.Shuffle,
+                contentDescription = stringResource(if (shuffleEnabled) Res.string.shuffle_on else Res.string.shuffle_off),
+                active = shuffleEnabled,
+                controlsLocked = controlsLocked,
+                touchSize = sideTouchSize,
+                iconSize = sideIconSize,
+                onClick = onShuffleClick,
+            )
+            TransportGlyph(
+                icon = Res.drawable.ic_player_previous,
+                contentDescription = stringResource(Res.string.widget_previous),
+                size = skipSize,
+                touchSize = skipTouch,
+                heightScale = PLAYER_SKIP_HEIGHT_SCALE,
+                onClick = onPrevious,
+                enabled = previousEnabled,
+                onBlocked = if (controlsLocked) onBlockedControl else null,
+                haptic = Haptic.SkipPrevious,
+            )
+        }
         if (isLoading) {
-            // Same footprint as the play/pause target — a smaller box here
-            // would shunt everything below it on every load.
             Box(Modifier.size(playTouch), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(
                     color = Color.White,
                     strokeWidth = 3.dp,
-                    modifier = Modifier.size(if (compact) 30.dp else 38.dp),
+                    modifier = Modifier.size(if (compact) 26.dp else 32.dp),
                 )
             }
         } else {
@@ -741,20 +859,32 @@ internal fun TransportRow(
                 contentDescription = stringResource(if (isPlaying) Res.string.pause else Res.string.play),
                 size = playSize,
                 touchSize = playTouch,
-                onClick = onPlayPause,
+                onClick = if (controlsLocked) onBlockedControl else onPlayPause,
                 haptic = if (isPlaying) Haptic.Pause else Haptic.Resume,
             )
         }
-        if (!radioPlaying) TransportGlyph(
-            icon = Res.drawable.ic_player_next,
-            contentDescription = stringResource(Res.string.widget_next),
-            size = skipSize,
-            touchSize = PLAYER_SKIP_TOUCH_SIZE,
-            heightScale = PLAYER_SKIP_HEIGHT_SCALE,
-            onClick = onNext,
-            enabled = nextEnabled,
-            haptic = Haptic.SkipNext,
-        )
+        if (!radioPlaying) {
+            TransportGlyph(
+                icon = Res.drawable.ic_player_next,
+                contentDescription = stringResource(Res.string.widget_next),
+                size = skipSize,
+                touchSize = skipTouch,
+                heightScale = PLAYER_SKIP_HEIGHT_SCALE,
+                onClick = onNext,
+                enabled = nextEnabled,
+                onBlocked = if (controlsLocked) onBlockedControl else null,
+                haptic = Haptic.SkipNext,
+            )
+            ModeIndicatorGlyph(
+                vector = repeatIcon,
+                contentDescription = repeatDescription,
+                active = repeatActive,
+                controlsLocked = controlsLocked,
+                touchSize = sideTouchSize,
+                iconSize = sideIconSize,
+                onClick = onRepeatClick,
+            )
+        }
     }
 }
 
@@ -945,6 +1075,58 @@ internal fun CircleGlyph(
     }
 }
 
+@Composable
+private fun ModeIndicatorGlyph(
+    vector: ImageVector,
+    contentDescription: String,
+    active: Boolean,
+    controlsLocked: Boolean,
+    touchSize: Dp,
+    iconSize: Dp,
+    onClick: () -> Unit,
+) {
+    val accentColor = MaterialTheme.colorScheme.primary
+    val iconColor = if (active) {
+        accentColor.copy(alpha = if (controlsLocked) 0.4f else 1f)
+    } else {
+        Color.White.copy(alpha = if (controlsLocked) 0.3f else 0.7f)
+    }
+    val dotAlpha by animateFloatAsState(
+        targetValue = if (active) (if (controlsLocked) 0.4f else 1f) else 0f,
+        label = "modeDotAlpha",
+    )
+    val dotColor = accentColor.copy(alpha = dotAlpha)
+
+    Box(
+        modifier = Modifier
+            .size(touchSize)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                imageVector = vector,
+                contentDescription = contentDescription,
+                tint = iconColor,
+                modifier = Modifier.size(iconSize),
+            )
+            Spacer(Modifier.height(3.dp))
+            Box(
+                Modifier
+                    .size(4.dp)
+                    .background(dotColor, CircleShape),
+            )
+        }
+    }
+}
+
 /**
  * Transport / bottom glyphs. The circular clip belongs on the touch target,
  * never on the [Icon] — clipping the icon itself shaves the corners off wide
@@ -958,6 +1140,7 @@ private fun TransportGlyph(
     touchSize: androidx.compose.ui.unit.Dp = size,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    onBlocked: (() -> Unit)? = null,
     haptic: Haptic = Haptic.Tap,
     /** Vertical squash of the glyph alone; its width and touch box are untouched. */
     heightScale: Float = 1f,
@@ -974,10 +1157,14 @@ private fun TransportGlyph(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                enabled = enabled,
+                enabled = enabled || onBlocked != null,
             ) {
-                haptics.play(haptic)
-                onClick()
+                if (!enabled && onBlocked != null) {
+                    onBlocked()
+                } else {
+                    haptics.play(haptic)
+                    onClick()
+                }
             },
         contentAlignment = Alignment.Center,
     ) {

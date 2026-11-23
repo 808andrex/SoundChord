@@ -277,6 +277,33 @@ object BitChordIcons {
 
     val Repeat: ImageVector by lazy { repeatLoop("bc_repeat") }
 
+    val RepeatOne: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "bc_repeat_one",
+            defaultWidth = 24.dp, defaultHeight = 24.dp,
+            viewportWidth = 24f, viewportHeight = 24f,
+        ).apply {
+            path(
+                stroke = stroke,
+                strokeLineWidth = STROKE,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
+                moveTo(8.6f, 7.6f)
+                lineTo(15.4f, 7.6f)
+                arcToRelative(4.4f, 4.4f, 0f, isMoreThanHalf = false, isPositiveArc = true, 0f, 8.8f)
+                lineTo(8.6f, 16.4f)
+                arcToRelative(4.4f, 4.4f, 0f, isMoreThanHalf = false, isPositiveArc = true, 0f, -8.8f)
+                close()
+                // Direction of travel: right along the top, left along the bottom.
+                moveTo(13.5f, 5.7f); lineTo(15.4f, 7.6f); lineTo(13.5f, 9.5f)
+                moveTo(10.5f, 14.5f); lineTo(8.6f, 16.4f); lineTo(10.5f, 18.3f)
+                // "1" digit centered inside loop
+                moveTo(11.2f, 11f); lineTo(12.3f, 10f); lineTo(12.3f, 14f)
+            }
+        }.build()
+    }
+
     /**
      * Two straight runs joined by semicircles, with the arrow heads lying flat
      * at the ends of the straights. Putting them on the curves instead — as a
