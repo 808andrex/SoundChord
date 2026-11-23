@@ -143,6 +143,7 @@ internal fun LibrarySort.localizedLabel(): String = when (this) {
 @Composable
 internal fun SongSort.localizedLabel(): String = when (this) {
     SongSort.DEFAULT -> stringResource(R.string.sort_default)
+    SongSort.TRACK_NUMBER -> stringResource(R.string.sort_track_number)
     SongSort.TITLE_ASC -> stringResource(R.string.sort_title_ascending)
     SongSort.TITLE_DESC -> stringResource(R.string.sort_title_descending)
     SongSort.DATE_ADDED_ASC -> stringResource(R.string.sort_date_added_oldest)
@@ -178,6 +179,7 @@ internal fun FrostedRadioFavoritesSortMenu(
 internal fun FrostedSortMenu(
     hazeState: HazeState,
     selected: SongSort,
+    offerTrackNumber: Boolean = false,
     onSelect: (SongSort) -> Unit,
     onFlipDateDirection: () -> Unit,
     onDismiss: () -> Unit,
@@ -214,6 +216,7 @@ internal fun FrostedSortMenu(
         }
         SongSort.entries
             .filter { it != SongSort.DATE_ADDED_ASC && it != SongSort.DATE_ADDED_DESC }
+            .filter { offerTrackNumber || it != SongSort.TRACK_NUMBER }
             .forEach { option ->
                 FrostedMenuRow(
                     label = option.localizedLabel(),
@@ -450,6 +453,7 @@ internal data class BitChordChromeActions(
     val onPrevious: () -> Unit,
     val onExpandPlayer: () -> Unit,
     val onShowHostOnlyNotice: () -> Unit,
+    val onActiveTabTap: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -903,6 +907,7 @@ internal fun BitChordChrome(
                 onExpand = actions.onExpandPlayer,
                 onBlockedControl = actions.onShowHostOnlyNotice,
                 onHeightChanged = { floatingBarsHeight.intValue = it },
+                onActiveTabTap = actions.onActiveTabTap,
             ),
             navBarScroll = state.navBarScroll,
             dock = state.activeDock,

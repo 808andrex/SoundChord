@@ -65,6 +65,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeDown
@@ -100,6 +101,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Color
@@ -231,6 +233,8 @@ internal fun PlayerScrubber(
     centerLabel: @Composable BoxScope.() -> Unit = {},
 ) {
     val shown = shown()
+    val showTotalDuration by PlayerSettings.showTotalDuration.collectAsStateWithLifecycle()
+    val totalDuration = durationMs.takeIf { it > 0L }
     // Held as a State and read only inside the bar's draw: the blend republishes
     // every fade tick, and collecting it by value here would recompose the
     // scrubber and its labels thirty times a second for a change only the
@@ -268,7 +272,11 @@ internal fun PlayerScrubber(
                     color = timeColor,
                 )
                 Text(
-                    text = "-" + formatTime(durationMs - (shown * durationMs).toLong()),
+                    text = if (showTotalDuration && totalDuration != null) {
+                        formatTime(totalDuration)
+                    } else {
+                        "-" + formatTime(durationMs - (shown * durationMs).toLong())
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = timeColor,
                 )
@@ -627,6 +635,43 @@ internal fun Modifier.glassFrost(hazeState: HazeState?, flat: Boolean): Modifier
         liveMenuFrost(hazeState, MenuFrostDark, alpha = GLASS_SLAB_ALPHA)
     }
 
+/**
+ * The star and ⋯ discs beside the credits, behind one frost between them.
+ *
+ * One blur, cut to both circles, rather than one per disc: the two always move
+ * together (a skip's slide, the collapse), and each would otherwise be blurred
+ * again on every frame of it, side by side, from the same source.
+ */
+@Composable
+internal fun GlassDiscPair(
+    hazeState: HazeState?,
+    /** See [BestPartPill]'s, which goes flat for the same reason. */
+    overlayOpen: () -> Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val reduceDynamicBlur by PlayerSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+    Box(modifier) {
+        Box(
+            Modifier
+                .matchParentSize()
+                .clip(DiscPairShape)
+                .glassFrost(hazeState, flat = reduceDynamicBlur || overlayOpen()),
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, content = content)
+    }
+}
+
+/**
+ * A disc at each end of a row as tall as one: both glyphs, or the ⋯ alone
+ * (a row no wider than it is tall) for a guest, who gets no star.
+ */
+private val DiscPairShape = GenericShape { size, _ ->
+    val d = size.height
+    addOval(Rect(0f, 0f, d, d))
+    if (size.width >= d * 1.5f) addOval(Rect(size.width - d, 0f, size.width, d))
+}
+
 internal fun Modifier.glassRim(shape: Shape): Modifier = border(
     width = 1.dp,
     brush = Brush.verticalGradient(
@@ -835,25 +880,31 @@ internal fun PlayerActionRow(
     }
 }
 
-/** How much more of the ink [CircleGlyph]'s disc takes than its plain white — 0.45 at rest. */
+/** How much more of the ink [CircleGlyph]'s disc takes than its plain white — 0.45 at rest, 0.85 lit. */
 private const val CIRCLE_DISC_DODGE_GAIN = 2.5f
 
 /**
  * Translucent circular button used for the track menu and the like control.
  *
- * The selected icon shape represents a liked track. The disc is identical for
- * the like and menu buttons so neither changes the artwork's contrast.
+ * [active] brightens the disc rather than only the glyph: this sits on album
+ * artwork of any colour, and a white icon on a white-ish sleeve has no tint
+ * change left to make. The filled star carries the state as a shape too —
+ * see [BitChordIcons.StarFilled].
  */
 @Composable
 internal fun CircleGlyph(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
+    active: Boolean = false,
     haptic: Haptic = Haptic.Tap,
     modifier: Modifier = Modifier,
 ) {
     val haptics = rememberHaptics()
-    val discAlpha = 0.18f
+    val discAlpha by animateFloatAsState(
+        targetValue = if (active) 0.34f else CIRCLE_DISC_ALPHA,
+        label = "glyphDisc",
+    )
     val chrome = LocalPlayerChrome.current
     Box(
         modifier = modifier
@@ -875,14 +926,10 @@ internal fun CircleGlyph(
             Modifier
                 .matchParentSize()
                 .vibrantChrome(chrome)
-                .background(
-                    if (chrome) {
-                        VibrantChromeInk.copy(alpha = (discAlpha * CIRCLE_DISC_DODGE_GAIN).coerceAtMost(1f))
-                    } else {
-                        Color.White.copy(alpha = discAlpha)
-                    },
-                ),
+                .background(discFill(chrome, discAlpha)),
         )
+        // Outside the blend: the rim is light catching the edge, not ink.
+        Box(Modifier.matchParentSize().glassRim(CircleShape))
         Crossfade(
             targetState = icon,
             animationSpec = tween(durationMillis = 180),

@@ -1040,11 +1040,13 @@ internal fun AppNavigationHost(
                         page.browseId,
                     )
                     val selected = songs.getOrNull(index)
-                    val pageSongKeys =
-                        (page.songs as? UiState.Success)?.data.orEmpty().mapTo(HashSet()) { it.contextEntryKey() }
+                    val pageKeys =
+                        (page.songs as? UiState.Success)?.data.orEmpty().map { it.contextEntryKey() }
+                    val pageSongKeys = pageKeys.toHashSet()
                     val useBounded =
                         (page.type == BrowseType.ALBUM || page.type == BrowseType.PLAYLIST) &&
                             selected?.contextEntryKey()?.let(pageSongKeys::contains) == true &&
+                            inPageOrder(songs.map { it.contextEntryKey() }, pageKeys) &&
                             !CastController.state.value.casting
                     val latestPage = if (useBounded) {
                         viewModel.takePlaybackContext(page.browseId)
@@ -1086,6 +1088,12 @@ internal fun AppNavigationHost(
                         else navigator.pop()
                     },
                     onSongClick = { s, i -> playDetailSongs(s, i) },
+                    onPlay = { songs ->
+                        if (songs.isNotEmpty()) {
+                            QueueShuffle.disableForNextQueue()
+                            playDetailSongs(songs, 0)
+                        }
+                    },
                     onSongLongPress = { actions.onOpenSongMenu(withAlbum(it)) },
                     onSongSwipe = { actions.onSongSwipe(withAlbum(it)) },
                     onShuffle = { songs ->
@@ -1556,4 +1564,14 @@ internal fun AppNavigationHost(
             }
         }
     }
+}
+
+/**
+ * [shown] keeps [page]'s own order: every entry is the page's, in the page's
+ * sequence, though a search may have left some out. A sort breaks that, and
+ * then the page snapshot can't stand in for the list on screen (#1141).
+ */
+internal fun inPageOrder(shown: List<String>, page: List<String>): Boolean {
+    val rest = page.iterator()
+    return shown.all { key -> rest.asSequence().any { it == key } }
 }

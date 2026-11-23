@@ -1011,6 +1011,19 @@ private fun BitChordApp(
         else -> searchListState
     }
 
+    val haptics = com.music.bitchord.ui.haptics.rememberHaptics()
+    val scrollScope = rememberCoroutineScope()
+    var scrollJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val onActiveTabTap: () -> Unit = {
+        if (route == null && detail == null && selectedTab != TAB_SEARCH) {
+            haptics.play(com.music.bitchord.ui.haptics.Haptic.Select)
+            scrollJob?.cancel()
+            scrollJob = scrollScope.launch {
+                currentListState.animateScrollToItem(0)
+            }
+        }
+    }
+
     val homePull = rememberPullToRefreshState()
     val explorePull = rememberPullToRefreshState()
     val libraryPull = rememberPullToRefreshState()
@@ -1151,6 +1164,7 @@ private fun BitChordApp(
             convertedAudioId = id
         },
         onKeepVideoIdChange = { keepVideoId = it },
+        onActiveTabTap = onActiveTabTap,
     )
 
     val listPadding = PaddingValues(
@@ -1478,6 +1492,7 @@ private fun rememberBitChordAppActions(
     onConvertedFromVideoChange: (Song?, String?) -> Unit,
     onConvertedFromAudioChange: (Song?, String?) -> Unit,
     onKeepVideoIdChange: (String?) -> Unit,
+    onActiveTabTap: () -> Unit = {},
 ): BitChordAppActions {
     val scope = rememberCoroutineScope()
     var playRequestGeneration by remember { mutableIntStateOf(0) }
@@ -2165,6 +2180,7 @@ private fun rememberBitChordAppActions(
         onConvertedFromVideoChange = onConvertedFromVideoChange,
         onConvertedFromAudioChange = onConvertedFromAudioChange,
         onKeepVideoIdChange = onKeepVideoIdChange,
+        onActiveTabTap = onActiveTabTap,
     )
 
 
@@ -2762,6 +2778,7 @@ private fun BitChordAppContent(
                             { playerSheetMotion.open() }
                         },
                         onShowHostOnlyNotice = actions.showHostOnlyNotice,
+                        onActiveTabTap = actions.onActiveTabTap,
                     ),
                     modifier = Modifier.fillMaxSize().zIndex(1f),
                 )
@@ -2883,6 +2900,7 @@ private fun BitChordAppContent(
                         onSetReplayLandingPage = actions.onReplayLandingPageChange,
                     )
                 },
+                onStartDownload = actions.startDownload,
             ),
             playerSheetMotion = playerSheetMotion,
             playerDock = playerDock,

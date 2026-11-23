@@ -347,6 +347,12 @@
     <string name="full_screen_cover_art_subtitle">Lleva la portada a los bordes del reproductor en lugar de mostrarla cuadrada</string>
     <string name="full_screen_detail_cover">Portada de álbum/lista a pantalla completa</string>
     <string name="full_screen_detail_cover_subtitle">Lleva las portadas de álbumes y listas a los bordes de la página en lugar de enmarcarlas</string>
+    <string name="show_total_duration">Mostrar duración total</string>
+    <string name="show_total_duration_subtitle">Muestra la duración completa de la pista en lugar del tiempo restante</string>
+    <string name="hide_lyrics_preview">Ocultar vista previa de letras</string>
+    <string name="hide_lyrics_preview_subtitle">Oculta la línea de letras en el reproductor principal</string>
+    <string name="disable_spotify_canvas">Desactivar Spotify Canvas</string>
+    <string name="disable_spotify_canvas_subtitle">No descarga ni reproduce vídeos de Spotify Canvas; usa otras fuentes de carátula animada</string>
     <string name="animated_cover_art_subtitle">Reproduce el video en bucle que incluyen algunos lanzamientos en lugar de una carátula fija</string>
     <string name="cover_animation">Animación de portada</string>
     <string name="cover_animation_slide">Deslizar</string>
@@ -1703,4 +1709,16 @@
     <string name="drive_backup_row_subtitle">Copia y sincroniza Replay entre tus dispositivos</string>
     <string name="drive_over_cellular">Sincronizar con datos móviles</string>
     <string name="drive_over_cellular_subtitle">Si está desactivado, las sincronizaciones automáticas esperan al Wi-Fi</string>
+    <string name="find_a_playlist">Buscar una lista</string>
+    <string name="no_playlists_match">Ninguna lista coincide con «%1$s»</string>
+    <string name="sort_track_number">Número de pista</string>
+    <string name="queue_undo_action">Deshacer</string>
+    <string name="queue_cleared">Cola vaciada</string>
+    <plurals name="queue_removed_count">
+        <item quantity="one">Se quitó %1$d canción</item>
+        <item quantity="other">Se quitaron %1$d canciones</item>
+    </plurals>
+    <string name="queue_removed_song">Se quitó %1$s</string>
+    <string name="queue_playlist_added">Se añadieron %1$d de %2$d canciones</string>
+    <string name="queue_playlist_partial">%1$s (%2$d incompatibles, %3$d ya estaban, %4$d fallaron)</string>
 </resources>

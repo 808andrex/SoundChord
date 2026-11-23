@@ -80,6 +80,8 @@ internal fun FrostedPlayerFrame(
     modifier: Modifier,
     /** [LocalPlayerChrome] for the player, not for what is drawn over it. */
     chrome: Boolean,
+    /** [LocalChromeSoftened], alongside [chrome]. */
+    softened: Boolean = false,
     frost: PlayerFrost?,
     live: Boolean,
     /** Read off composition, so a panel opening recomposes nothing here. */
@@ -104,7 +106,11 @@ internal fun FrostedPlayerFrame(
     Box(modifier.fillMaxSize()) {
         val source = if (frost != null) with(frost) { Modifier.frostSource() } else Modifier
         Box(Modifier.fillMaxSize().then(source)) {
-            CompositionLocalProvider(LocalPlayerChrome provides chrome, content = content)
+            CompositionLocalProvider(
+                LocalPlayerChrome provides chrome,
+                LocalChromeSoftened provides softened,
+                content = content,
+            )
         }
         CompositionLocalProvider(LocalPlayerFrost provides frost?.takeIf { !live }) {
             overlays()
@@ -133,11 +139,9 @@ fun Modifier.playerMenuSurface(
     val frost = LocalPlayerFrost.current
     return clip(shape).then(
         when {
-            reduceDynamicBlur || (frost == null && hazeState == null) -> Modifier.background(MenuFrostDark.copy(alpha = slabAlpha))
+            reduceDynamicBlur || (frost == null && hazeState == null) -> Modifier.background(MenuFrostDark)
             frost != null -> with(frost) { Modifier.frostPanel(shape, MenuFrostDark.copy(alpha = slabAlpha)) }
-            else -> Modifier
-                .background(MenuFrostDark.copy(alpha = slabAlpha))
-                .liveMenuFrost(hazeState!!, MenuFrostDark, slabAlpha)
+            else -> Modifier.liveMenuFrost(hazeState!!, MenuFrostDark, slabAlpha)
         },
     )
 }

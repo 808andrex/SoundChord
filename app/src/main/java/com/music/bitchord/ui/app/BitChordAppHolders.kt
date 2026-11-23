@@ -458,6 +458,7 @@ internal class BitChordAppActions(
     val onConvertedFromVideoChange: (Song?, String?) -> Unit,
     val onConvertedFromAudioChange: (Song?, String?) -> Unit,
     val onKeepVideoIdChange: (String?) -> Unit,
+    val onActiveTabTap: () -> Unit = {},
 )
 
 @Stable

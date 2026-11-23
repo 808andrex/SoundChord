@@ -510,6 +510,12 @@
     <string name="full_screen_cover_art_subtitle">Runs the cover to the edges of the player instead of a square sleeve</string>
     <string name="full_screen_detail_cover">Full-screen album/playlist cover</string>
     <string name="full_screen_detail_cover_subtitle">Runs album and playlist covers to the edges of the page instead of a framed sleeve</string>
+    <string name="show_total_duration">Show total duration</string>
+    <string name="show_total_duration_subtitle">Shows the song\'s full length instead of the time remaining</string>
+    <string name="hide_lyrics_preview">Hide lyrics</string>
+    <string name="hide_lyrics_preview_subtitle">Hides the lyrics line on the main player screen</string>
+    <string name="disable_spotify_canvas">Disable Spotify Canvas</string>
+    <string name="disable_spotify_canvas_subtitle">Never use Spotify Canvas. Animated artwork comes from the other sources instead</string>
     <string name="animated_cover_art_subtitle">Plays the looping video some releases ship instead of a still sleeve</string>
     <string name="cover_animation">Cover animation</string>
     <string name="cover_animation_slide">Slide</string>
@@ -1580,4 +1586,16 @@
     <string name="drive_backup_row_subtitle">Back up and sync Replay across your devices</string>
     <string name="drive_over_cellular">Sync over mobile data</string>
     <string name="drive_over_cellular_subtitle">When off, automatic syncs wait for Wi-Fi</string>
+    <string name="find_a_playlist">Find a playlist</string>
+    <string name="no_playlists_match">No playlists match “%1$s”</string>
+    <string name="sort_track_number">Track number</string>
+    <string name="queue_undo_action">Undo</string>
+    <string name="queue_cleared">Queue cleared</string>
+    <plurals name="queue_removed_count">
+        <item quantity="one">Removed %1$d song</item>
+        <item quantity="other">Removed %1$d songs</item>
+    </plurals>
+    <string name="queue_removed_song">Removed %1$s</string>
+    <string name="queue_playlist_added">Added %1$d of %2$d songs</string>
+    <string name="queue_playlist_partial">%1$s (%2$d incompatible, %3$d already present, %4$d failed)</string>
 </resources>

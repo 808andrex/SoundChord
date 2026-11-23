@@ -1,5 +1,19 @@
 package com.music.bitchord.ui.player
 
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.res.stringResource
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import kotlinx.coroutines.CompletableDeferred
+import com.music.bitchord.playback.QueueScreenUndo
+import com.music.bitchord.playback.moveQueueEntryToUser
+import com.music.bitchord.playback.removeQueueItemWithUndo
+import com.music.bitchord.playback.removeQueueEntriesWithUndo
+import com.music.bitchord.playback.clearUserQueueWithUndo
+import com.music.bitchord.playback.undoQueueEdit
+import com.music.bitchord.ui.components.QueuePlaylistPicker
+import com.music.bitchord.ui.player.QueueBulkAction
+import com.music.bitchord.download.DownloadTarget
 import com.music.bitchord.PLAYER_SCRIM_ALPHA
 import com.music.bitchord.PlayerSheetShape
 import com.music.bitchord.SEEK_END_GUARD_MS
@@ -173,6 +187,7 @@ data class BottomPlayerBarActions(
     val onExpand: () -> Unit,
     val onBlockedControl: () -> Unit,
     val onHeightChanged: (Int) -> Unit,
+    val onActiveTabTap: () -> Unit = {},
 )
 
 @Composable
@@ -184,6 +199,7 @@ internal fun rememberBottomPlayerBarActions(
     onExpand: () -> Unit,
     onBlockedControl: () -> Unit,
     onHeightChanged: (Int) -> Unit,
+    onActiveTabTap: () -> Unit = {},
 ): BottomPlayerBarActions = remember(
     onTabSelected,
     onPlayPause,
@@ -192,6 +208,7 @@ internal fun rememberBottomPlayerBarActions(
     onExpand,
     onBlockedControl,
     onHeightChanged,
+    onActiveTabTap,
 ) {
     BottomPlayerBarActions(
         onTabSelected = onTabSelected,
@@ -201,6 +218,7 @@ internal fun rememberBottomPlayerBarActions(
         onExpand = onExpand,
         onBlockedControl = onBlockedControl,
         onHeightChanged = onHeightChanged,
+        onActiveTabTap = onActiveTabTap,
     )
 }
 
@@ -239,6 +257,7 @@ internal fun BottomPlayerBar(
                 dock = dock,
                 pull = pull,
                 modifier = Modifier.fillMaxWidth(),
+                onActiveTabTap = actions.onActiveTabTap,
             )
         }
     } else {
@@ -273,6 +292,7 @@ internal fun BottomPlayerBar(
                 selectedIndex = state.selectedIndex,
                 hazeState = hazeState,
                 onTabSelected = actions.onTabSelected,
+                onActiveTabTap = actions.onActiveTabTap,
             )
         }
     }
@@ -419,6 +439,7 @@ data class MainPlayerSheetActions(
     val onShowQueueNotice: (String) -> Unit,
     val onDismissLyricsOffset: () -> Unit,
     val onOpenPlaybackSource: (Song) -> Unit,
+    val onStartDownload: (List<Song>, DownloadTarget?) -> Unit = { _, _ -> },
 )
 
 @Composable
@@ -442,6 +463,7 @@ internal fun rememberMainPlayerSheetActions(
     onShowQueueNotice: (String) -> Unit,
     onDismissLyricsOffset: () -> Unit,
     onOpenPlaybackSource: (Song) -> Unit,
+    onStartDownload: (List<Song>, DownloadTarget?) -> Unit = { _, _ -> },
 ): MainPlayerSheetActions = MainPlayerSheetActions(
     onDismissRequest = onDismissRequest,
     onLiveCanvasChanged = onLiveCanvasChanged,
@@ -462,6 +484,7 @@ internal fun rememberMainPlayerSheetActions(
     onShowQueueNotice = onShowQueueNotice,
     onDismissLyricsOffset = onDismissLyricsOffset,
     onOpenPlaybackSource = onOpenPlaybackSource,
+    onStartDownload = onStartDownload,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -631,6 +654,51 @@ internal fun MainPlayerSheet(
                                 }?.displayName?.takeIf(String::isNotBlank)
                         }
 
+                    val queueUndo by QueueScreenUndo.notice.collectAsStateWithLifecycle()
+                    var queueNoticeId by remember { mutableIntStateOf(0) }
+                    var queueUndoNotice by remember { mutableStateOf<QueueActionNotice?>(null) }
+                    LaunchedEffect(queueUndo) {
+                        queueUndoNotice = queueUndo?.let { notice ->
+                            queueNoticeId += 1
+                            QueueActionNotice(queueNoticeId, notice.message)
+                        }
+                    }
+
+                    var queuePlaylistSongs by remember { mutableStateOf<List<Song>?>(null) }
+                    var queuePlaylistCompletion by remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
+
+                    val performQueueBulkAction: suspend (List<Song>, QueueBulkAction) -> Boolean = { songs, action ->
+                        try {
+                            when (action) {
+                                QueueBulkAction.PLAYLIST -> if (queuePlaylistSongs != null) false else {
+                                    val completion = CompletableDeferred<Boolean>()
+                                    queuePlaylistCompletion = completion
+                                    queuePlaylistSongs = songs
+                                    try {
+                                        completion.await()
+                                    } finally {
+                                        if (queuePlaylistCompletion === completion) {
+                                            queuePlaylistCompletion = null
+                                            queuePlaylistSongs = null
+                                        }
+                                    }
+                                }
+                                QueueBulkAction.DOWNLOAD -> {
+                                    val requested = songs.filter { it.localUri == null }.distinctBy { it.videoId }
+                                    if (requested.isEmpty()) {
+                                        Toast.makeText(context, R.string.already_downloaded, Toast.LENGTH_SHORT).show()
+                                    } else actions.onStartDownload(requested, null)
+                                    true
+                                }
+                            }
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            Toast.makeText(context, R.string.failed, Toast.LENGTH_SHORT).show()
+                            false
+                        }
+                    }
+
                     NowPlayingScreen(
                         song = displayedSong,
                         radioTrackTitle = state.player.radioTrackTitle,
@@ -704,9 +772,42 @@ internal fun MainPlayerSheet(
                                 c.play()
                             }
                         },
-                        onRemoveFromQueue = { controller?.removeMediaItem(it) },
+                        onRemoveFromQueue = { index ->
+                            val item = state.player.queue.getOrNull(index)
+                            if (item != null) {
+                                scope.launch { controller?.removeQueueItemWithUndo(index, item) }
+                            } else {
+                                controller?.removeMediaItem(index)
+                            }
+                        },
                         onMoveInQueue = { from, to -> controller?.moveMediaItem(from, to) },
                         onQueueDragActiveChange = { active -> controller?.setQueueDragActive(active) },
+                        onQueueSongMenu = { _, s ->
+                            actions.onOpenSongMenu(s)
+                        },
+                        onQueueSwipeToQueue = { index, s ->
+                            controller?.moveQueueEntryToUser(index, s) == true
+                        },
+                        queueUndoNotice = { queueHaze ->
+                            QueueActionNoticeHost(
+                                notice = queueUndoNotice,
+                                hazeState = queueHaze,
+                                modifier = Modifier.navigationBarsPadding(),
+                                actionLabel = stringResource(R.string.queue_undo_action),
+                                onAction = {
+                                    val token = queueUndo?.token
+                                    val c = controller
+                                    if (c != null && token != null) scope.launch { c.undoQueueEdit(token) }
+                                },
+                            )
+                        },
+                        onQueueBulkAction = performQueueBulkAction,
+                        onQueueRemoveEntries = { entries ->
+                            controller?.removeQueueEntriesWithUndo(entries)
+                        },
+                        onQueueAddAllToPlaylist = { songs ->
+                            scope.launch { performQueueBulkAction(songs, QueueBulkAction.PLAYLIST) }
+                        },
                         onOpenMenu = {
                             actions.onOpenSongMenu(displayedSong)
                         },
@@ -766,11 +867,27 @@ internal fun MainPlayerSheet(
                             navigator.pushAll(AppRoute.Settings, AppRoute.ListenTogether)
                         },
                         onClearQueue = {
-                            controller?.let { c ->
-                                QueueCoordinator.clearUserQueue(c)
-                            }
+                            scope.launch { controller?.clearUserQueueWithUndo() }
                         },
                     )
+
+                    val queueTargets = queuePlaylistSongs
+                    if (queueTargets != null) {
+                        val completion = queuePlaylistCompletion
+                        val finish: (Boolean) -> Unit = { completed ->
+                            completion?.complete(completed)
+                            if (queuePlaylistCompletion === completion) queuePlaylistSongs = null
+                        }
+                        key(completion) {
+                            QueuePlaylistPicker(
+                                songs = queueTargets,
+                                viewModel = viewModel,
+                                onNotice = { message -> Toast.makeText(context, message, Toast.LENGTH_LONG).show() },
+                                onComplete = { finish(true) },
+                                onDismiss = { finish(false) },
+                            )
+                        }
+                    }
                 }
             }
 

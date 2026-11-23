@@ -412,6 +412,7 @@ internal fun SongMenuContent(
 
     val editable = viewModel.editablePlaylist(state.detail?.browseId)
         ?.takeIf { !fromPlayer && song.setVideoId != null }
+    val localPlaylists by com.music.bitchord.data.spotify.LocalPlaylistStore.playlists.collectAsStateWithLifecycle()
 
     val automixOn by AppSettings.smartFadeEnabled.collectAsStateWithLifecycle()
     val cacheVersion by AudioCache.contentsChanged.collectAsStateWithLifecycle()
@@ -492,7 +493,22 @@ internal fun SongMenuContent(
                 actions.onDismissActions()
                 viewModel.removeFromPlaylist(playlist.browseId, song)
             }
-        },
+        } ?: state.detail?.browseId
+            ?.takeIf { !fromPlayer && song.localUri != null && OfflinePlaylists.isOfflinePlaylist(it) }
+            ?.let { id ->
+                {
+                    actions.onDismissActions()
+                    OfflinePlaylists.remove(id, song)
+                }
+            } ?: state.detail?.browseId
+            ?.takeIf { id -> !fromPlayer && localPlaylists.any { it.browseId == id } }
+            ?.let { id ->
+                {
+                    actions.onDismissActions()
+                    com.music.bitchord.data.spotify.LocalPlaylistStore.removeSong(id, song)
+                    viewModel.reloadLocalDetail(id)
+                }
+            },
         onRemoveFromCache = if (inCache) {
             {
                 actions.onDismissActions()
@@ -1002,6 +1018,7 @@ internal fun GlobalSheetsHost(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var albumPlaylistTarget by remember { mutableStateOf<BrowseTarget?>(null) }
 
     Isolated {
         val pageMenuUp =
@@ -1135,6 +1152,36 @@ internal fun GlobalSheetsHost(
         )
     }
 
+    albumPlaylistTarget?.let { target ->
+        PlaylistPickerSheet(
+            playlists = state.playlists,
+            loading = state.playlistsLoading,
+            song = target.songs.firstOrNull(),
+            headerTitle = target.title,
+            onDismiss = { albumPlaylistTarget = null },
+            onAdd = { picked ->
+                viewModel.addSongsToPlaylists(picked, target.songs) { added, alreadyThere, failed ->
+                    actions.onShowQueueNotice(
+                        when {
+                            added > 0 -> context.getString(R.string.song_added_to_playlist)
+                            alreadyThere > 0 && failed == 0 -> context.getString(R.string.song_already_in_playlist)
+                            else -> context.getString(R.string.failed)
+                        },
+                    )
+                }
+            },
+            onCreate = { title, privacy, coverUri ->
+                viewModel.createPlaylistWithVideoIds(
+                    title = title,
+                    privacy = privacy,
+                    videoIds = target.songs.map { it.videoId },
+                    songs = target.songs,
+                    coverUri = coverUri,
+                )
+            },
+        )
+    }
+
     if (state.offlinePlaylistTarget != null || state.creatingOfflinePlaylist) {
         val target = state.offlinePlaylistTarget
         val dismiss = {
@@ -1262,14 +1309,18 @@ internal fun GlobalSheetsHost(
         val remote = target.browseId?.startsWith("local:") == false
         val downloadable = remote || target.browseId?.startsWith("local:playlist:sp_local_") == true
         val pinnedPlaylists by AppSettings.pinnedPlaylists.collectAsStateWithLifecycle()
+        val localPlaylists by com.music.bitchord.data.spotify.LocalPlaylistStore.playlists.collectAsStateWithLifecycle()
         val pinnableId = target.browseId?.takeIf {
             target.type == BrowseType.PLAYLIST &&
                 !it.startsWith(OfflinePlaylists.PREFIX) && !it.startsWith(LocalGroups.PREFIX)
         }
         val offlineEditable = OfflinePlaylists.get(target.browseId)?.takeUnless { it.isLiked }
+        val importEditable = localPlaylists.firstOrNull { it.browseId == target.browseId }
         BrowseActionsMenu(
             target = target.copy(
                 playlist = playlist ?: offlineEditable?.let {
+                    UserPlaylist(playlistId = it.id, title = it.title, subtitle = "", thumbnailUrl = null)
+                } ?: importEditable?.let {
                     UserPlaylist(playlistId = it.id, title = it.title, subtitle = "", thumbnailUrl = null)
                 },
             ),
@@ -1289,6 +1340,17 @@ internal fun GlobalSheetsHost(
                 QueueShuffle.enableForNextQueue()
                 actions.onPlayFrom(songs, songs.indices.random())
             }.takeIf { target.fromCard },
+            onAddToPlaylists = if (target.type == BrowseType.ALBUM && target.browseId != null && state.signedIn) {
+                {
+                    actions.onDismissBrowseActions()
+                    viewModel.loadPlaylists()
+                    withBrowseSongs(target) { songs ->
+                        if (songs.isNotEmpty()) albumPlaylistTarget = target.copy(songs = songs)
+                    }
+                }
+            } else {
+                null
+            },
             onOpen = target.browseId
                 ?.takeIf { target.fromCard }
                 ?.let { id ->
@@ -1361,6 +1423,12 @@ internal fun GlobalSheetsHost(
                     OfflinePlaylists.rename(p.browseId, name)
                     viewModel.retitleDetail(p.browseId, name.trim())
                 }
+            } ?: importEditable?.let { p ->
+                { name: String ->
+                    actions.onDismissBrowseActions()
+                    com.music.bitchord.data.spotify.LocalPlaylistStore.renamePlaylist(p.browseId, name.trim())
+                    viewModel.retitleDetail(p.browseId, name.trim())
+                }
             },
             isOwnedPlaylist = playlist != null,
             onReorder = playlist?.let { p ->
@@ -1391,6 +1459,12 @@ internal fun GlobalSheetsHost(
                     actions.onDismissBrowseActions()
                     if (state.detail?.browseId == p.browseId) viewModel.closeDetail()
                     OfflinePlaylists.delete(p.browseId)
+                }
+            } ?: importEditable?.let { p ->
+                {
+                    actions.onDismissBrowseActions()
+                    if (state.detail?.browseId == p.browseId) viewModel.closeDetail()
+                    com.music.bitchord.data.spotify.LocalPlaylistStore.deletePlaylist(p.browseId)
                 }
             },
             onDeleteDownload = target.downloadId?.let { id ->
@@ -1641,6 +1715,9 @@ internal fun GlobalSheetsHost(
         FrostedSortMenu(
             hazeState = state.hazeState,
             selected = state.songSort,
+            offerTrackNumber = (state.detail?.songs as? UiState.Success)?.data
+                .orEmpty()
+                .any { it.trackNumber != null },
             onSelect = { option ->
                 state.detail?.browseId?.let { AppSettings.setDetailSongSort(it, option) }
                 actions.onDismissSongSortMenu()

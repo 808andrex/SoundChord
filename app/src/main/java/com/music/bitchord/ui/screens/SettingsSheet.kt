@@ -277,7 +277,13 @@ fun SettingsScreen(
     val sleepTimerFadeOutIsNew = AppSettings.FEATURE_SLEEP_TIMER_FADE_OUT !in seenNewFeatures
     val automixModelIsNew = AppSettings.FEATURE_AUTOMIX_MODEL !in seenNewFeatures
     val driveBackupIsNew = AppSettings.FEATURE_DRIVE_BACKUP !in seenNewFeatures
-    val playerLyricsIsNew = bestPartIsNew || coverAnimationMenuIsNew || coverAnimSlideIsNew || coverAnimFluidIsNew || coverAnimAutomixIsNew
+    val showTotalDuration by AppSettings.showTotalDuration.collectAsStateWithLifecycle()
+    val showTotalDurationIsNew = AppSettings.FEATURE_SHOW_TOTAL_DURATION !in seenNewFeatures
+    val hideLyricsPreview by AppSettings.hideLyricsPreview.collectAsStateWithLifecycle()
+    val hideLyricsPreviewIsNew = AppSettings.FEATURE_HIDE_LYRICS_PREVIEW !in seenNewFeatures
+    val disableSpotifyCanvas by AppSettings.disableSpotifyCanvas.collectAsStateWithLifecycle()
+    val disableSpotifyCanvasIsNew = AppSettings.FEATURE_DISABLE_SPOTIFY_CANVAS !in seenNewFeatures
+    val playerLyricsIsNew = bestPartIsNew || coverAnimationMenuIsNew || coverAnimSlideIsNew || coverAnimFluidIsNew || coverAnimAutomixIsNew || showTotalDurationIsNew || hideLyricsPreviewIsNew || disableSpotifyCanvasIsNew
     val audioPlaybackIsNew = sleepTimerFadeOutIsNew || crossfadeOnNextIsNew || automixModelIsNew
     val yourDataIsNew = driveBackupIsNew
     val accentIsDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -831,6 +837,27 @@ fun SettingsScreen(
                     onClick = { AppSettings.setHideSongStatus(!hideSongStatus) },
                 )
                 RowDivider()
+                val showTotalDurationTitle = stringResource(R.string.show_total_duration)
+                SettingsRow(
+                    icon = SfIcons.Clock,
+                    title = showTotalDurationTitle,
+                    subtitle = stringResource(R.string.show_total_duration_subtitle),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { showTotalDurationIsNew },
+                    trailing = {
+                        IosSwitch(
+                            checked = showTotalDuration,
+                            onCheckedChange = { checked ->
+                                AppSettings.markFeatureSeen(AppSettings.FEATURE_SHOW_TOTAL_DURATION)
+                                AppSettings.setShowTotalDuration(checked)
+                            },
+                        )
+                    },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_SHOW_TOTAL_DURATION)
+                        AppSettings.setShowTotalDuration(!showTotalDuration)
+                    },
+                )
+                RowDivider()
                 SettingsRow(
                     icon = SfIcons.BarChart,
                     title = stringResource(R.string.show_nerd_stats),
@@ -906,9 +933,51 @@ fun SettingsScreen(
                         Chevron()
                     }
                 }
+                RowDivider()
+                val disableSpotifyCanvasTitle = stringResource(R.string.disable_spotify_canvas)
+                SettingsRow(
+                    icon = SfIcons.MotionPhotosOff,
+                    title = disableSpotifyCanvasTitle,
+                    subtitle = stringResource(R.string.disable_spotify_canvas_subtitle),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { disableSpotifyCanvasIsNew },
+                    trailing = {
+                        IosSwitch(
+                            checked = disableSpotifyCanvas,
+                            onCheckedChange = { checked ->
+                                AppSettings.markFeatureSeen(AppSettings.FEATURE_DISABLE_SPOTIFY_CANVAS)
+                                AppSettings.setDisableSpotifyCanvas(checked)
+                            },
+                        )
+                    },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_DISABLE_SPOTIFY_CANVAS)
+                        AppSettings.setDisableSpotifyCanvas(!disableSpotifyCanvas)
+                    },
+                )
             }
 
             SettingsGroup(header = stringResource(R.string.settings_group_lyrics_translation)) {
+                val lyricsHidden = hideLyricsPreview || !syncedLyrics
+                val setLyricsHidden: (Boolean) -> Unit = { hide ->
+                    AppSettings.markFeatureSeen(AppSettings.FEATURE_HIDE_LYRICS_PREVIEW)
+                    AppSettings.setHideLyricsPreview(hide)
+                    if (!hide && !syncedLyrics) AppSettings.setSyncedLyrics(true)
+                }
+                val hideLyricsTitle = stringResource(R.string.hide_lyrics_preview)
+                SettingsRow(
+                    icon = SfIcons.VisibilityOff,
+                    title = hideLyricsTitle,
+                    subtitle = stringResource(R.string.hide_lyrics_preview_subtitle),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { hideLyricsPreviewIsNew },
+                    trailing = {
+                        IosSwitch(
+                            checked = lyricsHidden,
+                            onCheckedChange = setLyricsHidden,
+                        )
+                    },
+                    onClick = { setLyricsHidden(!lyricsHidden) },
+                )
+                RowDivider()
                 SettingsRow(
                     icon = SfIcons.Notes,
                     title = stringResource(R.string.synced_lyrics),
@@ -2037,6 +2106,28 @@ fun SettingsScreen(
                 }
             }
             if (showPlayerLyricsInLegacyAppearance) {
+                val lyricsHidden = hideLyricsPreview || !syncedLyrics
+                val setLyricsHidden: (Boolean) -> Unit = { hide ->
+                    AppSettings.markFeatureSeen(AppSettings.FEATURE_HIDE_LYRICS_PREVIEW)
+                    AppSettings.setHideLyricsPreview(hide)
+                    if (!hide && !syncedLyrics) AppSettings.setSyncedLyrics(true)
+                }
+                val hideLyricsTitle = stringResource(R.string.hide_lyrics_preview)
+                row(hideLyricsTitle, stringResource(R.string.settings_category_player_lyrics), "lyrics", "hide", "synced", "translation", "lrclib", "musixmatch") {
+                    SettingsRow(
+                        icon = SfIcons.VisibilityOff,
+                        title = hideLyricsTitle,
+                        subtitle = stringResource(R.string.hide_lyrics_preview_subtitle),
+                        badge = stringResource(R.string.settings_badge_new).takeIf { hideLyricsPreviewIsNew },
+                        trailing = {
+                            IosSwitch(
+                                checked = lyricsHidden,
+                                onCheckedChange = setLyricsHidden,
+                            )
+                        },
+                        onClick = { setLyricsHidden(!lyricsHidden) },
+                    )
+                }
                 val syncedLyricsTitle = stringResource(R.string.synced_lyrics)
                 row(syncedLyricsTitle, stringResource(R.string.settings_category_player_lyrics), "lyrics", "translation", "lrclib", "musixmatch") {
                     SettingsRow(
@@ -2443,6 +2534,28 @@ fun SettingsScreen(
                         )
                     },
                     onClick = { AppSettings.setHideSongStatus(!hideSongStatus) },
+                )
+            }
+            val showTotalDurationTitle = stringResource(R.string.show_total_duration)
+            row(showTotalDurationTitle, "seek bar", "remaining time", "duration", "song length") {
+                SettingsRow(
+                    icon = SfIcons.Clock,
+                    title = showTotalDurationTitle,
+                    subtitle = stringResource(R.string.show_total_duration_subtitle),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { showTotalDurationIsNew },
+                    trailing = {
+                        IosSwitch(
+                            checked = showTotalDuration,
+                            onCheckedChange = { checked ->
+                                AppSettings.markFeatureSeen(AppSettings.FEATURE_SHOW_TOTAL_DURATION)
+                                AppSettings.setShowTotalDuration(checked)
+                            },
+                        )
+                    },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_SHOW_TOTAL_DURATION)
+                        AppSettings.setShowTotalDuration(!showTotalDuration)
+                    },
                 )
             }
             }
@@ -3763,6 +3876,7 @@ fun SettingsChoicePage(
     val coverAnimSlideIsNew = AppSettings.FEATURE_COVER_ANIM_SLIDE !in seenNewFeatures
     val coverAnimFluidIsNew = AppSettings.FEATURE_COVER_ANIM_FLUID !in seenNewFeatures
     val coverAnimAutomixIsNew = AppSettings.FEATURE_COVER_ANIM_AUTOMIX !in seenNewFeatures
+    val disableSpotifyCanvasIsNew = AppSettings.FEATURE_DISABLE_SPOTIFY_CANVAS !in seenNewFeatures
     Column(
         modifier
             .fillMaxWidth()
@@ -3875,6 +3989,7 @@ fun SettingsChoicePage(
                 val mixOnly by AppSettings.coverMixOnlyEffects.collectAsStateWithLifecycle()
                 val animated by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
                 val cellular by AppSettings.canvasOverCellular.collectAsStateWithLifecycle()
+                val disableSpotifyCanvas by AppSettings.disableSpotifyCanvas.collectAsStateWithLifecycle()
                 SettingsGroup(header = stringResource(R.string.cover_transition_section), topSpacing = 0.dp) {
                     CoverAnimationToggle(
                         icon = SfIcons.Animation,
@@ -3935,6 +4050,27 @@ fun SettingsChoicePage(
                     )
                 }
                 SettingsGroup(header = stringResource(R.string.spotify_canvas_section)) {
+                    val disableSpotifyCanvasTitle = stringResource(R.string.disable_spotify_canvas)
+                    SettingsRow(
+                        icon = SfIcons.MotionPhotosOff,
+                        title = disableSpotifyCanvasTitle,
+                        subtitle = stringResource(R.string.disable_spotify_canvas_subtitle),
+                        badge = stringResource(R.string.settings_badge_new).takeIf { disableSpotifyCanvasIsNew },
+                        trailing = {
+                            IosSwitch(
+                                checked = disableSpotifyCanvas,
+                                onCheckedChange = { checked ->
+                                    AppSettings.markFeatureSeen(AppSettings.FEATURE_DISABLE_SPOTIFY_CANVAS)
+                                    AppSettings.setDisableSpotifyCanvas(checked)
+                                },
+                            )
+                        },
+                        onClick = {
+                            AppSettings.markFeatureSeen(AppSettings.FEATURE_DISABLE_SPOTIFY_CANVAS)
+                            AppSettings.setDisableSpotifyCanvas(!disableSpotifyCanvas)
+                        },
+                    )
+                    RowDivider()
                     SettingsRow(
                         icon = SfIcons.Key,
                         title = stringResource(R.string.integrate_spotify_canvas),
