@@ -289,6 +289,8 @@
     <string name="crossfade_on_skip">Fundido cruzado en siguiente/anterior</string>
     <string name="crossfade_on_skip_subtitle">Funde una pista con otra al pasar a la siguiente o anterior</string>
     <string name="automix">Mezcla automática [BETA]</string>
+    <string name="album_gapless_playback">Reproducción sin pausas en álbumes</string>
+    <string name="album_gapless_playback_subtitle">Pausa la mezcla automática y el fundido cruzado en álbumes para conservar las transiciones originales entre canciones</string>
     <string name="automix_performance">Rendimiento de mezcla automática</string>
     <string name="automix_performance_subtitle">Define cuánta CPU puede usar el análisis en segundo plano</string>
     <string name="automix_performance_warning">El rendimiento alto analiza más rápido, pero puede consumir más batería y calentar el teléfono.</string>

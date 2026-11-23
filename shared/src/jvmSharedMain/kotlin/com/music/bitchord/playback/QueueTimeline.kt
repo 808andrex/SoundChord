@@ -1,5 +1,6 @@
 package com.music.bitchord.playback
 
+import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.PlaybackSourceType
 import com.music.bitchord.data.model.QueueTier
 import com.music.bitchord.data.model.Song
@@ -12,7 +13,11 @@ data class QueueSource(
     val title: String,
     val type: PlaybackSourceType,
     val id: String? = null,
-)
+    val browseType: BrowseType? = null,
+) {
+    val isAlbum: Boolean
+        get() = QueueTimeline.isAlbumSource(this)
+}
 
 /**
  * Result of constructing a context queue, containing the reconstructed timeline
@@ -70,7 +75,57 @@ object QueueTimeline {
         playbackSource = source.title,
         playbackSourceType = source.type,
         playbackSourceId = source.id,
+        albumId = if (source.isAlbum && albumId == null) source.id else albumId,
     )
+
+    fun isAlbumBrowseId(id: String): Boolean {
+        return id.startsWith("MPREb") ||
+            id.startsWith("VLOLAK") ||
+            id.startsWith("OLAK") ||
+            id.startsWith("FEmusic_album") ||
+            id.startsWith("local:album:")
+    }
+
+    fun isAlbumSource(source: QueueSource?): Boolean {
+        if (source == null) return false
+        if (source.browseType == BrowseType.ALBUM) return true
+        val id = source.id ?: return false
+        return isAlbumBrowseId(id)
+    }
+
+    fun isAlbumGaplessTransition(
+        currentSong: Song?,
+        nextSong: Song?,
+        contextSource: QueueSource?,
+    ): Boolean {
+        if (currentSong == null || nextSong == null) return false
+        val sourceIsAlbum = isAlbumSource(contextSource) ||
+            (currentSong.playbackSourceType == PlaybackSourceType.BROWSE && currentSong.playbackSourceId?.let(::isAlbumBrowseId) == true)
+        if (!sourceIsAlbum) return false
+
+        val currentAlbumId = currentSong.albumId?.takeIf { it.isNotBlank() }
+        val nextAlbumId = nextSong.albumId?.takeIf { it.isNotBlank() }
+
+        if (currentAlbumId != null && nextAlbumId != null) {
+            return currentAlbumId == nextAlbumId
+        }
+
+        val sourceId = contextSource?.id?.takeIf { it.isNotBlank() }
+        if (sourceId != null &&
+            (currentSong.playbackSourceId == sourceId || currentAlbumId == sourceId) &&
+            (nextSong.playbackSourceId == sourceId || nextAlbumId == sourceId)
+        ) {
+            return true
+        }
+
+        val currentAlbum = currentSong.albumName?.takeIf { it.isNotBlank() }
+        val nextAlbum = nextSong.albumName?.takeIf { it.isNotBlank() }
+        if (currentAlbum != null && nextAlbum != null) {
+            return currentAlbum == nextAlbum
+        }
+
+        return false
+    }
 
     /**
      * Constructs an interleaved queue for starting a Context (Album, Playlist, Artist):

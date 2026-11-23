@@ -275,6 +275,8 @@ fun SettingsScreen(
     val bestPartIsNew = AppSettings.FEATURE_BEST_PART !in seenNewFeatures
     val sleepTimerFadeOut by AppSettings.sleepTimerFadeOut.collectAsStateWithLifecycle()
     val sleepTimerFadeOutIsNew = AppSettings.FEATURE_SLEEP_TIMER_FADE_OUT !in seenNewFeatures
+    val albumGaplessPlayback by AppSettings.albumGaplessPlayback.collectAsStateWithLifecycle()
+    val albumGaplessPlaybackIsNew = AppSettings.FEATURE_ALBUM_GAPLESS_PLAYBACK !in seenNewFeatures
     val automixModelIsNew = AppSettings.FEATURE_AUTOMIX_MODEL !in seenNewFeatures
     val driveBackupIsNew = AppSettings.FEATURE_DRIVE_BACKUP !in seenNewFeatures
     val showTotalDuration by AppSettings.showTotalDuration.collectAsStateWithLifecycle()
@@ -286,7 +288,7 @@ fun SettingsScreen(
     val showPlayerShuffleRepeatButtons by AppSettings.showPlayerShuffleRepeatButtons.collectAsStateWithLifecycle()
     val playerShuffleRepeatIsNew = AppSettings.FEATURE_PLAYER_SHUFFLE_REPEAT !in seenNewFeatures
     val playerLyricsIsNew = bestPartIsNew || coverAnimationMenuIsNew || coverAnimSlideIsNew || coverAnimFluidIsNew || coverAnimAutomixIsNew || showTotalDurationIsNew || hideLyricsPreviewIsNew || disableSpotifyCanvasIsNew || playerShuffleRepeatIsNew
-    val audioPlaybackIsNew = sleepTimerFadeOutIsNew || crossfadeOnNextIsNew || automixModelIsNew
+    val audioPlaybackIsNew = sleepTimerFadeOutIsNew || crossfadeOnNextIsNew || automixModelIsNew || albumGaplessPlaybackIsNew
     val yourDataIsNew = driveBackupIsNew
     val accentIsDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val sessionId by AppSettings.audioSessionId.collectAsStateWithLifecycle()
@@ -1455,6 +1457,30 @@ fun SettingsScreen(
                             val next = !smartFade
                             if (next) AppSettings.markFeatureSeen(AppSettings.FEATURE_AUTOMIX_MODEL)
                             AppSettings.setSmartFadeEnabled(next)
+                        },
+                    )
+                }
+            }
+            val albumGaplessTitle = stringResource(R.string.album_gapless_playback)
+            row(albumGaplessTitle, "album", "gapless", "automix", "crossfade") {
+                BypassedByBitPerfect(bitPerfectReady) {
+                    SettingsRow(
+                        icon = SfIcons.Album,
+                        title = albumGaplessTitle,
+                        subtitle = stringResource(R.string.album_gapless_playback_subtitle),
+                        badge = stringResource(R.string.settings_badge_new).takeIf { albumGaplessPlaybackIsNew },
+                        trailing = {
+                            IosSwitch(
+                                checked = albumGaplessPlayback,
+                                onCheckedChange = { on ->
+                                    AppSettings.markFeatureSeen(AppSettings.FEATURE_ALBUM_GAPLESS_PLAYBACK)
+                                    AppSettings.setAlbumGaplessPlayback(on)
+                                },
+                            )
+                        },
+                        onClick = {
+                            AppSettings.markFeatureSeen(AppSettings.FEATURE_ALBUM_GAPLESS_PLAYBACK)
+                            AppSettings.setAlbumGaplessPlayback(!albumGaplessPlayback)
                         },
                     )
                 }

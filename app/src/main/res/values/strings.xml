@@ -353,6 +353,8 @@
     <string name="crossfade_on_skip">Crossfade on next/previous</string>
     <string name="crossfade_on_skip_subtitle">Fade between tracks when you skip to the next or previous song</string>
     <string name="automix">Automix [BETA]</string>
+    <string name="album_gapless_playback">Gapless album playback</string>
+    <string name="album_gapless_playback_subtitle">Pauses AutoMix and crossfade on albums to preserve original transitions between tracks</string>
     <string name="automix_performance">Automix performance</string>
     <string name="automix_performance_subtitle">Sets how much CPU background analysis may use</string>
     <string name="automix_performance_warning">Higher performance analyses tracks faster, but can use more battery and make the phone warmer.</string>

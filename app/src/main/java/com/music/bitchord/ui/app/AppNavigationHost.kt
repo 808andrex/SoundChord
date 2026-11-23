@@ -1027,7 +1027,10 @@ internal fun AppNavigationHost(
 
                 val withAlbum: (Song) -> Song = { song ->
                     if (page.type == BrowseType.ALBUM) {
-                        song.copy(albumName = song.albumName ?: page.title)
+                        song.copy(
+                            albumName = song.albumName ?: page.title,
+                            albumId = song.albumId ?: page.browseId,
+                        )
                     } else {
                         song
                     }
@@ -1042,6 +1045,7 @@ internal fun AppNavigationHost(
                         page.title,
                         PlaybackSourceType.BROWSE,
                         page.browseId,
+                        page.type,
                     )
                     val selected = songs.getOrNull(index)
                     val pageKeys =

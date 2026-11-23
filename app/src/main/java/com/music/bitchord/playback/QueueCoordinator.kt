@@ -22,6 +22,16 @@ private fun Player.queueTierAt(index: Int): QueueTier = getMediaItemAt(index).qu
  */
 object QueueCoordinator {
 
+    fun isAlbumSource(source: QueueSource?): Boolean = QueueTimeline.isAlbumSource(source)
+
+    fun isAlbumBrowseId(id: String): Boolean = QueueTimeline.isAlbumBrowseId(id)
+
+    fun isAlbumGaplessTransition(
+        currentSong: Song?,
+        nextSong: Song?,
+        contextSource: QueueSource?,
+    ): Boolean = QueueTimeline.isAlbumGaplessTransition(currentSong, nextSong, contextSource)
+
     /** @see QueueTimeline.asQueueEntry */
     fun Song.asQueueEntry(tier: QueueTier): Song = with(QueueTimeline) { asQueueEntry(tier) }
 

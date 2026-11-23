@@ -292,6 +292,7 @@ object BoundedContextPersistence {
                 title = context.sourceTitle,
                 type = sourceType,
                 id = context.sourceId,
+                browseType = context.sourceBrowseType?.let { runCatching { com.music.bitchord.data.model.BrowseType.valueOf(it) }.getOrNull() },
             )
 
             val restoredWindow = window.toSnapshot() ?: return null
@@ -322,6 +323,7 @@ object BoundedContextPersistence {
         val continuationState: String,
         val diagnostic: String? = null,
         val seenContinuationTokens: List<String> = emptyList(),
+        val sourceBrowseType: String? = null,
     ) {
         companion object {
             fun from(snapshot: ContextSnapshot, source: QueueSource) = StoredContext(
@@ -336,6 +338,7 @@ object BoundedContextPersistence {
                 continuationState = snapshot.continuationState.name,
                 diagnostic = snapshot.diagnostic?.name,
                 seenContinuationTokens = snapshot.seenContinuationTokens,
+                sourceBrowseType = source.browseType?.name,
             )
         }
     }

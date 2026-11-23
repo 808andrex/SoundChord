@@ -2,6 +2,7 @@ package com.music.bitchord
 
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.PlaybackSourceType
 import com.music.bitchord.data.model.QueueTier
 import com.music.bitchord.data.model.Song
@@ -15,6 +16,7 @@ import com.music.bitchord.playback.queueTier
 import com.music.bitchord.playback.toMediaItem
 import com.music.bitchord.playback.canonicalIndex
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -1435,6 +1437,53 @@ class QueueCoordinatorTest {
 
         // All canonical tracks are in order 0..9
         assertEquals((0..9).map { "c$it" }, testPlayer.items.map { it.mediaId })
+    }
+
+    @Test
+    fun `isAlbumGaplessTransition returns true for consecutive tracks of the same album when source is an album`() {
+        val albumSource = QueueSource("Hurry Up Tomorrow", PlaybackSourceType.BROWSE, "MPREb_the_weeknd", BrowseType.ALBUM)
+        val song1 = Song("track1", "Track 1", "The Weeknd", null, albumId = "MPREb_the_weeknd", albumName = "Hurry Up Tomorrow")
+        val song2 = Song("track2", "Track 2", "The Weeknd", null, albumId = "MPREb_the_weeknd", albumName = "Hurry Up Tomorrow")
+
+        assertTrue(QueueCoordinator.isAlbumGaplessTransition(song1, song2, albumSource))
+    }
+
+    @Test
+    fun `isAlbumGaplessTransition returns false when songs belong to different albums even if started from an album`() {
+        val albumSource = QueueSource("Hurry Up Tomorrow", PlaybackSourceType.BROWSE, "MPREb_the_weeknd", BrowseType.ALBUM)
+        val song1 = Song("track1", "Track 1", "The Weeknd", null, albumId = "MPREb_the_weeknd", albumName = "Hurry Up Tomorrow")
+        val userQueued = Song("guest", "Random Song", "Other Artist", null, albumId = "different_album_id", albumName = "Other Album")
+
+        assertFalse(QueueCoordinator.isAlbumGaplessTransition(song1, userQueued, albumSource))
+    }
+
+    @Test
+    fun `isAlbumGaplessTransition returns false when source is a playlist even if tracks share an albumId`() {
+        val playlistSource = QueueSource("Today's Hits", PlaybackSourceType.BROWSE, "VLPL_playlist", BrowseType.PLAYLIST)
+        val song1 = Song("track1", "Track 1", "The Weeknd", null, albumId = "MPREb_the_weeknd", albumName = "Hurry Up Tomorrow")
+        val song2 = Song("track2", "Track 2", "The Weeknd", null, albumId = "MPREb_the_weeknd", albumName = "Hurry Up Tomorrow")
+
+        assertFalse(QueueCoordinator.isAlbumGaplessTransition(song1, song2, playlistSource))
+    }
+
+    @Test
+    fun `isAlbumGaplessTransition returns false when source is search or radio`() {
+        val searchSource = QueueSource("Search", PlaybackSourceType.SEARCH, null)
+        val radioSource = QueueSource("Radio", PlaybackSourceType.QUEUE, "radio:123")
+        val song1 = Song("track1", "Track 1", "The Weeknd", null, albumId = "MPREb_the_weeknd", albumName = "Hurry Up Tomorrow")
+        val song2 = Song("track2", "Track 2", "The Weeknd", null, albumId = "MPREb_the_weeknd", albumName = "Hurry Up Tomorrow")
+
+        assertFalse(QueueCoordinator.isAlbumGaplessTransition(song1, song2, searchSource))
+        assertFalse(QueueCoordinator.isAlbumGaplessTransition(song1, song2, radioSource))
+    }
+
+    @Test
+    fun `isAlbumGaplessTransition returns true when albumId is missing but albumName and context match album source`() {
+        val albumSource = QueueSource("Hurry Up Tomorrow", PlaybackSourceType.BROWSE, "MPREb_the_weeknd", BrowseType.ALBUM)
+        val song1 = Song("track1", "Track 1", "The Weeknd", null, albumId = null, albumName = "Hurry Up Tomorrow", playbackSourceId = "MPREb_the_weeknd", playbackSourceType = PlaybackSourceType.BROWSE)
+        val song2 = Song("track2", "Track 2", "The Weeknd", null, albumId = null, albumName = "Hurry Up Tomorrow", playbackSourceId = "MPREb_the_weeknd", playbackSourceType = PlaybackSourceType.BROWSE)
+
+        assertTrue(QueueCoordinator.isAlbumGaplessTransition(song1, song2, albumSource))
     }
 
     /** Tiers looked up by song, since MediaItem metadata extras don't survive on the JVM. */

@@ -228,6 +228,7 @@ object AppSettings {
     const val FEATURE_HIDE_LYRICS_PREVIEW = "hide_lyrics_preview"
     const val FEATURE_DISABLE_SPOTIFY_CANVAS = "disable_spotify_canvas"
     const val FEATURE_PLAYER_SHUFFLE_REPEAT = "player_shuffle_repeat"
+    const val FEATURE_ALBUM_GAPLESS_PLAYBACK = "album_gapless_playback"
 
     private lateinit var prefs: SharedPreferences
 
@@ -330,6 +331,7 @@ object AppSettings {
      * See [com.music.bitchord.playback.smart.TransitionPlanner].
      */
     val smartFadeEnabled = MutableStateFlow(false)
+    val albumGaplessPlayback = MutableStateFlow(true)
     val sleepTimerFadeOut = MutableStateFlow(true)
 
     /** The CPU budget used by Beat This! and vocal analysis for Automix. */
@@ -1125,6 +1127,7 @@ object AppSettings {
         crossfadeSeconds.value = prefs.getInt(KEY_CROSSFADE, 0)
         crossfadeOnSkip.value = prefs.getBoolean(KEY_CROSSFADE_ON_SKIP, true)
         smartFadeEnabled.value = prefs.getBoolean(KEY_SMART_FADE, false)
+        albumGaplessPlayback.value = prefs.getBoolean(KEY_ALBUM_GAPLESS_PLAYBACK, true)
         sleepTimerFadeOut.value = prefs.getBoolean(KEY_SLEEP_TIMER_FADE_OUT, true)
         automixPerformanceMode.value = runCatching {
             AutomixPerformanceMode.valueOf(
@@ -1479,6 +1482,11 @@ object AppSettings {
     fun setSmartFadeEnabled(value: Boolean) {
         smartFadeEnabled.value = value
         prefs.edit().putBoolean(KEY_SMART_FADE, value).apply()
+    }
+
+    fun setAlbumGaplessPlayback(value: Boolean) {
+        albumGaplessPlayback.value = value
+        prefs.edit().putBoolean(KEY_ALBUM_GAPLESS_PLAYBACK, value).apply()
     }
 
     fun setSleepTimerFadeOut(value: Boolean) {
@@ -2550,6 +2558,7 @@ object AppSettings {
     private const val KEY_CROSSFADE = "crossfade_seconds"
     private const val KEY_CROSSFADE_ON_SKIP = "crossfade_on_skip"
     private const val KEY_SMART_FADE = "smart_fade_enabled"
+    private const val KEY_ALBUM_GAPLESS_PLAYBACK = "album_gapless_playback"
     private const val KEY_SLEEP_TIMER_FADE_OUT = "sleep_timer_fade_out"
     private const val KEY_AUTOMIX_PERFORMANCE_MODE = "automix_performance_mode"
     private const val KEY_SKIP_SILENCE = "skip_silence"

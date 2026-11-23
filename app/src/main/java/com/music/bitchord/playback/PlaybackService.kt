@@ -2200,6 +2200,7 @@ class PlaybackService : MediaLibraryService() {
             syncedLines = ::loopMixLyrics,
             loudnessGain = ::loudnessGainFor,
             onMixPositionJump = { wrapped -> (mediaSession?.player as? SessionPlayer)?.announceMixPosition(wrapped) },
+            currentQueueSource = { boundedContextSource },
         )
 
     /**
@@ -3474,12 +3475,16 @@ class PlaybackService : MediaLibraryService() {
         val source = request.source
         val requestedSongs = request.songs
             .filterNot { it.isUnresolvedSpotify }
-            .map { it.copy(
-                queueTier = QueueTier.CONTEXT,
-                playbackSource = source.title,
-                playbackSourceType = source.type,
-                playbackSourceId = source.id,
-            ) }
+            .map { song ->
+                val effectiveAlbumId = if (source.isAlbum && song.albumId == null) source.id else song.albumId
+                song.copy(
+                    queueTier = QueueTier.CONTEXT,
+                    playbackSource = source.title,
+                    playbackSourceType = source.type,
+                    playbackSourceId = source.id,
+                    albumId = effectiveAlbumId,
+                )
+            }
         if (requestedSongs.isEmpty()) return null
 
         val requestedIndex = request.startIndex
@@ -3607,11 +3612,13 @@ class PlaybackService : MediaLibraryService() {
                 failures = 0
                 val source = boundedContextSource
                 val songs = page.songs.map { song ->
+                    val effectiveAlbumId = if (source?.isAlbum == true && song.albumId == null) source.id else song.albumId
                     if (source == null) song else song.copy(
                         queueTier = QueueTier.CONTEXT,
                         playbackSource = source.title,
                         playbackSourceType = source.type,
                         playbackSourceId = source.id,
+                        albumId = effectiveAlbumId,
                     )
                 }
                 val result = boundedContextRegistry.complete(

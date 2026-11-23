@@ -230,7 +230,12 @@ class CrossfadeController(
     private val loudnessGain: (String) -> Float = { 1f },
     /** The session's playhead moved on purpose during a loop mix: a loop wrap (true) or a re-anchor (false). */
     private val onMixPositionJump: (wrapped: Boolean) -> Unit = {},
+    /** Active context / queue source from PlaybackService, for album detection. */
+    private val currentQueueSource: () -> QueueSource? = { null },
 ) {
+
+    private fun isAlbumGaplessTransition(currentSong: com.music.bitchord.data.model.Song, nextSong: com.music.bitchord.data.model.Song): Boolean =
+        QueueCoordinator.isAlbumGaplessTransition(currentSong, nextSong, currentQueueSource())
 
     private enum class Phase {
         /** Nothing in flight; watching for the next transition. */
@@ -878,6 +883,13 @@ class CrossfadeController(
             out.previousMediaItemIndex
         }
         if (target == C.INDEX_UNSET) return false
+        if (AppSettings.albumGaplessPlayback.value) {
+            val currentItem = out.currentMediaItem
+            val targetItem = out.getMediaItemAt(target)
+            if (currentItem != null && isAlbumGaplessTransition(currentItem.toSong(), targetItem.toSong())) {
+                return false
+            }
+        }
         val duration = out.duration
         if (duration == C.TIME_UNSET || duration <= 0L) return false
         val left = duration - out.currentPosition
@@ -914,6 +926,12 @@ class CrossfadeController(
         val out = active()
         if (!out.isPlaying || items.isEmpty() || targetIndex !in items.indices) return false
         if (items[targetIndex].mediaId == out.currentMediaItem?.mediaId) return false
+        if (AppSettings.albumGaplessPlayback.value) {
+            val currentItem = out.currentMediaItem
+            if (currentItem != null && isAlbumGaplessTransition(currentItem.toSong(), items[targetIndex].toSong())) {
+                return false
+            }
+        }
         val originalTargetIndex = (0 until out.mediaItemCount).firstOrNull { index ->
             out.getMediaItemAt(index).mediaId == items[targetIndex].mediaId
         }
@@ -1044,6 +1062,15 @@ class CrossfadeController(
      * playing is left for the playing path to decide.
      */
     private fun refreshMarkerWhilePaused(player: ExoPlayer) {
+        if (AppSettings.albumGaplessPlayback.value) {
+            val item = player.currentMediaItem
+            val nextIndex = player.nextMediaItemIndex
+            val nextItem = if (nextIndex != C.INDEX_UNSET) player.getMediaItemAt(nextIndex) else null
+            if (item != null && nextItem != null && isAlbumGaplessTransition(item.toSong(), nextItem.toSong())) {
+                AppSettings.smartTransitionWindow.value = null
+                return
+            }
+        }
         if (!AppSettings.smartFadeEnabled.value) {
             val item = player.currentMediaItem
             val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0L }
@@ -1138,6 +1165,21 @@ class CrossfadeController(
         if (!player.hasNextMediaItem()) {
             AppSettings.smartTransitionWindow.value = null
             return
+        }
+
+        if (AppSettings.albumGaplessPlayback.value) {
+            val currentItem = player.currentMediaItem
+            val nextIndex = player.nextMediaItemIndex
+            val nextItem = if (nextIndex != C.INDEX_UNSET) player.getMediaItemAt(nextIndex) else null
+            if (currentItem != null && nextItem != null) {
+                val currentSong = currentItem.toSong()
+                val nextSong = nextItem.toSong()
+                if (isAlbumGaplessTransition(currentSong, nextSong)) {
+                    AppSettings.smartTransitionWindow.value = null
+                    AppSettings.smartMixInProgress.value = false
+                    return
+                }
+            }
         }
 
         val duration = player.duration
@@ -2657,6 +2699,7 @@ class CrossfadeController(
         AppSettings.playbackSpeed.value != 1f -> "playback speed is not 1x"
         player.skipSilenceEnabled -> "skip silence is on"
         SleepTimer.afterTrack.value -> "sleep timer"
+        AppSettings.albumGaplessPlayback.value && isAlbumGaplessTransition(current.toSong(), next.toSong()) -> "album gapless playback"
         state.current != TrackAnalysisState.ANALYSED || state.next != TrackAnalysisState.ANALYSED -> "waiting on analysis"
         isSourceBacked(current) || isSourceBacked(next) -> "analysed off another recording"
         loopPortOf(player)?.supportsLoopMix != true -> "this output can't take it"
@@ -3085,8 +3128,12 @@ class CrossfadeController(
     private fun publishAutomixDetail() {
         val player = active()
         val item = player.currentMediaItem
+        val nextIndex = player.nextMediaItemIndex
+        val next = if (nextIndex == C.INDEX_UNSET) null else player.getMediaItemAt(nextIndex)
+        val isGaplessAlbum = AppSettings.albumGaplessPlayback.value && item != null && next != null &&
+            isAlbumGaplessTransition(item.toSong(), next.toSong())
         val text = when {
-            !AppSettings.smartFadeEnabled.value || item == null || ListenTogether.state.value.inParty -> null
+            !AppSettings.smartFadeEnabled.value || item == null || ListenTogether.state.value.inParty || isGaplessAlbum -> null
             else -> describeAutomix(player, item)
         }
         if (AppSettings.automixDetail.value != text) AppSettings.automixDetail.value = text
@@ -3296,7 +3343,15 @@ class CrossfadeController(
     private fun stillWorthFading(): Boolean {
         if (manualFade) return AppSettings.crossfadeOnSkip.value
         val stillOn = if (smartFadeActive) AppSettings.smartFadeEnabled.value else configuredFadeMs() > 0L
-        return stillOn && (outgoing ?: active()).hasNextMediaItem()
+        if (!stillOn) return false
+        if (AppSettings.albumGaplessPlayback.value) {
+            val current = (outgoing ?: active()).currentMediaItem
+            val into = incoming?.currentMediaItem
+            if (current != null && into != null && isAlbumGaplessTransition(current.toSong(), into.toSong())) {
+                return false
+            }
+        }
+        return (outgoing ?: active()).hasNextMediaItem()
     }
 
     /**
