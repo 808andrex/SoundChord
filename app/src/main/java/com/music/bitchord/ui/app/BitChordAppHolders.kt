@@ -26,6 +26,7 @@ import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.listentogether.ServerConnectionState
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsSource
+import com.music.bitchord.data.backup.RemoteDevice
 import com.music.bitchord.data.model.Account
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.DetailPage
@@ -83,6 +84,7 @@ import com.music.bitchord.data.stats.ReplayPeriod
 import com.music.bitchord.ui.replay.ReplayState
 import com.music.bitchord.ui.replay.ReplayStoryPage
 import com.music.bitchord.ui.screens.DiscordDialog
+import com.music.bitchord.ui.screens.DriveBackupAlerts
 import com.music.bitchord.ui.screens.LibraryLink
 import com.music.bitchord.ui.screens.LocalFolderState
 import com.music.bitchord.ui.theme.ArtworkPalette
@@ -328,6 +330,7 @@ internal class BitChordSheetsUiState(
     val confirmJioSaavn: Boolean,
     val confirmBitPerfect: BitPerfectMode?,
     val confirmFixedVolume: Boolean,
+    val driveAlerts: DriveBackupAlerts,
     val blockedAddonSong: Song?,
     val addonLeftOutOfDownload: Pair<String, SourceRegistry.DownloadExclusion>?,
     val showAboutWhatsNew: Boolean,
@@ -401,6 +404,10 @@ internal class BitChordAppActions(
     val onConfirmJioSaavnChange: (Boolean) -> Unit,
     val onConfirmBitPerfectChange: (BitPerfectMode?) -> Unit,
     val onConfirmFixedVolumeChange: (Boolean) -> Unit,
+    val onConfirmDriveDisconnect: () -> Unit,
+    val onConfirmDriveRemove: (RemoteDevice) -> Unit,
+    val onConfirmDriveRestore: (RemoteDevice) -> Unit,
+    val onConfirmDriveRename: (String) -> Unit,
     val onBlockedAddonSongChange: (Song?) -> Unit,
     val onAddonLeftOutOfDownloadChange: (Pair<String, SourceRegistry.DownloadExclusion>?) -> Unit,
     val onEditingPartyServerChange: (Boolean) -> Unit,
@@ -467,6 +474,7 @@ internal class BitChordSheetStateHolder {
     var confirmJioSaavn by mutableStateOf(false)
     var confirmBitPerfect by mutableStateOf<BitPerfectMode?>(null)
     var confirmFixedVolume by mutableStateOf(false)
+    val driveAlerts = DriveBackupAlerts()
     var blockedAddonSong by mutableStateOf<Song?>(null)
     var addonLeftOutOfDownload by mutableStateOf<Pair<String, SourceRegistry.DownloadExclusion>?>(null)
     var editingPartyServer by mutableStateOf(false)
@@ -618,6 +626,7 @@ internal fun rememberBitChordSheetsUiState(
     confirmJioSaavn = sheetHolder.confirmJioSaavn,
     confirmBitPerfect = sheetHolder.confirmBitPerfect,
     confirmFixedVolume = sheetHolder.confirmFixedVolume,
+    driveAlerts = sheetHolder.driveAlerts,
     blockedAddonSong = sheetHolder.blockedAddonSong,
     addonLeftOutOfDownload = sheetHolder.addonLeftOutOfDownload,
     showAboutWhatsNew = sheetHolder.showAboutWhatsNew,

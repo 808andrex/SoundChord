@@ -159,6 +159,7 @@ import com.music.bitchord.data.settings.OutputPcmMode
 import com.music.bitchord.data.settings.BitPerfectMode
 import com.music.bitchord.playback.AudioOutputStatus
 import com.music.bitchord.playback.audio.bitperfect.BitPerfectOutput
+import com.music.bitchord.playback.smart.AutomixModels
 import com.music.bitchord.data.settings.AutomixPerformanceMode
 import com.music.bitchord.R
 import com.music.bitchord.data.sources.DeviceCodecs
@@ -194,6 +195,8 @@ fun SettingsScreen(
     onAccountScrobbling: () -> Unit,
     onEqualizer: () -> Unit,
     onOpenReplay: () -> Unit,
+    /** Opens [DriveBackupScreen], under Backup and Restore. */
+    onDriveBackup: () -> Unit = {},
     onLyricsSources: () -> Unit,
     onTranslationLanguage: () -> Unit,
     onSources: () -> Unit,
@@ -226,6 +229,7 @@ fun SettingsScreen(
     val crossfade by AppSettings.crossfadeSeconds.collectAsStateWithLifecycle()
     val crossfadeOnSkip by AppSettings.crossfadeOnSkip.collectAsStateWithLifecycle()
     val smartFade by AppSettings.smartFadeEnabled.collectAsStateWithLifecycle()
+    val automixModels by AutomixModels.state.collectAsStateWithLifecycle()
     val automixPerformance by AppSettings.automixPerformanceMode.collectAsStateWithLifecycle()
     val skipSilence by AppSettings.skipSilence.collectAsStateWithLifecycle()
     val dolbyAtmos by AppSettings.dolbyAtmos.collectAsStateWithLifecycle()
@@ -271,8 +275,11 @@ fun SettingsScreen(
     val bestPartIsNew = AppSettings.FEATURE_BEST_PART !in seenNewFeatures
     val sleepTimerFadeOut by AppSettings.sleepTimerFadeOut.collectAsStateWithLifecycle()
     val sleepTimerFadeOutIsNew = AppSettings.FEATURE_SLEEP_TIMER_FADE_OUT !in seenNewFeatures
+    val automixModelIsNew = AppSettings.FEATURE_AUTOMIX_MODEL !in seenNewFeatures
+    val driveBackupIsNew = AppSettings.FEATURE_DRIVE_BACKUP !in seenNewFeatures
     val playerLyricsIsNew = bestPartIsNew || coverAnimationMenuIsNew || coverAnimSlideIsNew || coverAnimFluidIsNew || coverAnimAutomixIsNew
-    val audioPlaybackIsNew = sleepTimerFadeOutIsNew || crossfadeOnNextIsNew
+    val audioPlaybackIsNew = sleepTimerFadeOutIsNew || crossfadeOnNextIsNew || automixModelIsNew
+    val yourDataIsNew = driveBackupIsNew
     val accentIsDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val sessionId by AppSettings.audioSessionId.collectAsStateWithLifecycle()
     val outputPcmMode by AppSettings.outputPcmMode.collectAsStateWithLifecycle()
@@ -357,6 +364,7 @@ fun SettingsScreen(
     var importStatus by remember { mutableStateOf<String?>(null) }
     var confirmImport by remember { mutableStateOf(false) }
     var confirmClearSongCache by remember { mutableStateOf(false) }
+    var confirmDeleteAutomixModel by remember { mutableStateOf(false) }
     var showPerformanceWarning by remember { mutableStateOf(false) }
     var showPerformanceConfirmation by remember { mutableStateOf(false) }
     val backupScope = rememberCoroutineScope()
@@ -580,6 +588,7 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = SfIcons.YourData,
                     title = stringResource(R.string.settings_category_your_data_replay),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { yourDataIsNew },
                     onClick = { onOpenSection(SettingsCategory.YOUR_DATA_REPLAY) },
                 )
                 RowDivider()
@@ -1338,18 +1347,93 @@ fun SettingsScreen(
                     SettingsRow(
                         iconPainter = painterResource(R.drawable.automix_icon),
                         title = automixTitle,
-                        subtitle = if (smartFade) {
-                            stringResource(R.string.automix_enabled_subtitle)
-                        } else {
-                            stringResource(R.string.automix_disabled_subtitle)
-                        },
+                        subtitle = stringResource(
+                            if (smartFade) R.string.automix_enabled_subtitle else R.string.automix_disabled_subtitle,
+                        ),
                         trailing = {
                             IosSwitch(
                                 checked = smartFade,
-                                onCheckedChange = AppSettings::setSmartFadeEnabled,
+                                onCheckedChange = { on ->
+                                    if (on) AppSettings.markFeatureSeen(AppSettings.FEATURE_AUTOMIX_MODEL)
+                                    AppSettings.setSmartFadeEnabled(on)
+                                },
                             )
                         },
-                        onClick = { AppSettings.setSmartFadeEnabled(!smartFade) },
+                        onClick = {
+                            val next = !smartFade
+                            if (next) AppSettings.markFeatureSeen(AppSettings.FEATURE_AUTOMIX_MODEL)
+                            AppSettings.setSmartFadeEnabled(next)
+                        },
+                    )
+                }
+            }
+            // The weights Automix analyses with live outside the APK (see
+            // AutomixModels): switching Automix on fetches them by itself,
+            // and this row lets them be fetched ahead of time, retried after
+            // a failure, or removed to free the space.
+            val automixModelTitle = stringResource(R.string.automix_model)
+            row(automixModelTitle, "automix", "model", "download", "storage", "free space") {
+                val modelMb = (AutomixModels.totalBytes / 1_000_000).toInt()
+                val badgeNew = stringResource(R.string.settings_badge_new).takeIf { automixModelIsNew }
+                when (val model = automixModels) {
+                    is AutomixModels.State.Downloading -> SettingsRow(
+                        icon = SfIcons.Download,
+                        title = automixModelTitle,
+                        badge = badgeNew,
+                        subtitle = stringResource(
+                            R.string.automix_models_downloading,
+                            modelMb,
+                            (model.fraction * 100).toInt(),
+                        ),
+                    )
+                    AutomixModels.State.Failed -> SettingsRow(
+                        icon = SfIcons.Download,
+                        title = automixModelTitle,
+                        badge = badgeNew,
+                        subtitleContent = {
+                            SubtitleWithAction(
+                                stringResource(R.string.automix_models_failed),
+                                stringResource(R.string.retry),
+                            )
+                        },
+                        onClick = {
+                            AppSettings.markFeatureSeen(AppSettings.FEATURE_AUTOMIX_MODEL)
+                            AutomixModels.download()
+                        },
+                        trailing = {},
+                    )
+                    AutomixModels.State.Ready -> SettingsRow(
+                        icon = SfIcons.Downloaded,
+                        title = automixModelTitle,
+                        badge = badgeNew,
+                        subtitleContent = {
+                            SubtitleWithAction(
+                                stringResource(R.string.automix_model_ready, modelMb),
+                                stringResource(R.string.delete),
+                                actionColor = MaterialTheme.colorScheme.error,
+                            )
+                        },
+                        onClick = {
+                            AppSettings.markFeatureSeen(AppSettings.FEATURE_AUTOMIX_MODEL)
+                            confirmDeleteAutomixModel = true
+                        },
+                        trailing = {},
+                    )
+                    AutomixModels.State.Missing -> SettingsRow(
+                        icon = SfIcons.Download,
+                        title = automixModelTitle,
+                        badge = badgeNew,
+                        subtitleContent = {
+                            SubtitleWithAction(
+                                stringResource(R.string.automix_model_missing),
+                                stringResource(R.string.automix_model_download, modelMb),
+                            )
+                        },
+                        onClick = {
+                            AppSettings.markFeatureSeen(AppSettings.FEATURE_AUTOMIX_MODEL)
+                            AutomixModels.download()
+                        },
+                        trailing = {},
                     )
                 }
             }
@@ -2216,6 +2300,17 @@ fun SettingsScreen(
                     onClick = { confirmImport = true },
                 )
             }
+            val driveBackupTitle = stringResource(R.string.drive_backup_title)
+            row(driveBackupTitle, "backup", "restore", "google", "drive", "cloud") {
+                DriveBackupSettingsRow(
+                    title = driveBackupTitle,
+                    badge = stringResource(R.string.settings_badge_new).takeIf { driveBackupIsNew },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_DRIVE_BACKUP)
+                        onDriveBackup()
+                    },
+                )
+            }
         }
 
         // No footer: it only restated the stop-on-close row's own subtitle,
@@ -2467,6 +2562,37 @@ fun SettingsScreen(
         )
     }
 
+    // Deleting also turns Automix off: left on, its next analysis pass would
+    // simply download the model again.
+    if (confirmDeleteAutomixModel) {
+        AlertDialog(
+            onDismissRequest = { confirmDeleteAutomixModel = false },
+            title = { Text(stringResource(R.string.automix_model_delete_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.automix_model_delete_warning,
+                        (AutomixModels.totalBytes / 1_000_000).toInt(),
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDeleteAutomixModel = false
+                    AppSettings.setSmartFadeEnabled(false)
+                    AutomixModels.delete()
+                }) {
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteAutomixModel = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
+
     // Asked before the picker opens rather than after a file is chosen: the
     // thing being confirmed is that this device's own history is about to be
     // thrown away, and that is true whichever file gets picked.
@@ -2655,7 +2781,7 @@ fun SettingsScreen(
 }
 
 /** "3 months of listening" — the unit a backup is actually measured in. */
-private fun Context.countOfMonths(months: Int): String = if (months == 0) {
+internal fun Context.countOfMonths(months: Int): String = if (months == 0) {
     getString(R.string.no_listening_history)
 } else {
     resources.getQuantityString(R.plurals.listening_month_count, months, months)
@@ -3194,6 +3320,31 @@ internal fun RowDivider() {
         modifier = Modifier.padding(start = TEXT_INSET),
         thickness = 0.5.dp,
         color = MaterialTheme.colorScheme.outline,
+    )
+}
+
+/**
+ * A row's description with what tapping the row does set under it in
+ * [actionColor] — for rows whose action is too long to sit on the right.
+ */
+@Composable
+private fun SubtitleWithAction(
+    subtitle: String,
+    action: String,
+    actionColor: Color = MaterialTheme.colorScheme.primary,
+) {
+    Text(
+        text = subtitle,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 5,
+    )
+    Text(
+        text = action,
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = FontWeight.Medium,
+        color = actionColor,
+        modifier = Modifier.padding(top = 6.dp),
     )
 }
 
@@ -3862,12 +4013,14 @@ internal fun <T> ChoiceGroup(
     footer: String?,
     detail: (@Composable (T) -> String)? = null,
     enabled: (T) -> Boolean = { true },
+    /** Set where the card is one of several on its page rather than the whole of it. */
+    header: String? = null,
     onSelect: (T) -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
     // Every page it is the body of leads with its large heading — see
     // [SettingsPageTitle], whose own bottom padding is all the room it needs.
-    SettingsGroup(footer = footer, topSpacing = 0.dp) {
+    SettingsGroup(header = header, footer = footer, topSpacing = 0.dp) {
         options.forEachIndexed { index, option ->
             if (index > 0) {
                 HorizontalDivider(

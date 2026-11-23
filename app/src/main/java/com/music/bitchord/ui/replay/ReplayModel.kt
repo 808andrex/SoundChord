@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -68,7 +69,7 @@ fun rememberReplayState(active: Boolean): Pair<ReplayState, (ReplayPeriod) -> Un
         if (!active) return@LaunchedEffect
         // A directory listing, so off the composition's thread.
         memberSince = withContext(Dispatchers.IO) {
-            ListeningStats.months().firstOrNull()?.let {
+            ListeningStats.allMonths().firstOrNull()?.let {
                 "%02d/%02d".format(Locale.ROOT, it.monthValue, it.year % 100)
             }
         }
@@ -91,7 +92,8 @@ fun rememberReplayState(active: Boolean): Pair<ReplayState, (ReplayPeriod) -> Un
         // with the Replay closed. `collectLatest` gives the debounce for free —
         // a burst of lookups cancels each pending delay and only the last one
         // gets as far as a rebuild.
-        ArtistFacts.revision.drop(1).collectLatest {
+        // So do other devices' months, when a sync brings newer ones down.
+        merge(ArtistFacts.revision.drop(1), ListeningStats.peerRevision.drop(1)).collectLatest {
             delay(SETTLE_MILLIS)
             summary = ListeningStats.summary(period)
         }

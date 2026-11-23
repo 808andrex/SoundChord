@@ -529,6 +529,8 @@ internal fun BitChordChrome(
                 AppRoute.Sources -> stringResource(R.string.sources)
                 AppRoute.ListenTogether -> stringResource(R.string.listen_together)
                 AppRoute.WearOs -> stringResource(R.string.wear_os_page_title)
+                AppRoute.DriveBackup -> stringResource(R.string.drive_backup_title)
+                AppRoute.DriveDevices -> stringResource(R.string.drive_devices_title)
                 AppRoute.Equalizer -> stringResource(R.string.equalizer)
                 AppRoute.Settings -> stringResource(R.string.settings)
                 AppRoute.About -> stringResource(R.string.settings_category_about)

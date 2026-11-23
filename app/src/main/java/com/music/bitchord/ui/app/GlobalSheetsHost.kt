@@ -107,6 +107,8 @@ import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.ChoiceAlert
 import com.music.bitchord.ui.components.ConfirmationAlert
 import com.music.bitchord.ui.components.DacVolumeHud
+import com.music.bitchord.ui.screens.DriveBackupAlerts
+import com.music.bitchord.ui.screens.DriveBackupAlertsHost
 import com.music.bitchord.ui.components.FieldConfig
 import com.music.bitchord.ui.components.HeldContextMenu
 import com.music.bitchord.ui.components.HeldItem
@@ -655,6 +657,7 @@ data class GlobalSheetsHostState(
     val confirmJioSaavn: Boolean,
     val confirmBitPerfect: BitPerfectMode?,
     val confirmFixedVolume: Boolean,
+    val driveAlerts: DriveBackupAlerts,
     val blockedAddonSong: Song?,
     val addonLeftOutOfDownload: Pair<String, SourceRegistry.DownloadExclusion>?,
     val showAboutWhatsNew: Boolean,
@@ -732,6 +735,7 @@ internal fun rememberGlobalSheetsHostState(
     confirmJioSaavn: Boolean,
     confirmBitPerfect: BitPerfectMode?,
     confirmFixedVolume: Boolean,
+    driveAlerts: DriveBackupAlerts,
     blockedAddonSong: Song?,
     addonLeftOutOfDownload: Pair<String, SourceRegistry.DownloadExclusion>?,
     showAboutWhatsNew: Boolean,
@@ -806,6 +810,7 @@ internal fun rememberGlobalSheetsHostState(
     confirmJioSaavn = confirmJioSaavn,
     confirmBitPerfect = confirmBitPerfect,
     confirmFixedVolume = confirmFixedVolume,
+    driveAlerts = driveAlerts,
     blockedAddonSong = blockedAddonSong,
     addonLeftOutOfDownload = addonLeftOutOfDownload,
     showAboutWhatsNew = showAboutWhatsNew,
@@ -2076,6 +2081,12 @@ internal fun GlobalSheetsHost(
             onDismiss = actions.onDismissConfirmFixedVolume,
         )
     }
+
+    DriveBackupAlertsHost(
+        alerts = state.driveAlerts,
+        hazeState = state.hazeState,
+        onRestoreStarted = { if (navigator.visibleRoute() == AppRoute.DriveDevices) navigator.pop() },
+    )
 
     DacVolumeHud(state.hazeState)
 

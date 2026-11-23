@@ -41,6 +41,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.R
 import com.music.bitchord.auth.WebSessionMode
+import com.music.bitchord.data.backup.RemoteDevice
+import com.music.bitchord.ui.screens.DriveBackupScreen
+import com.music.bitchord.ui.screens.DriveDevicesScreen
 import com.music.bitchord.data.innertube.InnertubeParser
 import com.music.bitchord.data.OfflinePlaylists
 import com.music.bitchord.data.sources.SourceRegistry
@@ -426,6 +429,10 @@ data class AppNavigationScreenActions(
     val onConfirmJioSaavn: () -> Unit,
     val onConfirmBitPerfect: (BitPerfectMode) -> Unit,
     val onConfirmFixedVolume: () -> Unit,
+    val onConfirmDriveDisconnect: () -> Unit,
+    val onConfirmDriveRemove: (RemoteDevice) -> Unit,
+    val onConfirmDriveRestore: (RemoteDevice) -> Unit,
+    val onConfirmDriveRename: (String) -> Unit,
     val onEditingPartyServer: () -> Unit,
     val onEditingSignatureApi: () -> Unit,
     val onDiscordDialog: (DiscordDialog) -> Unit,
@@ -496,6 +503,10 @@ internal fun rememberAppNavigationScreenActions(
     onConfirmJioSaavn: () -> Unit,
     onConfirmBitPerfect: (BitPerfectMode) -> Unit,
     onConfirmFixedVolume: () -> Unit,
+    onConfirmDriveDisconnect: () -> Unit,
+    onConfirmDriveRemove: (RemoteDevice) -> Unit,
+    onConfirmDriveRestore: (RemoteDevice) -> Unit,
+    onConfirmDriveRename: (String) -> Unit,
     onEditingPartyServer: () -> Unit,
     onEditingSignatureApi: () -> Unit,
     onDiscordDialog: (DiscordDialog) -> Unit,
@@ -563,6 +574,10 @@ internal fun rememberAppNavigationScreenActions(
     onConfirmJioSaavn = onConfirmJioSaavn,
     onConfirmBitPerfect = onConfirmBitPerfect,
     onConfirmFixedVolume = onConfirmFixedVolume,
+    onConfirmDriveDisconnect = onConfirmDriveDisconnect,
+    onConfirmDriveRemove = onConfirmDriveRemove,
+    onConfirmDriveRestore = onConfirmDriveRestore,
+    onConfirmDriveRename = onConfirmDriveRename,
     onEditingPartyServer = onEditingPartyServer,
     onEditingSignatureApi = onEditingSignatureApi,
     onDiscordDialog = onDiscordDialog,
@@ -867,6 +882,20 @@ internal fun AppNavigationHost(
                 )
             } else if (pageRoute == AppRoute.WearOs) {
                 WearOsScreen(contentPadding = states.listPadding)
+            } else if (pageRoute == AppRoute.DriveBackup) {
+                DriveBackupScreen(
+                    contentPadding = states.listPadding,
+                    onOpenDevices = { navigator.push(AppRoute.DriveDevices) },
+                    onConfirmDisconnect = actions.onConfirmDriveDisconnect,
+                    onConfirmRemove = actions.onConfirmDriveRemove,
+                    onRename = actions.onConfirmDriveRename,
+                )
+            } else if (pageRoute == AppRoute.DriveDevices) {
+                DriveDevicesScreen(
+                    contentPadding = states.listPadding,
+                    onConfirmRestore = actions.onConfirmDriveRestore,
+                    onDone = { navigator.pop() },
+                )
             } else if (pageRoute == AppRoute.ListenTogether) {
                 ListenTogetherScreen(
                     signedIn = states.signedIn,
@@ -926,6 +955,7 @@ internal fun AppNavigationHost(
                         actions.onOpenReplayLandingPage(ReplayStoryPage.INTRO)
                         navigator.push(AppRoute.Replay)
                     },
+                    onDriveBackup = { navigator.push(AppRoute.DriveBackup) },
                     onLyricsSources = actions.onShowLyricsSources,
                     onTranslationLanguage = actions.onShowTranslationLanguage,
                     onSources = { navigator.push(AppRoute.Sources) },

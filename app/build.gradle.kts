@@ -73,6 +73,14 @@ android {
     // InnerTubeX's AAR requires compiling against 37; targetSdk (runtime behaviour) stays 36.
     compileSdk = 37
 
+    // Automix's models stay in src/main/assets (the desktop build and the
+    // release that hosts them read them from there) but are not packaged: the
+    // app downloads them on first use, see AutomixModels. The rest is AGP's
+    // default pattern, which setting this replaces.
+    androidResources {
+        ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~:!*.onnx"
+    }
+
     defaultConfig {
         applicationId = "com.music.bitchord"
         // 26 keeps reach wide; real-time blur (RenderEffect) kicks in on API 31+,
@@ -416,6 +424,9 @@ dependencies {
     // files, which would put an offline conversion step between the model and
     // the app for a saving that does not matter in a self-distributed APK.
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.28.0")
+
+    // ---- Google Drive backup: account picker + Drive appdata scope auth ----
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
 
     // ---- Casting: Google Cast sender + the route discovery it sits on ----
     // The framework and the router only. media3-cast is left out on purpose:
