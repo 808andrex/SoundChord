@@ -33,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -697,6 +698,85 @@ internal fun AppNavigationHost(
             detailListStates.getOrPut(key) { LazyListState() }
         }
 
+        val onHomeItemClick: (ShelfItem, String) -> Unit = remember(actions, viewModel) {
+            { item: ShelfItem, shelfTitle: String ->
+                val song = shelfSong(item)
+                val browseId = item.browseId
+                when {
+                    song != null -> actions.onPlayRadio(
+                        song,
+                        QueueSource(shelfTitle, PlaybackSourceType.HOME),
+                    )
+                    browseId != null -> viewModel.openDetail(
+                        browseId = browseId,
+                        title = item.title,
+                        subtitle = item.subtitle,
+                        thumbnailUrl = item.thumbnailUrl,
+                    )
+                }
+            }
+        }
+        val onHomeTopPickLongPress: (TopPick) -> Unit = remember(actions) {
+            { pick: TopPick ->
+                pick.browseId?.let { browseId ->
+                    actions.onShelfLongPress(
+                        ShelfItem(
+                            title = pick.title,
+                            subtitle = pick.artistName.orEmpty(),
+                            thumbnailUrl = pick.images.firstOrNull(),
+                            videoId = null,
+                            browseId = browseId,
+                        ),
+                    )
+                }
+            }
+        }
+        val onExploreShelfItemClick: (HomeShelf, ShelfItem) -> Unit = remember(actions, viewModel) {
+            { shelf: HomeShelf, item: ShelfItem ->
+                val song = shelfSong(item)
+                val browseId = item.browseId
+                when {
+                    song != null -> actions.onPlayRadio(
+                        song,
+                        QueueSource(shelf.title, PlaybackSourceType.EXPLORE, shelf.moreBrowseId),
+                    )
+                    browseId != null -> viewModel.openDetail(
+                        browseId = browseId,
+                        title = item.title,
+                        subtitle = item.subtitle,
+                        thumbnailUrl = item.thumbnailUrl,
+                    )
+                }
+            }
+        }
+        val onRadioPlayMix: (String, String) -> Unit = remember(viewModel) {
+            { browseId: String, title: String ->
+                viewModel.openDetail(browseId, title, "YouTube Music mix", null, BrowseType.PLAYLIST)
+            }
+        }
+        val onRadioPlayStation: (Song) -> Unit = remember(actions, states.radioLabel) {
+            { song: Song ->
+                actions.onPlayRadio(
+                    song,
+                    QueueSource(states.radioLabel, PlaybackSourceType.QUEUE, id = song.playbackSourceId),
+                )
+            }
+        }
+        val onRadioStationLongPress: (RadioStation, Boolean, Rect, () -> Unit) -> Unit = remember(actions) {
+            { station: RadioStation, isFavorite: Boolean, anchor: Rect, toggleFavorite: () -> Unit ->
+                actions.onStationActions(StationMenuTarget(station, isFavorite, anchor, toggleFavorite))
+            }
+        }
+        val onLibraryShelfClick: (ShelfItem) -> Unit = remember(navigator, actions) {
+            { item: ShelfItem ->
+                if (item.browseId == RADIO_FAVORITES_BROWSE_ID) navigator.push(AppRoute.RadioFavorites)
+                else actions.onLibraryItemClick(item)
+            }
+        }
+        val exploreShelves = remember(states.homeState) {
+            (states.homeState as? UiState.Success)?.data.orEmpty()
+        }
+
         val pageContent: @Composable () -> Unit = {
             if (pageRoute == AppRoute.RecognitionHistory) {
                 RecognitionHistoryScreen(
@@ -1206,22 +1286,7 @@ internal fun AppNavigationHost(
                     onFestiveLogoClick = actions.onShowDiwali,
                     signedIn = states.signedIn,
                     onSignIn = { actions.onOpenWebSession(WebSessionMode.SIGN_IN) },
-                    onItemClick = { item, shelfTitle ->
-                        val song = shelfSong(item)
-                        val browseId = item.browseId
-                        when {
-                            song != null -> actions.onPlayRadio(
-                                song,
-                                QueueSource(shelfTitle, PlaybackSourceType.HOME),
-                            )
-                            browseId != null -> viewModel.openDetail(
-                                browseId = browseId,
-                                title = item.title,
-                                subtitle = item.subtitle,
-                                thumbnailUrl = item.thumbnailUrl,
-                            )
-                        }
-                    },
+                    onItemClick = onHomeItemClick,
                     onItemLongPress = actions.onShelfLongPress,
                     onRetry = viewModel::loadHome,
                     refreshing = MainViewModel.Feed.HOME in states.refreshing,
@@ -1238,19 +1303,7 @@ internal fun AppNavigationHost(
                     onMoodClick = actions.onPlayMood.takeUnless { states.hideHomeMoods },
                     onMoodsShowAll = { navigator.push(AppRoute.Moods) },
                     artworkMotion = states.artworkMotion && !states.showDiwali,
-                    onTopPickLongPress = { pick ->
-                        pick.browseId?.let { browseId ->
-                            actions.onShelfLongPress(
-                                ShelfItem(
-                                    title = pick.title,
-                                    subtitle = pick.artistName.orEmpty(),
-                                    thumbnailUrl = pick.images.firstOrNull(),
-                                    videoId = null,
-                                    browseId = browseId,
-                                ),
-                            )
-                        }
-                    },
+                    onTopPickLongPress = onHomeTopPickLongPress,
                 )
                 TAB_EXPLORE -> states.selectedMoodGenre?.let { category ->
                     MoodGenrePlaylistsScreen(
@@ -1287,25 +1340,10 @@ internal fun AppNavigationHost(
                     )
                 } ?: ExploreScreen(
                     moodState = states.exploreState,
-                    shelves = (states.homeState as? UiState.Success)?.data.orEmpty(),
+                    shelves = exploreShelves,
                     listState = lists.exploreListState,
                     onCategoryClick = viewModel::openMoodGenre,
-                    onShelfItemClick = { shelf, item ->
-                        val song = shelfSong(item)
-                        val browseId = item.browseId
-                        when {
-                            song != null -> actions.onPlayRadio(
-                                song,
-                                QueueSource(shelf.title, PlaybackSourceType.EXPLORE, shelf.moreBrowseId),
-                            )
-                            browseId != null -> viewModel.openDetail(
-                                browseId = browseId,
-                                title = item.title,
-                                subtitle = item.subtitle,
-                                thumbnailUrl = item.thumbnailUrl,
-                            )
-                        }
-                    },
+                    onShelfItemClick = onExploreShelfItemClick,
                     onShelfMore = { shelf -> navigator.push(AppRoute.LibraryShowAll(shelf)) },
                     onRetry = viewModel::loadExplore,
                     refreshing = MainViewModel.Feed.EXPLORE in states.refreshing,
@@ -1318,20 +1356,11 @@ internal fun AppNavigationHost(
                     contentPadding = states.listPadding,
                     pullToRefreshState = lists.radioPull,
                     onRadioRefreshStateChanged = { refreshing -> viewModel.setRadioRefreshing(refreshing) },
-                    onPlayMix = { browseId, title ->
-                        viewModel.openDetail(browseId, title, "YouTube Music mix", null, BrowseType.PLAYLIST)
-                    },
+                    onPlayMix = onRadioPlayMix,
                     onSubpageBackHandlerChanged = actions.onRadioSubpageBackChanged,
-                    onPlayStation = { song ->
-                        actions.onPlayRadio(
-                            song,
-                            QueueSource(states.radioLabel, PlaybackSourceType.QUEUE, id = song.playbackSourceId),
-                        )
-                    },
+                    onPlayStation = onRadioPlayStation,
                     onStartStation = actions.onStartRadio,
-                    onStationLongPress = { station, isFavorite, anchor, toggleFavorite ->
-                        actions.onStationActions(StationMenuTarget(station, isFavorite, anchor, toggleFavorite))
-                    },
+                    onStationLongPress = onRadioStationLongPress,
                 )
                 TAB_SEARCH -> SearchScreen(
                     query = states.query,
@@ -1520,10 +1549,7 @@ internal fun AppNavigationHost(
                     signedIn = states.signedIn,
                     state = states.libraryState,
                     listState = lists.libraryListState,
-                    onShelfItemClick = { item ->
-                        if (item.browseId == RADIO_FAVORITES_BROWSE_ID) navigator.push(AppRoute.RadioFavorites)
-                        else actions.onLibraryItemClick(item)
-                    },
+                    onShelfItemClick = onLibraryShelfClick,
                     onShelfItemLongPress = actions.onBrowseLongPress,
                     onNewPlaylist = actions.onCreatingPlaylist,
                     onImportSpotifyPlaylist = actions.onShowSpotifyImport,

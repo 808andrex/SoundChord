@@ -131,7 +131,7 @@ private fun PersonalStationCard(seed: Song, onOpen: () -> Unit, onPlay: () -> Un
             fontWeight = FontWeight.Bold,
         )
         Column(
-            Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 18.dp, end = 76.dp, bottom = 20.dp),
+            Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 18.dp, end = 68.dp, bottom = 20.dp),
         ) {
             Text(
                 stringResource(R.string.station_title_format, seed.title),
@@ -151,13 +151,13 @@ private fun PersonalStationCard(seed: Song, onOpen: () -> Unit, onPlay: () -> Un
         }
         Surface(
             onClick = onPlay,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).size(58.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).size(44.dp),
             shape = CircleShape,
             color = Color.Black.copy(alpha = .6f),
             contentColor = Color.White,
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.PlayArrow, stringResource(R.string.play), modifier = Modifier.size(34.dp))
+                Icon(Icons.Rounded.PlayArrow, stringResource(R.string.play), modifier = Modifier.size(20.dp))
             }
         }
     }

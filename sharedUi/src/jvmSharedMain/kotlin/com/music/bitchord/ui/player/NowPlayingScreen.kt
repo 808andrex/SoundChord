@@ -1166,6 +1166,9 @@ fun NowPlayingScreen(
         lyricsControlsOpen = true
         lyricsOpen = true
         queueOpen = false
+        if (playerPrewarmStage < 2) {
+            playerPrewarmStage = 2
+        }
     }
     val closeLyrics: () -> Unit = {
         lyricsControlsOpen = false
@@ -4122,7 +4125,7 @@ fun NowPlayingScreen(
                         // [lyricsOpen] asked first: a close has already hidden the
                         // panel, and doesn't then listen for the sleeve leaving the
                         // header — which is its first frame of moving.
-                        val lyricsPanelVisible = lyricsOpen && collapseDone
+                        val lyricsPanelVisible by remember { derivedStateOf { lyricsOpen && collapseDone } }
                         if (lyricsPanelVisible || playerPrewarmStage >= 2) {
                                 LyricsTranslationMotion(
                                     trigger = lyricsTranslation.transition,

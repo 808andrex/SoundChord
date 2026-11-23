@@ -82,6 +82,7 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.KeyedMix
 import com.music.bitchord.data.model.UiState
+import com.music.bitchord.data.model.CARD_ART_PX
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.ui.components.LocalLiquidGlassEnabled
 import com.music.bitchord.ui.components.ShelfRow
@@ -242,6 +243,12 @@ fun RadioScreen(
     }
 
     val pullState = pullToRefreshState ?: rememberPullToRefreshState()
+    val displayedGenres = remember(genres) {
+        val availableTags = genres.map { it.name.lowercase().replace('-', ' ').trim() }.toSet()
+        radioGenres.filter { it.tag in availableTags }.ifEmpty { radioGenres }
+    }
+    val chunkedGenres = remember(displayedGenres) { displayedGenres.chunked(2) }
+    val chunkedCountries = remember { radioCountries.chunked(2) }
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
@@ -404,14 +411,20 @@ fun RadioScreen(
 
             item(key = "genres_title") { SectionTitle(stringResource(R.string.radio_genres)) }
             if (genres.isEmpty()) item { Text(stringResource(R.string.radio_genres_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            val availableTags = genres.map { it.name.lowercase().replace('-', ' ').trim() }.toSet()
-            val displayedGenres = radioGenres.filter { it.tag in availableTags }.ifEmpty { radioGenres }
-            if (displayedGenres.isNotEmpty()) items(displayedGenres.chunked(2), key = { row -> "genre_${row.firstOrNull()?.tag.orEmpty()}" }) { row ->
+            if (displayedGenres.isNotEmpty()) items(
+                items = chunkedGenres,
+                key = { row -> "genre_${row.firstOrNull()?.tag.orEmpty()}" },
+                contentType = { "genre_row" },
+            ) { row ->
                 CategoryGridRow(row.map { CategoryOption(it.label, it.colors) }) { index -> vm.onGenreChanged(row[index].tag) }
             }
 
             item(key = "countries_title") { SectionTitle(stringResource(R.string.radio_countries)) }
-            items(radioCountries.chunked(2), key = { row -> "country_${row.first().code}" }) { row ->
+            items(
+                items = chunkedCountries,
+                key = { row -> "country_${row.first().code}" },
+                contentType = { "country_row" },
+            ) { row ->
                 CategoryGridRow(row.map { CategoryOption(it.label, it.colors) }) { index -> vm.onCountryCodeChanged(row[index].code) }
             }
         }
@@ -455,37 +468,41 @@ private fun PersonalizedMixesSection(
                 }
             }
             is UiState.Success -> {
-                val unique = state.data.distinctBy { it.item.browseId ?: it.item.title }
-                val normalizedQuick = QUICK_MIX_NAMES.mapIndexed { index, _ ->
-                    val hints = SIGNATURE_MIX_TITLE_HINTS[index]
-                    unique.firstOrNull { keyed -> keyed.englishTitle.trim().lowercase() in hints }?.item
-                        ?: unique.firstOrNull { keyed -> keyed.item.title.trim().lowercase() in hints }?.item
-                        ?: unique.firstOrNull { keyed ->
-                            val title = keyed.item.title.trim().lowercase()
-                            when (index) {
-                                0 -> "supermix" in title
-                                1 -> "discover" in title || "descubr" in title
-                                2 -> "release" in title || "novedad" in title || "estreno" in title
-                                3 -> "replay" in title || "escuchad" in title || "repetici" in title
-                                4 -> "archive" in title || "archivo" in title
-                                else -> false
-                            }
-                        }?.item
-                        ?: if (index == 5) unique.firstOrNull {
-                        it.item.browseId == com.music.bitchord.data.YtMusicRepository.LIKED_MUSIC ||
-                            it.item.browseId == "LM" || it.item.browseId == "VLLM"
-                    }?.item ?: ShelfItem(
-                        title = "Liked music", subtitle = "Your liked songs", thumbnailUrl = null,
-                        videoId = null, browseId = com.music.bitchord.data.YtMusicRepository.LIKED_MUSIC,
-                    ) else ShelfItem(
-                        title = QUICK_MIX_NAMES[index].toQuickMixTitle(),
-                        subtitle = "", thumbnailUrl = null, videoId = null,
-                        browseId = null,
-                    )
+                val (unique, normalizedQuick) = remember(state.data) {
+                    val u = state.data.distinctBy { it.item.browseId ?: it.item.title }
+                    val nq = QUICK_MIX_NAMES.mapIndexed { index, _ ->
+                        val hints = SIGNATURE_MIX_TITLE_HINTS[index]
+                        u.firstOrNull { keyed -> keyed.englishTitle.trim().lowercase() in hints }?.item
+                            ?: u.firstOrNull { keyed -> keyed.item.title.trim().lowercase() in hints }?.item
+                            ?: u.firstOrNull { keyed ->
+                                val title = keyed.item.title.trim().lowercase()
+                                when (index) {
+                                    0 -> "supermix" in title
+                                    1 -> "discover" in title || "descubr" in title
+                                    2 -> "release" in title || "novedad" in title || "estreno" in title
+                                    3 -> "replay" in title || "escuchad" in title || "repetici" in title
+                                    4 -> "archive" in title || "archivo" in title
+                                    else -> false
+                                }
+                            }?.item
+                            ?: if (index == 5) u.firstOrNull {
+                            it.item.browseId == com.music.bitchord.data.YtMusicRepository.LIKED_MUSIC ||
+                                it.item.browseId == "LM" || it.item.browseId == "VLLM"
+                        }?.item ?: ShelfItem(
+                            title = "Liked music", subtitle = "Your liked songs", thumbnailUrl = null,
+                            videoId = null, browseId = com.music.bitchord.data.YtMusicRepository.LIKED_MUSIC,
+                        ) else ShelfItem(
+                            title = QUICK_MIX_NAMES[index].toQuickMixTitle(),
+                            subtitle = "", thumbnailUrl = null, videoId = null,
+                            browseId = null,
+                        )
+                    }
+                    u to nq
                 }
+                val chunkedQuick = remember(normalizedQuick) { normalizedQuick.chunked(3) }
                 if (showQuickGrid) BoxWithConstraints(Modifier.fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        normalizedQuick.chunked(3).forEach { row ->
+                        chunkedQuick.forEach { row ->
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 row.forEach { item ->
                                     QuickMixCard(item, glass, Modifier.weight(1f), onClick = { onPlayMix(item) })
@@ -502,7 +519,11 @@ private fun PersonalizedMixesSection(
                             contentPadding = PaddingValues(end = 4.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            items(groups.yours, key = { it.browseId ?: it.title }) { item ->
+                            items(
+                                items = groups.yours,
+                                key = { it.browseId ?: it.title },
+                                contentType = { "mix_card" },
+                            ) { item ->
                                 MixCarouselCard(item, glass, darkContainer = true, onClick = { onPlayMix(item) })
                             }
                         }
@@ -516,7 +537,11 @@ private fun PersonalizedMixesSection(
                                 contentPadding = PaddingValues(end = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                items(mood.items, key = { it.browseId ?: it.title }) { item ->
+                                items(
+                                    items = mood.items,
+                                    key = { it.browseId ?: it.title },
+                                    contentType = { "mix_card" },
+                                ) { item ->
                                     MixCarouselCard(item, glass, darkContainer = false, onClick = { onPlayMix(item) })
                                 }
                             }
@@ -626,7 +651,7 @@ private fun MixCarouselCard(item: ShelfItem, glass: Boolean, darkContainer: Bool
             .combinedClickable(onClick = onClick),
     ) {
         AsyncImage(
-            model = item.thumbnailUrl,
+            model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)),

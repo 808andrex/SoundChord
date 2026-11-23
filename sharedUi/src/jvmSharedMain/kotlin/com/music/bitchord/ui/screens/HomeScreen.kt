@@ -282,9 +282,9 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
     shelves.forEachIndexed { index, shelf ->
         // Find Your Mood follows the lead shelf, as on Apple Music's Home.
         if (index == 1 && onMoodClick != null) {
-            item(key = "find-your-mood") { FindYourMoodShelf(onMoodClick, onMoodsShowAll) }
+            item(key = "find-your-mood", contentType = "find_your_mood") { FindYourMoodShelf(onMoodClick, onMoodsShowAll) }
         }
-        item(key = shelf.title + index) {
+        item(key = shelf.title + index, contentType = "shelf_${shelf.layout.name}") {
             val openItem: (ShelfItem) -> Unit = { item -> onItemClick(item, shelf.title) }
             // Listen again and Quick picks are lists on the web player, as
             // Recents is here: one pager for all three.
@@ -322,14 +322,19 @@ private fun RecentShelf(
 ) {
     Column(Modifier.padding(bottom = 26.dp)) {
         RecentSectionHeader(title = localizeShelfTitle(shelf.title), subtitle = localizeShelfSubtitle(shelf.subtitle))
-        val isCurrentItem = shelf.items.playingItemMatcher(currentSong)
+        val isCurrentItem = remember(shelf.items, currentSong) { shelf.items.playingItemMatcher(currentSong) }
+        val chunkedColumns = remember(shelf.items) { shelf.items.chunked(RECENT_TRACKS_PER_COLUMN) }
         BoxWithConstraints {
             val columnWidth = trackColumnWidth(maxWidth)
             ShelfRow(
                 contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(shelf.items.chunked(RECENT_TRACKS_PER_COLUMN)) { column ->
+                items(
+                    items = chunkedColumns,
+                    key = { column -> column.firstOrNull()?.videoId ?: column.firstOrNull()?.browseId ?: column.hashCode() },
+                    contentType = { "recent_column" },
+                ) { column ->
                     Column(Modifier.width(columnWidth)) {
                         column.forEachIndexed { index, item ->
                             RecentTrackRow(
@@ -750,13 +755,17 @@ internal fun Shelf(
 ) {
     Column(Modifier.padding(bottom = 26.dp)) {
         SectionHeader(shelf.title, shelf.subtitle)
-        val isCurrentItem = shelf.items.playingItemMatcher(currentSong)
+        val isCurrentItem = remember(shelf.items, currentSong) { shelf.items.playingItemMatcher(currentSong) }
         ShelfRow(
             contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            leadingCard?.let { card -> item(key = "leading") { card() } }
-            items(shelf.items) { item ->
+            leadingCard?.let { card -> item(key = "leading", contentType = "leading_card") { card() } }
+            items(
+                items = shelf.items,
+                key = { item -> item.videoId ?: item.browseId ?: "${shelf.title}_${item.title}" },
+                contentType = { if (shelf.layout == ShelfLayout.VIDEO) "video_card" else "shelf_card" },
+            ) { item ->
                 if (shelf.layout == ShelfLayout.VIDEO) {
                     VideoShelfCard(
                         item = item,

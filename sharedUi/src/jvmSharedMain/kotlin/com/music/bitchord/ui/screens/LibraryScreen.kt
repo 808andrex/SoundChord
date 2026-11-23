@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -203,7 +204,7 @@ fun LibraryScreen(
                     shelves.forEach { shelf ->
                         item(key = "shelf:${shelf.title}") {
                             if (shelf.title == PLAYLISTS) {
-                                val pinnedFirst = shelf.pinnedFirst(pinnedPlaylists)
+                                val pinnedFirst = remember(shelf, pinnedPlaylists) { shelf.pinnedFirst(pinnedPlaylists) }
                                 PlaylistShelf(
                                     shelf = pinnedFirst,
                                     onItemClick = onShelfItemClick,
@@ -363,7 +364,9 @@ internal fun LibraryGridShelf(
     pinnedPlaylists: List<String> = emptyList(),
 ) {
     val leadingCount = if (leadingCard != null) 1 else 0
-    val visibleItems = shelf.items.take((LIBRARY_ROW_MAX_ITEMS - leadingCount).coerceAtLeast(0))
+    val visibleItems = remember(shelf.items, leadingCount) {
+        shelf.items.take((LIBRARY_ROW_MAX_ITEMS - leadingCount).coerceAtLeast(0))
+    }
     Column(Modifier.padding(bottom = 26.dp)) {
         SectionHeader(
             title = shelf.title,
@@ -374,8 +377,12 @@ internal fun LibraryGridShelf(
             contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
             horizontalArrangement = Arrangement.spacedBy(LIBRARY_GRID_SPACING),
         ) {
-            leadingCard?.let { card -> item(key = "leading") { card() } }
-            items(visibleItems) { item ->
+            leadingCard?.let { card -> item(key = "leading", contentType = "leading") { card() } }
+            items(
+                items = visibleItems,
+                key = { it.browseId ?: it.title },
+                contentType = { "library_shelf_card" },
+            ) { item ->
                 ShelfCard(
                     item = item,
                     onClick = { onItemClick(item) },
@@ -439,7 +446,11 @@ fun LibraryGridPage(
                         )
                     }
                 }
-                items(sortedShelf.items, key = { it.browseId ?: it.title }) { item ->
+                items(
+                    items = sortedShelf.items,
+                    key = { it.browseId ?: it.title },
+                    contentType = { "library_grid_card" },
+                ) { item ->
                     ShelfCard(
                         item = item,
                         onClick = { onItemClick(item) },

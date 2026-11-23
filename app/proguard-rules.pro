@@ -60,6 +60,16 @@
 # cover the generated serializers, and keeping the classes too costs little.
 -keep @kotlinx.serialization.Serializable class com.music.bitchord.** { *; }
 -keep @kotlinx.serialization.Serializable class com.my.kizzy.** { *; }
+-keep @kotlinx.serialization.Serializable class com.soundchord.** { *; }
+
+# Google Drive (ReplaySync) and backup models
+-keep class com.music.bitchord.data.backup.** { *; }
+
+# ONNX Smart Playback / AutoMix models & track analyzer
+-keep class com.music.bitchord.playback.smart.** { *; }
+
+# Home Screen App Widgets and snapshots
+-keep class com.music.bitchord.widget.** { *; }
 
 # ---- WebView bridges ------------------------------------------------------------
 # PoToken minting and the Spotify token page call back into these from JavaScript.

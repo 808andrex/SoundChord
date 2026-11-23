@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,12 +38,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.soundchord.features.R
+import com.music.bitchord.data.model.CARD_ART_PX
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.MoodGenre
 import com.music.bitchord.data.model.MoodGenreSection
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.ShelfLayout
 import com.music.bitchord.data.model.UiState
+import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.PullToRefresh
 
@@ -64,11 +67,14 @@ fun ExploreScreen(
     modifier: Modifier = Modifier,
     showTitle: Boolean = true,
 ) {
-    val contentShelves = shelves.filter { it.items.isNotEmpty() && !it.isExploreExcluded() }
-    val categories = ExploreShelfCategory.entries
-        .mapNotNull { category -> category to contentShelves.filter { it.exploreCategory() == category } }
-        .filter { (_, matching) -> matching.isNotEmpty() }
-    val unclassified = contentShelves.filter { it.exploreCategory() == null && !it.isReleaseShelf() }
+    val (contentShelves, categories, unclassified) = remember(shelves) {
+        val filtered = shelves.filter { it.items.isNotEmpty() && !it.isExploreExcluded() }
+        val cats = ExploreShelfCategory.entries
+            .mapNotNull { category -> category to filtered.filter { it.exploreCategory() == category } }
+            .filter { (_, matching) -> matching.isNotEmpty() }
+        val uncl = filtered.filter { it.exploreCategory() == null && !it.isReleaseShelf() }
+        Triple(filtered, cats, uncl)
+    }
 
     PullToRefresh(
         refreshing = refreshing,
@@ -143,11 +149,13 @@ fun ExploreHeroCarousel(
     shelves: List<HomeShelf>,
     onItemClick: (HomeShelf, ShelfItem) -> Unit,
 ) {
-    val cards = shelves.flatMap { shelf ->
-        shelf.items.filter { it.browseId != null && it.thumbnailUrl != null }
-            .map { shelf to it }
-    }.distinctBy { (_, item) -> item.browseId }
-        .take(8)
+    val cards = remember(shelves) {
+        shelves.flatMap { shelf ->
+            shelf.items.filter { it.browseId != null && it.thumbnailUrl != null }
+                .map { shelf to it }
+        }.distinctBy { (_, item) -> item.browseId }
+            .take(8)
+    }
     if (cards.isEmpty()) return
 
     LazyRow(
@@ -155,7 +163,11 @@ fun ExploreHeroCarousel(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.padding(bottom = 24.dp),
     ) {
-        items(cards, key = { (_, item) -> "explore-hero-${item.browseId}" }) { (shelf, item) ->
+        items(
+            items = cards,
+            key = { (_, item) -> "explore-hero-${item.browseId}" },
+            contentType = { "explore_hero" },
+        ) { (shelf, item) ->
             Box(
                 modifier = Modifier
                     .fillParentMaxWidth(.88f)
@@ -164,7 +176,7 @@ fun ExploreHeroCarousel(
                     .clickable { onItemClick(shelf, item) },
             ) {
                 AsyncImage(
-                    model = item.thumbnailUrl,
+                    model = item.thumbnailUrl.artworkAt(CARD_ART_PX * 2),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
@@ -241,8 +253,10 @@ fun MoodGenreSection(
                 }
             }
             is UiState.Success -> {
-                val moods = state.data.flatMap(MoodGenreSection::items)
-                    .distinctBy { it.browseId to it.params }
+                val moods = remember(state.data) {
+                    state.data.flatMap(MoodGenreSection::items)
+                        .distinctBy { it.browseId to it.params }
+                }
                 if (moods.isEmpty()) {
                     Text(
                         text = stringResource(R.string.explore_empty_moods),
@@ -255,7 +269,11 @@ fun MoodGenreSection(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.padding(bottom = 22.dp),
                     ) {
-                        items(moods, key = { "${it.browseId}|${it.params}" }) { mood ->
+                        items(
+                            items = moods,
+                            key = { "${it.browseId}|${it.params}" },
+                            contentType = { "mood_genre" },
+                        ) { mood ->
                             MoodGenreCard(mood = mood, onClick = { onCategoryClick(mood) })
                         }
                     }
@@ -280,7 +298,7 @@ private fun MoodGenreCard(mood: MoodGenre, onClick: () -> Unit) {
     ) {
         mood.thumbnailUrl?.let { artwork ->
             AsyncImage(
-                model = artwork,
+                model = artwork.artworkAt(CARD_ART_PX),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -363,7 +381,11 @@ fun ExploreShelfSection(
                 contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(shelf.items, key = { "${shelf.title}:${it.videoId}:${it.browseId}:${it.title}" }) { item ->
+                items(
+                    items = shelf.items,
+                    key = { "${shelf.title}:${it.videoId}:${it.browseId}:${it.title}" },
+                    contentType = { if (shelf.layout == ShelfLayout.VIDEO || it.isVideo) "explore_video_card" else "explore_shelf_card" },
+                ) { item ->
                     ExploreShelfCard(
                         item = item,
                         video = shelf.layout == ShelfLayout.VIDEO || item.isVideo,
@@ -388,7 +410,7 @@ private fun ExploreShelfCard(item: ShelfItem, video: Boolean, onClick: () -> Uni
         ) {
             item.thumbnailUrl?.let { artwork ->
                 AsyncImage(
-                    model = artwork,
+                    model = artwork.artworkAt(CARD_ART_PX),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
