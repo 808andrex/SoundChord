@@ -219,6 +219,7 @@ fun FloatingBottomBar(
     val currentTabStepPx by rememberUpdatedState(tabStepPx)
     val currentLastIndex by rememberUpdatedState(tabs.lastIndex)
     val currentOnTabSelected by rememberUpdatedState(onTabSelected)
+    val currentOnActiveTabTap by rememberUpdatedState(onActiveTabTap)
 
     val pillTargetPx = if (tabStepPx > 0f) {
         selectedIndex * tabStepPx + dragOffset
@@ -352,8 +353,14 @@ fun FloatingBottomBar(
                     glassSpec = glassSpec,
                     selectedTint = adaptiveTint,
                     unselectedTint = adaptiveTint?.copy(alpha = 0.65f),
-                    onClick = { onTabSelected(index) },
-                    onActiveTabTap = onActiveTabTap,
+                    onClick = {
+                        if (index == currentSelectedIndex) {
+                            currentOnActiveTabTap()
+                        } else {
+                            haptics.play(Haptic.Select)
+                            currentOnTabSelected(index)
+                        }
+                    },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -367,7 +374,6 @@ private fun BottomBarItem(
     selected: Boolean,
     glassSpec: AnimationSpec<Float>,
     onClick: () -> Unit,
-    onActiveTabTap: () -> Unit,
     modifier: Modifier = Modifier,
     /** Overrides the theme's primary/onSurfaceVariant tint — see the glass branch above. */
     selectedTint: Color? = null,
@@ -380,7 +386,6 @@ private fun BottomBarItem(
         animationSpec = glassSpec,
         label = "tabScale",
     )
-    val haptics = rememberHaptics()
     val tint by animateColorAsState(
         targetValue = if (selected) {
             selectedTint ?: MaterialTheme.colorScheme.primary
@@ -398,14 +403,8 @@ private fun BottomBarItem(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-            ) {
-                if (selected) {
-                    onActiveTabTap()
-                } else {
-                    haptics.play(Haptic.Select)
-                    onClick()
-                }
-            }
+                onClick = onClick,
+            )
             .padding(vertical = TAB_VERTICAL_PADDING),
     ) {
         Icon(

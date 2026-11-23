@@ -646,7 +646,9 @@ internal fun AppNavigationHost(
 
     AnimatedContent(
         targetState = targetState,
-        contentKey = { it.key },
+        contentKey = { destination ->
+            if (destination is AppDestination.Tab) "tabs" else destination.key
+        },
         transitionSpec = {
             val initial = initialState
             val target = targetState
@@ -657,7 +659,9 @@ internal fun AppNavigationHost(
             val libraryShowAllSwap = (initial.isShowAll() && target == libraryTab) ||
                 (target.isShowAll() && initial == libraryTab)
             if (tabSwap || libraryShowAllSwap) {
-                EnterTransition.None togetherWith ExitTransition.None
+                (EnterTransition.None togetherWith ExitTransition.None).apply {
+                    targetContentZIndex = 1f
+                }
             } else {
                 fadeIn(tween(180)) togetherWith fadeOut(tween(180))
             }
@@ -1556,7 +1560,9 @@ internal fun AppNavigationHost(
                     ),
             ) {
                 if (destination is AppDestination.Tab) {
-                    pageContent()
+                    if (destination == targetState || (targetState !is AppDestination.Tab && destination.index == states.selectedTab)) {
+                        pageContent()
+                    }
                 } else {
                     pageKeysSeen += key
                     pageStates.SaveableStateProvider(key, pageContent)
