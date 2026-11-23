@@ -1316,26 +1316,6 @@ class CrossfadeController(
         val currentState = stateOf(currentItem, currentAnalysis)
         val nextState = stateOf(nextItem, nextAnalysis)
 
-        // A blank TrackAnalysis is a planner default, not evidence that the
-        // track was measured. In SMART mode that default used to pass the
-        // planner's readiness check, where the missing BPM was classified as
-        // "outgoing-tempo" and armed an ordinary equal-power crossfade. Keep
-        // asking for analysis and pre-resolve the next stream, but wait for the
-        // DJ plan before arming any audible transition.
-        val analysisPending = currentState == TrackAnalysisState.WAITING ||
-            currentState == TrackAnalysisState.ANALYSING ||
-            nextState == TrackAnalysisState.WAITING ||
-            nextState == TrackAnalysisState.ANALYSING
-        if (analysisPending) {
-            val provisionalFade = (fallbackSeconds * 1000.0).roundToLong()
-                .coerceAtMost(duration / 3)
-            plannedTransition = currentItem.mediaId to (duration - provisionalFade).coerceAtLeast(0L)
-            lastSmartPlan = null
-            lastSmartPlanStartMs = 0L
-            AppSettings.smartTransitionWindow.value = null
-            return
-        }
-
         // The DJ planner is Automix now; there is no separate mode switch.
         val advanced = true
 
@@ -1416,15 +1396,20 @@ class CrossfadeController(
         // window that was already correct. Since the incoming track is now
         // routinely analysed from its opening long before it plays, that was
         // most of the time the marker was missing.
-        // Publish a valid provisional marker immediately. The planner refines
-        // it on each idle tick as analysis improves; stream readiness is still
-        // checked before arming the actual transition.
-        val markable = !plan.blocked && plan.markerVisible && duration > 0L
+        val markable = !plan.blocked &&
+            plan.markerVisible &&
+            duration > 0L &&
+            analysisState.current == TrackAnalysisState.ANALYSED &&
+            analysisState.next in MEASURED_ENOUGH_TO_ENTER_ON &&
+            nextStreamReady(nextItem)
         val markerVerdict = when {
             markable -> "shown"
             plan.blocked -> "hidden: plan blocked (${plan.reason})"
             !plan.markerVisible -> "hidden: plan has no marker (${plan.reason})"
-            else -> "hidden: no duration"
+            duration <= 0L -> "hidden: no duration"
+            analysisState.current != TrackAnalysisState.ANALYSED -> "hidden: current is ${analysisState.current}"
+            analysisState.next !in MEASURED_ENOUGH_TO_ENTER_ON -> "hidden: next is ${analysisState.next}"
+            else -> "hidden: next stream not ready"
         }
         if (markerVerdict != lastMarkerVerdict) {
             lastMarkerVerdict = markerVerdict
@@ -1863,7 +1848,7 @@ class CrossfadeController(
         // incoming audio becomes audible. The following idle tick rebuilds the
         // same queue with the final DJ cue, tempo and filter plan.
         val planned = planInFlight
-        if (smartFadeActive && planned?.reason?.contains("smart-analysis-fallback") == true) {
+        if (smartFadeActive && (planned?.reason?.contains("fallback") == true || planned?.reason?.contains("unmixable") == true)) {
             val outItem = out.currentMediaItem
             val inItem = into.currentMediaItem
             val outAnalysis = outItem?.let(analysisFor)
@@ -3169,7 +3154,7 @@ class CrossfadeController(
         if (plan != null && !plan.blocked && next != null && AppSettings.smartTransitionWindow.value != null) {
             val inSeconds = ((lastSmartPlanStartMs - player.currentPosition) / 1000.0).coerceAtLeast(0.0)
             val whenText = if (inSeconds > 0) "in ${ceil(inSeconds).toInt()} s" else "now"
-            if (plan.reason.contains("smart-analysis-fallback")) {
+            if (plan.reason.contains("fallback")) {
                 return "Automix · analysing for DJ mix · fallback $whenText"
             }
             val bars = if (plan.beatSeconds > 0) (plan.fadeSeconds / (4 * plan.beatSeconds)).roundToInt() else 0
@@ -3184,6 +3169,16 @@ class CrossfadeController(
                     val stretch = if (abs(rate - 1) < 0.0005) "same tempo" else "next at ${"%.3f".format(Locale.ROOT, rate)}×"
                     "Automix · mixing $whenText · $length · $stretch$noLoop"
                 }
+            }
+        }
+        val planFallback = lastSmartPlan
+        if (planFallback != null && !planFallback.blocked && next != null &&
+            (planFallback.reason.contains("fallback") || planFallback.reason.contains("unmixable"))
+        ) {
+            val inSeconds = ((lastSmartPlanStartMs - player.currentPosition) / 1000.0).coerceAtLeast(0.0)
+            if (inSeconds <= 12.0) {
+                val whenText = if (inSeconds > 0) "in ${ceil(inSeconds).toInt()} s" else "now"
+                return "Automix · analysing for DJ mix · fallback $whenText"
             }
         }
         val nextForAnalysis = next?.let { analysisFor(it) }
