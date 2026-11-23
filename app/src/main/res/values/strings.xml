@@ -268,6 +268,8 @@
     <string name="widget_next">Next</string>
     <string name="widget_previous">Previous</string>
     <string name="widget_artwork">Album art</string>
+    <string name="widget_favorite">Favorite</string>
+    <string name="widget_unfavorite">Remove from favorites</string>
     <string name="widget_nothing_played">Nothing played yet</string>
     <string name="widget_open_bitchord">Open SoundChord</string>
     <string name="widget_preview_title">Song title</string>

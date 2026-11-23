@@ -38,6 +38,21 @@ class MediaWidgetActions : BroadcastReceiver() {
         val action = intent.action?.takeIf { it in ACTIONS } ?: return
         val app = context.applicationContext
 
+        // Instant optimistic feedback for transport and favorite buttons
+        val snapshot = MediaWidgetSnapshot.load(app)
+        if (snapshot.hasTrack) {
+            when (action) {
+                ACTION_TOGGLE -> {
+                    MediaWidgetSnapshot.save(app, snapshot.copy(isPlaying = !snapshot.isPlaying))
+                    MediaWidget.refresh(app)
+                }
+                ACTION_LIKE -> {
+                    MediaWidgetSnapshot.save(app, snapshot.copy(isLiked = !snapshot.isLiked))
+                    MediaWidget.refresh(app)
+                }
+            }
+        }
+
         // Held open across the connect: a controller that arrives after the
         // broadcast has returned arrives in a process that may already be gone.
         val pending = goAsync()

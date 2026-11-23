@@ -1,71 +1,107 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  What the picker shows for the 2×2 widget on API 31+, where previewLayout is
-  inflated live rather than an image being drawn.
-
-  A copy of widget_media_compact with stand-in text, and only because of the
-  text: everything else about the real layout already previews itself correctly —
-  widget_art carries no bitmap until a provider fills it, so the root's gradient
-  background shows through. The same reason widget_media_wide_preview exists.
--->
+<!-- Preview for 2×2 widget in widget picker -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_preview_art">
+    android:clipToOutline="true"
+    android:background="@drawable/widget_preview_background">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="@dimen/widget_band_compact"
-        android:layout_gravity="bottom"
-        android:gravity="center_horizontal|bottom"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:paddingLeft="@dimen/widget_band_padding"
-        android:paddingRight="@dimen/widget_band_padding"
-        android:paddingBottom="4dp">
+        android:padding="12dp">
 
-        <TextView
+        <RelativeLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="3dp"
-            android:ellipsize="end"
-            android:fontFamily="@font/sf_pro_display_semibold"
-            android:gravity="center_horizontal"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:paddingLeft="4dp"
-            android:paddingRight="4dp"
-            android:text="@string/widget_preview_title"
-            android:textColor="#FFFFFFFF"
-            android:textSize="13sp" />
+            android:layout_height="70dp">
+
+            <ImageView
+                android:layout_width="70dp"
+                android:layout_height="70dp"
+                android:layout_alignParentStart="true"
+                android:layout_alignParentTop="true"
+                android:scaleType="fitXY"
+                android:src="@drawable/widget_fallback_art"
+                android:contentDescription="@string/widget_artwork" />
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="18dp"
+                android:layout_alignParentEnd="true"
+                android:layout_alignParentTop="true"
+                android:layout_marginTop="2dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_widget_logo"
+                android:tint="#FFFFFF"
+                android:contentDescription="@string/app_name" />
+        </RelativeLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="vertical"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="@font/sf_pro_display_bold"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_preview_title"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:ellipsize="end"
+                android:fontFamily="@font/sf_pro_display_regular"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_preview_artist"
+                android:textColor="#D9FFFFFF"
+                android:textSize="12sp" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center_vertical"
             android:orientation="horizontal">
 
             <ImageView
                 android:layout_width="0dp"
-                android:layout_height="@dimen/widget_button_compact"
+                android:layout_height="36dp"
                 android:layout_weight="1"
                 android:contentDescription="@string/widget_previous"
-                android:padding="9dp"
-                android:src="@drawable/ic_widget_previous" />
+                android:padding="7dp"
+                android:src="@drawable/ic_widget_previous"
+                android:tint="#FFFFFF" />
 
             <ImageView
                 android:layout_width="0dp"
-                android:layout_height="@dimen/widget_button_compact"
+                android:layout_height="36dp"
                 android:layout_weight="1"
                 android:contentDescription="@string/widget_play"
-                android:padding="9dp"
-                android:src="@drawable/ic_widget_play" />
+                android:padding="6dp"
+                android:src="@drawable/ic_widget_play"
+                android:tint="#FFFFFF" />
 
             <ImageView
                 android:layout_width="0dp"
-                android:layout_height="@dimen/widget_button_compact"
+                android:layout_height="36dp"
                 android:layout_weight="1"
                 android:contentDescription="@string/widget_next"
-                android:padding="9dp"
-                android:src="@drawable/ic_widget_next" />
+                android:padding="7dp"
+                android:src="@drawable/ic_widget_next"
+                android:tint="#FFFFFF" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

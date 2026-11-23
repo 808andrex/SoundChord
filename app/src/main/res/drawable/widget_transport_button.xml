@@ -1,11 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Press feedback for a transport button. Masked to an oval so the ripple reads as
-  a circle around the glyph rather than as a square lighting up over the artwork
-  — the same shape the IconButtons in the mini player get for free from Material.
--->
+<!-- Press feedback for a transport/action button with neutral oval ripple -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
-    android:color="#40FFFFFF">
+    android:color="#26808080">
     <item android:id="@android:id/mask">
         <shape android:shape="oval">
             <solid android:color="#FFFFFFFF" />

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Preview background with light neutral pastel gradient for widget picker -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/widget_corner_radius" />
+    <gradient
+        android:angle="315"
+        android:startColor="#FFF2F2F5"
+        android:endColor="#FFE2E2E6"
+        android:type="linear" />
+</shape>

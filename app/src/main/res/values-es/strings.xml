@@ -219,6 +219,8 @@
     <string name="widget_next">Siguiente</string>
     <string name="widget_previous">Anterior</string>
     <string name="widget_artwork">Portada del álbum</string>
+    <string name="widget_favorite">Me gusta</string>
+    <string name="widget_unfavorite">Quitar de favoritos</string>
     <string name="widget_nothing_played">Aún no se ha reproducido nada</string>
     <string name="widget_open_bitchord">Abrir BitChord</string>
     <string name="widget_preview_title">Título de la canción</string>

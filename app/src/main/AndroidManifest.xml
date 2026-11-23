@@ -448,18 +448,6 @@
                 android:resource="@xml/widget_media_wide" />
         </receiver>
 
-        <!-- The 4×1 capsule. Its own provider and layout; see MediaWidgetPill. -->
-        <receiver
-            android:name=".widget.MediaWidgetPill"
-            android:exported="false"
-            android:label="@string/widget_pill_label">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/widget_media_pill" />
-        </receiver>
 
         <!-- Quick Settings tile: play or pause the last queue. See PlaybackTile. -->
         <service

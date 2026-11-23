@@ -8,7 +8,9 @@
       stand-in, where hosts don't clip at all and the baked corners are the only
       ones there are.
     -->
-    <dimen name="widget_corner_radius">16dp</dimen>
+    <dimen name="widget_corner_radius">24dp</dimen>
+    <dimen name="widget_art_radius_square">14dp</dimen>
+    <dimen name="widget_art_radius_wide">16dp</dimen>
 
     <!--
       The strip at the foot of the widget the track and transport sit in, and so

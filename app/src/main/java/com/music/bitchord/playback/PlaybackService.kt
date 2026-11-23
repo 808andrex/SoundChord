@@ -4110,11 +4110,13 @@ class PlaybackService : MediaLibraryService() {
         // the optimistic state with YouTube in the background.
         LikeState.set(videoId, target)
         refreshCustomLayouts()
+        publishWidgetState()
         favoriteActionJob = scope.launch {
             YtMusicRepository.rate(videoId, target)
                 .onFailure {
                     LikeState.set(videoId, previous)
                     refreshCustomLayouts()
+                    publishWidgetState()
                     TrackLog.w("BitChord", "notification favorite failed: ${it.message}", about = videoId)
                 }
         }
@@ -9598,6 +9600,7 @@ class PlaybackService : MediaLibraryService() {
                             // On the device and nowhere else: nothing to
                             // reconcile, and the button follows [OfflinePlaylists.liked].
                             OfflinePlaylists.toggleLike(song)
+                            publishWidgetState()
                         } else {
                             toggleFavoriteFromNotification(item.mediaId)
                         }

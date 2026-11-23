@@ -1,93 +1,135 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The 4×2 widget, and the shape either widget takes at
-  MediaWidget.WIDE_LAYOUT_MIN_DP or wider. Same full-bleed cover and same baked
-  blur as widget_media_compact; the extra width goes to the track, because three
-  glyphs spread across four cells reads as an empty bar.
-
-  See widget_media_compact for why the band's height has to match the blurred
-  region, and why nothing in it is clickable except the buttons themselves.
+  SoundChord Home Screen Widget: Rectangular (4×2)
+  Apple Music / iOS design with large square artwork, SoundChord logo in top right,
+  centered title/artist, and clean transport.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_preview_art">
+    android:clipToOutline="true"
+    android:background="@drawable/widget_fallback_background">
 
+    <!-- Dynamic pastel gradient background bitmap with rounded corners -->
     <ImageView
-        android:id="@+id/widget_art"
+        android:id="@+id/widget_background"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:contentDescription="@string/widget_artwork"
         android:scaleType="fitXY" />
 
     <LinearLayout
-        android:id="@+id/widget_band"
+        android:id="@+id/widget_content"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/widget_band_wide"
-        android:layout_gravity="bottom"
-        android:gravity="center_vertical"
+        android:layout_height="match_parent"
         android:orientation="horizontal"
-        android:paddingLeft="14dp"
-        android:paddingRight="4dp">
+        android:padding="14dp">
 
-        <LinearLayout
-            android:id="@+id/widget_text"
+        <!-- Mitad izquierda: Carátula grande cuadrada ocupando la altura interior -->
+        <ImageView
+            android:id="@+id/widget_art"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:adjustViewBounds="true"
+            android:scaleType="fitCenter"
+            android:src="@drawable/widget_fallback_art"
+            android:contentDescription="@string/widget_artwork" />
+
+        <!-- Mitad derecha -->
+        <RelativeLayout
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
-            android:orientation="vertical"
-            android:paddingRight="8dp">
+            android:layout_marginStart="14dp">
 
-            <TextView
-                android:id="@+id/widget_title"
+            <!-- Esquina superior derecha: Solamente el logotipo de SoundChord -->
+            <ImageView
+                android:id="@+id/widget_logo"
+                android:layout_width="20dp"
+                android:layout_height="18dp"
+                android:layout_alignParentEnd="true"
+                android:layout_alignParentTop="true"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_widget_logo"
+                android:contentDescription="@string/app_name" />
+
+            <!-- Fila inferior con los 3 botones (Anterior, Reproducir/Pausar, Siguiente) -->
+            <LinearLayout
+                android:id="@+id/widget_transport"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:fontFamily="@font/sf_pro_display_semibold"
-                android:includeFontPadding="false"
-                android:maxLines="1"
-                android:textColor="#FFFFFFFF"
-                android:textSize="14sp" />
+                android:layout_alignParentBottom="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-            <TextView
-                android:id="@+id/widget_artist"
+                <ImageView
+                    android:id="@+id/widget_previous"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/widget_transport_button"
+                    android:contentDescription="@string/widget_previous"
+                    android:padding="7dp"
+                    android:src="@drawable/ic_widget_previous" />
+
+                <ImageView
+                    android:id="@+id/widget_toggle"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/widget_transport_button"
+                    android:contentDescription="@string/widget_play"
+                    android:padding="6dp"
+                    android:src="@drawable/ic_widget_play" />
+
+                <ImageView
+                    android:id="@+id/widget_next"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/widget_transport_button"
+                    android:contentDescription="@string/widget_next"
+                    android:padding="7dp"
+                    android:src="@drawable/ic_widget_next" />
+            </LinearLayout>
+
+            <!-- Título en negrita (hasta 2 líneas) y Artista centrados vertical y horizontalmente -->
+            <LinearLayout
+                android:id="@+id/widget_info_container"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:ellipsize="end"
-                android:fontFamily="@font/sf_pro_display_regular"
-                android:includeFontPadding="false"
-                android:maxLines="1"
-                android:textColor="#B3FFFFFF"
-                android:textSize="12sp" />
-        </LinearLayout>
+                android:layout_height="match_parent"
+                android:layout_below="@id/widget_logo"
+                android:layout_above="@id/widget_transport"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp">
 
-        <ImageView
-            android:id="@+id/widget_previous"
-            android:layout_width="@dimen/widget_button_wide"
-            android:layout_height="@dimen/widget_button_wide"
-            android:background="@drawable/widget_transport_button"
-            android:contentDescription="@string/widget_previous"
-            android:padding="10dp"
-            android:src="@drawable/ic_widget_previous" />
+                <TextView
+                    android:id="@+id/widget_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="@font/sf_pro_display_bold"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:maxLines="2"
+                    android:textColor="#1C1C1E"
+                    android:textSize="15sp" />
 
-        <ImageView
-            android:id="@+id/widget_toggle"
-            android:layout_width="@dimen/widget_button_wide"
-            android:layout_height="@dimen/widget_button_wide"
-            android:background="@drawable/widget_transport_button"
-            android:contentDescription="@string/widget_play"
-            android:padding="10dp"
-            android:src="@drawable/ic_widget_play" />
-
-        <ImageView
-            android:id="@+id/widget_next"
-            android:layout_width="@dimen/widget_button_wide"
-            android:layout_height="@dimen/widget_button_wide"
-            android:background="@drawable/widget_transport_button"
-            android:contentDescription="@string/widget_next"
-            android:padding="10dp"
-            android:src="@drawable/ic_widget_next" />
+                <TextView
+                    android:id="@+id/widget_artist"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:fontFamily="@font/sf_pro_display_regular"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:textColor="#737373"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </RelativeLayout>
     </LinearLayout>
 </FrameLayout>
