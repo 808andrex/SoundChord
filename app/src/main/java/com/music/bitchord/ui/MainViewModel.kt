@@ -1398,6 +1398,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         videoIds: List<String>,
         songs: List<Song> = emptyList(),
         coverUri: android.net.Uri? = null,
+        motionVideoUrl: String? = null,
         /** [savedLocally] is true when the playlist went to this device, not YouTube Music. */
         onResult: ((browseId: String?, title: String, savedLocally: Boolean) -> Unit)? = null,
     ) {
@@ -1419,6 +1420,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                         setPlaylistOwned("VL$normalizedId", true)
                         libraryStale = true
+                        motionVideoUrl?.let {
+                            com.music.bitchord.data.canvas.PlaylistMotionStore.setMotionVideoUrl(normalizedId, it)
+                        }
                         val coverUrl = coverUri?.let {
                             com.music.bitchord.data.PlaylistCovers.save(getApplication<Application>(), normalizedId, it)?.toString()
                         }
@@ -1449,12 +1453,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         onResult?.invoke(created.browseId, created.title, false)
                     },
                     onFailure = {
-                        val local = com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, songs, coverUri)
+                        val local = com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, songs, coverUri, motionVideoUrl)
                         onResult?.invoke(local.browseId, local.title, true)
                     },
                 )
             } else {
-                val local = com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, songs, coverUri)
+                val local = com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, songs, coverUri, motionVideoUrl)
                 onResult?.invoke(local.browseId, local.title, true)
             }
         }

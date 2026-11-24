@@ -334,69 +334,7 @@ object AppleMusicCanvas {
 
     // ---- Token ---------------------------------------------------------
 
-    private var cachedToken: String? = null
-    private var tokenExpiresAtMs = 0L
-    private var retryTokenAfterMs = 0L
-
-    /** Tokens the catalog API has already turned down. See [get]. */
-    private val rejected = mutableSetOf<String>()
-
-    /**
-     * The anonymous bearer token the Apple Music web player uses for catalog
-     * reads. It isn't published anywhere and rotates every few weeks, so it is
-     * read the way the browser gets it: load the web player, find the JS
-     * bundle it pulls in, and pick the token out of it. Held until shortly
-     * before it expires.
-     *
-     * The bundle ships several unrelated JWTs and only the web player's own is
-     * accepted here — the others come back 401 — so this picks by issuer
-     * rather than taking the first one that parses.
-     *
-     * A failed scrape backs off for [TOKEN_RETRY_MS] rather than retrying per
-     * track: if Apple has changed the page shape, hammering it on every skip
-     * fixes nothing and makes every canvas lookup pay for the round trip.
-     */
-    @Synchronized
-    private fun token(): String? {
-        val now = System.currentTimeMillis()
-        cachedToken?.let { if (now < tokenExpiresAtMs - 60_000) return it }
-        if (now < retryTokenAfterMs) return null
-
-        val html = canvasGet(WEB_PLAYER, mapOf("User-Agent" to CANVAS_UA))
-        val scripts = html?.let {
-            Regex("""/assets/index(?:-legacy)?[~-][A-Za-z0-9_-]+\.js""")
-                .findAll(it).map(MatchResult::value).distinct().toList()
-        }.orEmpty()
-
-        for (path in scripts) {
-            val script = canvasGet("https://music.apple.com$path", mapOf("User-Agent" to CANVAS_UA))
-                ?: continue
-            val candidates = Regex("""ey[A-Za-z0-9_-]+\.ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+""")
-                .findAll(script)
-                .map(MatchResult::value)
-                .distinct()
-                .filter { it !in rejected }
-                .mapNotNull { jwt -> expiry(jwt)?.let { jwt to it } }
-                .filter { it.second > now }
-                .toList()
-            if (candidates.isEmpty()) continue
-
-            // The web player's own token first; anything else is a guess kept
-            // only so a change in how Apple labels it isn't fatal.
-            val (jwt, expiresAt) = candidates.firstOrNull { isWebPlayerToken(it.first) }
-                ?: candidates.first()
-            cachedToken = jwt
-            tokenExpiresAtMs = expiresAt
-            Log.d(TAG, "web player token good until ${java.util.Date(expiresAt)}")
-            return jwt
-        }
-
-        Log.w(TAG, "no usable web player token in ${scripts.size} bundle(s); backing off")
-        retryTokenAfterMs = now + TOKEN_RETRY_MS
-        return null
-    }
-
-    private const val TOKEN_RETRY_MS = 30L * 60 * 1000
+    private fun token(): String? = AppleMusicTokenProvider.token()
 
     /**
      * An authenticated catalog read. A 401 means the token we picked out of
@@ -414,13 +352,7 @@ object AppleMusicCanvas {
                     response.isSuccessful -> response.body?.string()
                     response.code == 401 -> {
                         Log.w(TAG, "token rejected by the catalog API; will re-scrape")
-                        synchronized(this) {
-                            rejected += bearer
-                            if (cachedToken == bearer) {
-                                cachedToken = null
-                                tokenExpiresAtMs = 0L
-                            }
-                        }
+                        AppleMusicTokenProvider.invalidateToken(bearer)
                         null
                     }
                     else -> null
@@ -428,24 +360,6 @@ object AppleMusicCanvas {
             }
         }.getOrNull()
     }
-
-    /** The web player's token names itself in the header `kid` and payload `iss`. */
-    private fun isWebPlayerToken(jwt: String): Boolean = runCatching {
-        val parts = jwt.split(".")
-        val header = String(Base64.getUrlDecoder().decode(parts[0]), Charsets.UTF_8)
-        val payload = String(Base64.getUrlDecoder().decode(parts[1]), Charsets.UTF_8)
-        header.contains("WebPlayKid") || payload.contains("AMPWebPlay")
-    }.getOrDefault(false)
-
-    /** A JWT's `exp` in millis, or null if this isn't one we can read. */
-    private fun expiry(jwt: String): Long? = runCatching {
-        val payload = String(
-            Base64.getUrlDecoder().decode(jwt.split(".")[1]),
-            Charsets.UTF_8,
-        )
-        val seconds = Regex("\"exp\"\\s*:\\s*(\\d+)").find(payload)?.groupValues?.get(1)
-        seconds?.toLong()?.times(1000)
-    }.getOrDefault(null)
 
     private fun authHeaders(bearer: String) = mapOf(
         "Authorization" to "Bearer $bearer",

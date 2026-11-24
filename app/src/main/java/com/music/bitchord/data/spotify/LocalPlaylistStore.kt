@@ -20,6 +20,7 @@ data class LocalPlaylist(
     val title: String,
     val songs: List<Song>,
     val customCoverUri: String? = null,
+    val motionVideoUrl: String? = null,
 ) {
     val browseId: String get() = "local:playlist:$id"
 }
@@ -39,6 +40,7 @@ object LocalPlaylistStore {
     fun init(context: Context) {
         appContext = context.applicationContext
         PlaylistCovers.init(appContext)
+        com.music.bitchord.data.canvas.PlaylistMotionStore.init(appContext)
         prefs = appContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         load()
         if (!coverObserverStarted) {
@@ -86,18 +88,28 @@ object LocalPlaylistStore {
                 }
                 val storedCover = obj.optString("customCoverUri", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
                 val cover = PlaylistCovers.getCoverUri(appContext, id)?.toString() ?: storedCover
-                list.add(LocalPlaylist(id, title, songs, cover))
+                val motionVideo = obj.optString("motionVideoUrl", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
+                motionVideo?.let { com.music.bitchord.data.canvas.PlaylistMotionStore.setMotionVideoUrl(id, it) }
+                list.add(LocalPlaylist(id, title, songs, cover, motionVideo))
             }
             _playlists.value = list
         }
     }
 
-    suspend fun savePlaylist(title: String, songs: List<Song>, coverUri: Uri? = null): LocalPlaylist {
+    suspend fun savePlaylist(
+        title: String,
+        songs: List<Song>,
+        coverUri: Uri? = null,
+        motionVideoUrl: String? = null,
+    ): LocalPlaylist {
         val id = "sp_local_" + java.util.UUID.randomUUID().toString()
-        val playlist = LocalPlaylist(id = id, title = title, songs = songs)
+        val playlist = LocalPlaylist(id = id, title = title, songs = songs, motionVideoUrl = motionVideoUrl)
         val updated = listOf(playlist) + _playlists.value.filterNot { it.id == id }
         _playlists.value = updated
         persist(updated)
+        if (motionVideoUrl != null && this::appContext.isInitialized) {
+            com.music.bitchord.data.canvas.PlaylistMotionStore.setMotionVideoUrl(id, motionVideoUrl)
+        }
         if (coverUri != null && this::appContext.isInitialized) {
             val saved = com.music.bitchord.data.PlaylistCovers.save(appContext, id, coverUri)?.toString()
             val withCover = _playlists.value.map { item ->
@@ -111,7 +123,10 @@ object LocalPlaylistStore {
     }
 
     fun deletePlaylist(id: String) {
-        if (this::appContext.isInitialized) PlaylistCovers.delete(appContext, id)
+        if (this::appContext.isInitialized) {
+            PlaylistCovers.delete(appContext, id)
+            com.music.bitchord.data.canvas.PlaylistMotionStore.removeMotionVideoUrl(id)
+        }
         val updated = _playlists.value.filterNot { it.id == id || it.browseId == id || it.id == id.removePrefix("local:playlist:") }
         _playlists.value = updated
         persist(updated)
@@ -193,7 +208,9 @@ object LocalPlaylistStore {
                 }
                 val storedCover = obj.optString("customCoverUri", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
                 val cover = PlaylistCovers.getCoverUri(appContext, id)?.toString() ?: storedCover
-                incoming.add(LocalPlaylist(id, title, songs, cover))
+                val motionVideo = obj.optString("motionVideoUrl", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
+                motionVideo?.let { com.music.bitchord.data.canvas.PlaylistMotionStore.setMotionVideoUrl(id, it) }
+                incoming.add(LocalPlaylist(id, title, songs, cover, motionVideo))
             }
             val existingIds = _playlists.value.map { it.id }.toSet()
             val newPlaylists = incoming.filter { it.id !in existingIds }
@@ -212,6 +229,9 @@ object LocalPlaylistStore {
                 pObj.put("id", playlist.id)
                 pObj.put("title", playlist.title)
                 pObj.put("customCoverUri", playlist.customCoverUri)
+                if (playlist.motionVideoUrl != null) {
+                    pObj.put("motionVideoUrl", playlist.motionVideoUrl)
+                }
                 val songsArray = JSONArray()
                 for (song in playlist.songs) {
                     val sObj = JSONObject()
