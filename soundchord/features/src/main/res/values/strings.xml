@@ -136,4 +136,26 @@
     <string name="output_cast">Cast</string>
     <string name="output_cast_subtitle">Chromecast and Google Cast speakers</string>
     <string name="output_audio_pipeline">Audio Pipeline</string>
+
+    <!-- Apple Music Playlist Import -->
+    <string name="apple_music_import_title">Import Apple Music playlist</string>
+    <string name="apple_music_import_description">Paste a public Apple Music playlist link. Songs are matched on YouTube Music.</string>
+    <string name="apple_music_import_description_local">Paste a public Apple Music playlist link. Songs are matched on YouTube Music and saved on this device.</string>
+    <string name="apple_music_import_hint">music.apple.com/…/playlist/…</string>
+    <string name="apple_music_import_invalid">That isn’t an Apple Music playlist link.</string>
+    <string name="apple_music_import_fetching">Reading Apple Music playlist…</string>
+    <string name="apple_music_import_matching">Matching songs %1$d of %2$d</string>
+    <string name="apple_music_import_none">None of those songs were found on YouTube Music.</string>
+    <string name="apple_music_import_failed">Couldn’t import the playlist: %1$s</string>
+    <string name="apple_music_import_button">Import</string>
+    <string name="apple_music_import_preview_button">Preview</string>
+    <string name="apple_music_import_save">Save Playlist</string>
+    <string name="apple_music_import_motion_badge">PORTADA ANIMADA</string>
+    <string name="apple_music_import_track_count">%1$d tracks</string>
+    <string name="apple_music_import_unmatched">%1$d tracks weren’t found on YouTube Music</string>
+    <string name="apple_music_import_language_preference" translatable="false">Language preference</string>
+    <string name="apple_music_import_language_hint" translatable="false">e.g. Punjabi, Marathi, Korean…</string>
+    <string name="cancel">Cancel</string>
+    <string name="done">Done</string>
+    <string name="who_can_see_it">Who can see it</string>
 </resources>

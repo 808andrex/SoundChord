@@ -389,6 +389,19 @@ object DriveBackup {
         }
     }
 
+    /**
+     * Silently triggers a background backup sync if Google Drive backup is configured and active
+     * (connected account, device assigned, frequency != OFF).
+     */
+    fun syncSilently(context: Context) {
+        val s = _settings.value
+        if (s.account == null || s.needsDevice || s.needsSignIn || s.frequency == BackupFrequency.OFF) return
+        val app = context.applicationContext
+        scope.launch {
+            runCatching { runSync(app, push = true) }
+        }
+    }
+
     internal sealed interface RunOutcome {
         data class Done(val uploaded: Int, val downloaded: Int) : RunOutcome
         data class Failed(val message: String, val retryable: Boolean) : RunOutcome

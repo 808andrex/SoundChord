@@ -97,6 +97,8 @@ import com.music.bitchord.playback.QualityUpgrade
 import com.music.bitchord.playback.QueueShuffle
 import com.music.bitchord.playback.QueueSource
 import com.music.bitchord.playback.smart.VersionAudioAligner
+import com.music.bitchord.data.backup.BackupFrequency
+import com.music.bitchord.data.backup.DriveBackup
 import com.music.bitchord.playback.swapToVersion
 import com.music.bitchord.ui.AddonBlockedAlert
 import com.music.bitchord.ui.MainViewModel
@@ -120,6 +122,7 @@ import com.music.bitchord.ui.components.LyricsSourcesDialog
 import com.music.bitchord.ui.components.PlaylistAddSongsHost
 import com.music.bitchord.ui.components.ServerEditorHost
 import com.music.bitchord.ui.components.SpotifyImportAlert
+import com.soundchord.features.playlistimport.ui.AppleMusicImportAlert
 import com.music.bitchord.ui.components.StationActionsMenu
 import com.music.bitchord.ui.components.StationMenuTarget
 import com.music.bitchord.ui.components.TranslationLanguageDialog
@@ -1266,6 +1269,65 @@ internal fun GlobalSheetsHost(
                 }
             },
             onDismiss = actions.onDismissSpotifyImport,
+        )
+    }
+
+    var showAppleMusicDriveNotice by remember { mutableStateOf(false) }
+
+    if (AppleMusicImportController.showDialog) {
+        BackHandler { AppleMusicImportController.showDialog = false }
+        AppleMusicImportAlert(
+            hazeState = state.hazeState,
+            signedIn = state.signedIn,
+            onImported = { playlist, privacy, songs ->
+                viewModel.createPlaylistWithVideoIds(
+                    title = playlist.name,
+                    privacy = privacy,
+                    videoIds = songs.map { it.videoId },
+                    songs = songs,
+                    motionVideoUrl = playlist.motionVideoUrl,
+                    coverUrl = playlist.coverUrl,
+                    applePlaylistId = playlist.id,
+                    storefront = playlist.storefront,
+                    description = playlist.description,
+                ) { browseId, pTitle, savedLocally ->
+                    actions.onShowQueueNotice(
+                        context.getString(
+                            if (savedLocally && state.signedIn) R.string.apple_music_import_local_fallback
+                            else R.string.apple_music_import_done,
+                            pTitle,
+                        ),
+                    )
+                    browseId?.let { id ->
+                        viewModel.openDetail(id, pTitle, "${songs.size} songs", songs.firstOrNull()?.thumbnailUrl)
+                    }
+                    val driveSettings = DriveBackup.settings.value
+                    val isDriveActive = driveSettings.account != null &&
+                        !driveSettings.needsSignIn &&
+                        !driveSettings.needsDevice &&
+                        driveSettings.frequency != BackupFrequency.OFF
+                    if (!isDriveActive) {
+                        showAppleMusicDriveNotice = true
+                    }
+                }
+            },
+            onDismiss = { AppleMusicImportController.showDialog = false },
+        )
+    }
+
+    if (showAppleMusicDriveNotice) {
+        ConfirmationAlert(
+            hazeState = state.hazeState,
+            title = stringResource(R.string.playlist_cover_local_notice_title),
+            description = stringResource(R.string.playlist_cover_local_notice_message),
+            confirmLabel = stringResource(R.string.playlist_cover_configure_drive),
+            cancelLabel = stringResource(R.string.playlist_cover_understood),
+            onConfirm = {
+                showAppleMusicDriveNotice = false
+                navigator.push(AppRoute.DriveBackup)
+            },
+            onDismiss = { showAppleMusicDriveNotice = false },
+            inOwnWindow = true,
         )
     }
 

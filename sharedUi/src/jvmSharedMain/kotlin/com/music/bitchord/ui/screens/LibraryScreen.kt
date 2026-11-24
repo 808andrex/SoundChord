@@ -24,6 +24,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.FlingBehavior
+import androidx.compose.foundation.gestures.ScrollableDefaults
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import com.music.bitchord.ui.components.ShelfRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -89,6 +93,7 @@ fun LibraryScreen(
     onShelfItemLongPress: (ShelfItem) -> Unit,
     onNewPlaylist: () -> Unit,
     onImportSpotifyPlaylist: (() -> Unit)? = null,
+    onImportAppleMusicPlaylist: (() -> Unit)? = null,
     /**
      * A shelf's "Show all" — every shelf's row here stops at five cards (see
      * [LibraryGridShelf]), so this is the only way to reach whatever didn't
@@ -168,6 +173,7 @@ fun LibraryScreen(
                         onItemLongPress = onShelfItemLongPress,
                         onNewPlaylist = onNewPlaylist,
                         onImportSpotifyPlaylist = onImportSpotifyPlaylist,
+                        onImportAppleMusicPlaylist = onImportAppleMusicPlaylist,
                         onShowAll = { onShowAll(emptyPlaylists) },
                     )
                 }
@@ -205,6 +211,7 @@ fun LibraryScreen(
                                 onItemLongPress = onShelfItemLongPress,
                                 onNewPlaylist = onNewPlaylist,
                                 onImportSpotifyPlaylist = onImportSpotifyPlaylist,
+                                onImportAppleMusicPlaylist = onImportAppleMusicPlaylist,
                                 onShowAll = { onShowAll(emptyPlaylists) },
                             )
                         }
@@ -219,6 +226,7 @@ fun LibraryScreen(
                                     onItemLongPress = onShelfItemLongPress,
                                     onNewPlaylist = onNewPlaylist,
                                     onImportSpotifyPlaylist = onImportSpotifyPlaylist,
+                                    onImportAppleMusicPlaylist = onImportAppleMusicPlaylist,
                                     onShowAll = { onShowAll(pinnedFirst) },
                                     pinnedPlaylists = pinnedPlaylists,
                                 )
@@ -318,6 +326,7 @@ private fun PlaylistShelf(
     onItemLongPress: (ShelfItem) -> Unit,
     onNewPlaylist: () -> Unit,
     onImportSpotifyPlaylist: (() -> Unit)? = null,
+    onImportAppleMusicPlaylist: (() -> Unit)? = null,
     onShowAll: () -> Unit,
     pinnedPlaylists: List<String> = emptyList(),
 ) {
@@ -327,6 +336,7 @@ private fun PlaylistShelf(
         onItemLongPress = onItemLongPress,
         onShowAll = onShowAll,
         pinnedPlaylists = pinnedPlaylists,
+        flingBehavior = ScrollableDefaults.flingBehavior(),
         leadingCard = {
             Row(horizontalArrangement = Arrangement.spacedBy(LIBRARY_GRID_SPACING)) {
                 NewShelfCard(
@@ -342,6 +352,14 @@ private fun PlaylistShelf(
                         subtitle = stringResource(Res.string.import_spotify_subtitle),
                         onClick = onImportSpotifyPlaylist,
                         logo = Res.drawable.spotify_logo,
+                    )
+                }
+                if (onImportAppleMusicPlaylist != null) {
+                    NewShelfCard(
+                        icon = BitChordIcons.MusicNote,
+                        label = stringResource(Res.string.import_apple_music),
+                        subtitle = stringResource(Res.string.import_apple_music_subtitle),
+                        onClick = onImportAppleMusicPlaylist,
                     )
                 }
             }
@@ -370,6 +388,7 @@ internal fun LibraryGridShelf(
     onShowAll: () -> Unit,
     leadingCard: (@Composable () -> Unit)? = null,
     pinnedPlaylists: List<String> = emptyList(),
+    flingBehavior: FlingBehavior? = null,
 ) {
     val leadingCount = if (leadingCard != null) 1 else 0
     val visibleItems = remember(shelf.items, leadingCount) {
@@ -381,7 +400,11 @@ internal fun LibraryGridShelf(
             subtitle = shelf.subtitle,
             onShowAll = onShowAll.takeIf { shelf.items.size + leadingCount > LIBRARY_ROW_MAX_ITEMS },
         )
+        val rowState = rememberLazyListState()
+        val effectiveFling = flingBehavior ?: rememberSnapFlingBehavior(lazyListState = rowState)
         ShelfRow(
+            state = rowState,
+            flingBehavior = effectiveFling,
             contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
             horizontalArrangement = Arrangement.spacedBy(LIBRARY_GRID_SPACING),
         ) {

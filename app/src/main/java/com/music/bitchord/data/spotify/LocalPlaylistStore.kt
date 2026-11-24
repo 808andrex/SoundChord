@@ -21,6 +21,10 @@ data class LocalPlaylist(
     val songs: List<Song>,
     val customCoverUri: String? = null,
     val motionVideoUrl: String? = null,
+    val coverUrl: String? = null,
+    val applePlaylistId: String? = null,
+    val storefront: String? = null,
+    val description: String? = null,
 ) {
     val browseId: String get() = "local:playlist:$id"
 }
@@ -89,8 +93,21 @@ object LocalPlaylistStore {
                 val storedCover = obj.optString("customCoverUri", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
                 val cover = PlaylistCovers.getCoverUri(appContext, id)?.toString() ?: storedCover
                 val motionVideo = obj.optString("motionVideoUrl", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
-                motionVideo?.let { com.music.bitchord.data.canvas.PlaylistMotionStore.setMotionVideoUrl(id, it) }
-                list.add(LocalPlaylist(id, title, songs, cover, motionVideo))
+                val coverUrl = obj.optString("coverUrl", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
+                val applePlaylistId = obj.optString("applePlaylistId", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
+                val storefront = obj.optString("storefront", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
+                val description = obj.optString("description", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
+                if (motionVideo != null || coverUrl != null || applePlaylistId != null || description != null) {
+                    com.music.bitchord.data.canvas.PlaylistMotionStore.setEntry(
+                        playlistIdOrBrowseId = id,
+                        motionVideoUrl = motionVideo,
+                        coverUrl = coverUrl,
+                        applePlaylistId = applePlaylistId,
+                        storefront = storefront,
+                        description = description,
+                    )
+                }
+                list.add(LocalPlaylist(id, title, songs, cover, motionVideo, coverUrl, applePlaylistId, storefront, description))
             }
             _playlists.value = list
         }
@@ -101,14 +118,34 @@ object LocalPlaylistStore {
         songs: List<Song>,
         coverUri: Uri? = null,
         motionVideoUrl: String? = null,
+        coverUrl: String? = null,
+        applePlaylistId: String? = null,
+        storefront: String? = null,
+        description: String? = null,
     ): LocalPlaylist {
         val id = "sp_local_" + java.util.UUID.randomUUID().toString()
-        val playlist = LocalPlaylist(id = id, title = title, songs = songs, motionVideoUrl = motionVideoUrl)
+        val playlist = LocalPlaylist(
+            id = id,
+            title = title,
+            songs = songs,
+            motionVideoUrl = motionVideoUrl,
+            coverUrl = coverUrl,
+            applePlaylistId = applePlaylistId,
+            storefront = storefront,
+            description = description,
+        )
         val updated = listOf(playlist) + _playlists.value.filterNot { it.id == id }
         _playlists.value = updated
         persist(updated)
-        if (motionVideoUrl != null && this::appContext.isInitialized) {
-            com.music.bitchord.data.canvas.PlaylistMotionStore.setMotionVideoUrl(id, motionVideoUrl)
+        if ((motionVideoUrl != null || coverUrl != null || applePlaylistId != null || description != null) && this::appContext.isInitialized) {
+            com.music.bitchord.data.canvas.PlaylistMotionStore.setEntry(
+                playlistIdOrBrowseId = id,
+                motionVideoUrl = motionVideoUrl,
+                coverUrl = coverUrl,
+                applePlaylistId = applePlaylistId,
+                storefront = storefront,
+                description = description,
+            )
         }
         if (coverUri != null && this::appContext.isInitialized) {
             val saved = com.music.bitchord.data.PlaylistCovers.save(appContext, id, coverUri)?.toString()
@@ -209,8 +246,21 @@ object LocalPlaylistStore {
                 val storedCover = obj.optString("customCoverUri", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
                 val cover = PlaylistCovers.getCoverUri(appContext, id)?.toString() ?: storedCover
                 val motionVideo = obj.optString("motionVideoUrl", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
-                motionVideo?.let { com.music.bitchord.data.canvas.PlaylistMotionStore.setMotionVideoUrl(id, it) }
-                incoming.add(LocalPlaylist(id, title, songs, cover, motionVideo))
+                val coverUrl = obj.optString("coverUrl", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
+                val applePlaylistId = obj.optString("applePlaylistId", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
+                val storefront = obj.optString("storefront", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
+                val description = obj.optString("description", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
+                if (motionVideo != null || coverUrl != null || applePlaylistId != null || description != null) {
+                    com.music.bitchord.data.canvas.PlaylistMotionStore.setEntry(
+                        playlistIdOrBrowseId = id,
+                        motionVideoUrl = motionVideo,
+                        coverUrl = coverUrl,
+                        applePlaylistId = applePlaylistId,
+                        storefront = storefront,
+                        description = description,
+                    )
+                }
+                incoming.add(LocalPlaylist(id, title, songs, cover, motionVideo, coverUrl, applePlaylistId, storefront, description))
             }
             val existingIds = _playlists.value.map { it.id }.toSet()
             val newPlaylists = incoming.filter { it.id !in existingIds }
@@ -231,6 +281,18 @@ object LocalPlaylistStore {
                 pObj.put("customCoverUri", playlist.customCoverUri)
                 if (playlist.motionVideoUrl != null) {
                     pObj.put("motionVideoUrl", playlist.motionVideoUrl)
+                }
+                if (playlist.coverUrl != null) {
+                    pObj.put("coverUrl", playlist.coverUrl)
+                }
+                if (playlist.applePlaylistId != null) {
+                    pObj.put("applePlaylistId", playlist.applePlaylistId)
+                }
+                if (playlist.storefront != null) {
+                    pObj.put("storefront", playlist.storefront)
+                }
+                if (playlist.description != null) {
+                    pObj.put("description", playlist.description)
                 }
                 val songsArray = JSONArray()
                 for (song in playlist.songs) {

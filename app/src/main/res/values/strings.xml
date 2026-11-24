@@ -1447,6 +1447,10 @@
     <string name="spotify_import_local_fallback">Couldn\'t create it on YouTube Music, so \'%1$s\' was saved on this device instead.</string>
     <string name="spotify_import_done">Imported \'%1$s\'</string>
     <string name="spotify_import_unmatched">%1$d songs weren\'t found on YouTube Music</string>
+    <string name="apple_music_import_done">Imported \'%1$s\' from Apple Music</string>
+    <string name="apple_music_import_local_fallback">Couldn\'t create it on YouTube Music, so \'%1$s\' was saved on this device instead.</string>
+    <string name="apple_music_import_invalid">That isn\'t an Apple Music playlist link.</string>
+    <string name="playlist_description_more">MORE</string>
     <string name="local_playlist_subtitle">%1$d songs · On this device</string>
     <!-- Local Music's own playlists and folders: the offline player. -->
     <string name="folders">Folders</string>

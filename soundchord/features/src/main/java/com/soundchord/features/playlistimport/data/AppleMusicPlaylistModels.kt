@@ -25,4 +25,5 @@ data class AppleMusicPlaylist(
     val motionVideoUrl: String? = null,
     val motionPreviewUrl: String? = null,
     val tracks: List<AppleMusicTrack> = emptyList(),
+    val storefront: String = "us",
 )

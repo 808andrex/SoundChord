@@ -990,6 +990,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val recentlyCreatedPlaylistIds = mutableListOf<String>()
     /** Keeps a successful add visible while YouTube's playlist count catches up. */
     private val optimisticPlaylistCounts = mutableMapOf<String, Int>()
+    /** Keeps newly imported/created playlist songs available immediately while YouTube's backend replica indexes them. */
+    private val pendingPlaylistSongs = mutableMapOf<String, List<Song>>()
 
     private fun normalizedPlaylistId(id: String): String =
         com.music.bitchord.data.PlaylistCovers.normalizePlaylistId(id)
@@ -999,13 +1001,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val context = getApplication<Application>()
         return playlists.map { playlist ->
             val normalizedId = normalizedPlaylistId(playlist.playlistId)
-            val cover = com.music.bitchord.data.PlaylistCovers.getCoverUri(context, normalizedId)
-                ?: com.music.bitchord.data.PlaylistCovers.getCoverUri(context, playlist.browseId)
+            val cover = com.music.bitchord.data.PlaylistCovers.getCoverUri(context, normalizedId)?.toString()
+                ?: com.music.bitchord.data.PlaylistCovers.getCoverUri(context, playlist.browseId)?.toString()
+                ?: com.music.bitchord.data.canvas.PlaylistMotionStore.getCoverUrl(normalizedId)
+                ?: com.music.bitchord.data.canvas.PlaylistMotionStore.getCoverUrl(playlist.browseId)
             val normalized = if (playlist.playlistId == normalizedId) playlist
                 else playlist.copy(playlistId = normalizedId)
             val count = optimisticPlaylistCounts[normalizedId]
             val withCount = if (count == null) normalized else normalized.copy(subtitle = playlistSubtitle(normalized, count))
-            if (cover == null) withCount else withCount.copy(thumbnailUrl = cover.toString())
+            if (cover == null) withCount else withCount.copy(thumbnailUrl = cover)
         }
     }
 
@@ -1025,10 +1029,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val allItems = (existingItems + missingItems).map { item ->
             val id = item.browseId
             val current = id?.let { knownById[normalizedPlaylistId(it)] }
-            val updated = if (current == null) item else item.copy(
+            val motionCover = id?.let { com.music.bitchord.data.canvas.PlaylistMotionStore.getCoverUrl(it) }
+            val updated = if (current == null) {
+                if (motionCover != null && item.thumbnailUrl == null) item.copy(thumbnailUrl = motionCover)
+                else item
+            } else item.copy(
                 title = current.title,
                 subtitle = current.subtitle,
-                thumbnailUrl = current.thumbnailUrl ?: item.thumbnailUrl?.takeUnless { it.startsWith("file:") },
+                thumbnailUrl = current.thumbnailUrl ?: motionCover ?: item.thumbnailUrl?.takeUnless { it.startsWith("file:") },
             )
             val count = id?.let { optimisticPlaylistCounts[normalizedPlaylistId(it)] }
             val withCount = if (id == null || count == null) updated else {
@@ -1078,8 +1086,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return shelves.map { shelf ->
             shelf.copy(items = shelf.items.map { item ->
                 val id = item.browseId
-                val cover = id?.let { com.music.bitchord.data.PlaylistCovers.getCoverUri(context, it) }
-                if (cover == null) item else item.copy(thumbnailUrl = cover.toString())
+                val cover = id?.let {
+                    com.music.bitchord.data.PlaylistCovers.getCoverUri(context, it)?.toString()
+                        ?: com.music.bitchord.data.canvas.PlaylistMotionStore.getCoverUrl(it)
+                }
+                if (cover == null) item else item.copy(thumbnailUrl = cover)
             })
         }
     }
@@ -1385,6 +1396,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     cacheCurrentListener()
                     loadPlaylists()
                     refreshLibraryAfterPlaylistMutation()
+                    com.music.bitchord.data.backup.DriveBackup.syncSilently(getApplication())
                     onCreated?.invoke(created)
                 },
                 onFailure = {},
@@ -1399,6 +1411,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         songs: List<Song> = emptyList(),
         coverUri: android.net.Uri? = null,
         motionVideoUrl: String? = null,
+        coverUrl: String? = null,
+        applePlaylistId: String? = null,
+        storefront: String? = null,
+        description: String? = null,
         /** [savedLocally] is true when the playlist went to this device, not YouTube Music. */
         onResult: ((browseId: String?, title: String, savedLocally: Boolean) -> Unit)? = null,
     ) {
@@ -1420,17 +1436,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                         setPlaylistOwned("VL$normalizedId", true)
                         libraryStale = true
-                        motionVideoUrl?.let {
-                            com.music.bitchord.data.canvas.PlaylistMotionStore.setMotionVideoUrl(normalizedId, it)
+                        if (motionVideoUrl != null || coverUrl != null || applePlaylistId != null || description != null) {
+                            com.music.bitchord.data.canvas.PlaylistMotionStore.setEntry(
+                                playlistIdOrBrowseId = normalizedId,
+                                motionVideoUrl = motionVideoUrl,
+                                coverUrl = coverUrl,
+                                applePlaylistId = applePlaylistId,
+                                storefront = storefront,
+                                description = description,
+                            )
                         }
-                        val coverUrl = coverUri?.let {
+                        val localCoverUrl = coverUri?.let {
                             com.music.bitchord.data.PlaylistCovers.save(getApplication<Application>(), normalizedId, it)?.toString()
                         }
+                        val effectiveCover = localCoverUrl ?: coverUrl ?: songs.firstOrNull()?.thumbnailUrl
                         val created = UserPlaylist(
                             playlistId = normalizedId,
                             title = name,
                             subtitle = "${videoIds.size} songs",
-                            thumbnailUrl = coverUrl ?: songs.firstOrNull()?.thumbnailUrl,
+                            thumbnailUrl = effectiveCover,
                         )
                         optimisticPlaylistCounts[normalizedId] = videoIds.size
                         pendingCreatedPlaylists[normalizedId] = created
@@ -1450,15 +1474,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             ) + items.filterNot { it.browseId?.let(::normalizedPlaylistId) == normalizedId }
                         }
                         cacheCurrentListener()
+                        if (songs.isNotEmpty()) {
+                            pendingPlaylistSongs[created.browseId] = songs
+                            pendingPlaylistSongs[normalizedId] = songs
+                            pendingPlaylistSongs["VL$normalizedId"] = songs
+                        }
+                        com.music.bitchord.data.backup.DriveBackup.syncSilently(getApplication())
+                        kotlinx.coroutines.delay(800)
                         onResult?.invoke(created.browseId, created.title, false)
                     },
                     onFailure = {
-                        val local = com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, songs, coverUri, motionVideoUrl)
+                        val local = com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(
+                            title = name,
+                            songs = songs,
+                            coverUri = coverUri,
+                            motionVideoUrl = motionVideoUrl,
+                            coverUrl = coverUrl,
+                            applePlaylistId = applePlaylistId,
+                            storefront = storefront,
+                            description = description,
+                        )
+                        com.music.bitchord.data.backup.DriveBackup.syncSilently(getApplication())
                         onResult?.invoke(local.browseId, local.title, true)
                     },
                 )
             } else {
-                val local = com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, songs, coverUri, motionVideoUrl)
+                val local = com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(
+                    title = name,
+                    songs = songs,
+                    coverUri = coverUri,
+                    motionVideoUrl = motionVideoUrl,
+                    coverUrl = coverUrl,
+                    applePlaylistId = applePlaylistId,
+                    storefront = storefront,
+                    description = description,
+                )
+                com.music.bitchord.data.backup.DriveBackup.syncSilently(getApplication())
                 onResult?.invoke(local.browseId, local.title, true)
             }
         }
@@ -3310,8 +3361,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             }
                             description = page.description
                             if (page.songs.isEmpty()) {
-                                UiState.Error(text(R.string.no_tracks_here))
+                                val fallback = pendingPlaylistSongs[browseId] ?: pendingPlaylistSongs[browseId.removePrefix("VL")]
+                                if (!fallback.isNullOrEmpty()) {
+                                    UiState.Success(fallback.withArtwork(thumbnailUrl ?: artwork))
+                                } else {
+                                    UiState.Error(text(R.string.no_tracks_here))
+                                }
                             } else {
+                                pendingPlaylistSongs.remove(browseId)
+                                pendingPlaylistSongs.remove(browseId.removePrefix("VL"))
                                 more = page.continuation
                                 suggested = page.suggested.withArtwork(thumbnailUrl ?: artwork)
                                 library = page.library
@@ -3494,6 +3552,60 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     it.copy(songs = state)
                 } else it
             }
+        }
+    }
+
+    fun reloadDetail(browseId: String) {
+        if (browseId.startsWith(SPOTIFY_PAGE_PREFIX)) return
+        val localPlaylist = com.music.bitchord.data.spotify.LocalPlaylistStore.getPlaylist(browseId)
+        if (localPlaylist != null || browseId.startsWith("local:") || remoteLibrary(browseId) != null) {
+            reloadLocalDetail(browseId)
+            return
+        }
+        viewModelScope.launch {
+            _detailStack.value = _detailStack.value.map {
+                if (it.browseId == browseId) it.copy(songs = UiState.Loading) else it
+            }
+            YtMusicRepository.browseSongs(browseId).fold(
+                onSuccess = { page ->
+                    page.owned?.let { setPlaylistOwned(browseId, it) }
+                    val targetSongs = if (page.songs.isEmpty()) {
+                        val fallback = pendingPlaylistSongs[browseId] ?: pendingPlaylistSongs[browseId.removePrefix("VL")]
+                        if (!fallback.isNullOrEmpty()) {
+                            UiState.Success(fallback)
+                        } else {
+                            UiState.Error(text(R.string.no_tracks_here))
+                        }
+                    } else {
+                        pendingPlaylistSongs.remove(browseId)
+                        pendingPlaylistSongs.remove(browseId.removePrefix("VL"))
+                        UiState.Success(page.songs)
+                    }
+                    _detailStack.value = _detailStack.value.map {
+                        if (it.browseId == browseId) {
+                            it.copy(
+                                songs = targetSongs,
+                                continuation = page.continuation,
+                                suggestedSongs = page.suggested,
+                                library = page.library,
+                                description = page.description ?: it.description,
+                            )
+                        } else it
+                    }
+                },
+                onFailure = { err ->
+                    _detailStack.value = _detailStack.value.map {
+                        if (it.browseId == browseId) {
+                            val fallback = pendingPlaylistSongs[browseId] ?: pendingPlaylistSongs[browseId.removePrefix("VL")]
+                            if (!fallback.isNullOrEmpty()) {
+                                it.copy(songs = UiState.Success(fallback))
+                            } else {
+                                it.copy(songs = UiState.Error(err.friendly()))
+                            }
+                        } else it
+                    }
+                },
+            )
         }
     }
 

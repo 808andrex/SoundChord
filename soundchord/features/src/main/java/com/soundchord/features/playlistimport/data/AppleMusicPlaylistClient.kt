@@ -152,6 +152,7 @@ object AppleMusicPlaylistClient {
                 motionVideoUrl = motionVideoUrl,
                 motionPreviewUrl = motionPreviewUrl,
                 tracks = allTracks,
+                storefront = storefront,
             )
         }
 

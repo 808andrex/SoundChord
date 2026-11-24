@@ -1,6 +1,9 @@
 package com.music.bitchord.ui.screens
 
 import com.music.bitchord.ui.components.coverSharedElement
+import com.music.bitchord.ui.components.InfoAlert
+import com.music.bitchord.data.canvas.PlaylistMotionStore
+import dev.chrisbanes.haze.HazeState
 import com.music.bitchord.ui.components.rememberCoverTap
 import com.music.bitchord.ui.components.secondaryExitFade
 import com.music.bitchord.ui.components.staggeredEntrance
@@ -11,6 +14,7 @@ import com.music.bitchord.R
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -187,6 +191,7 @@ import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.graphics.FADE_CURVE_STOPS
 import com.music.bitchord.ui.graphics.smootherStep
 import com.music.bitchord.ui.player.CanvasArtworkPlayer
+import com.music.bitchord.ui.player.CanvasContentMode
 import com.music.bitchord.ui.theme.ArtworkPalette
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import kotlin.math.roundToInt
@@ -376,6 +381,8 @@ fun DetailScreen(
      * [ArtworkPalette] so it reads as this page rather than a sheet over it.
      */
     reorder: (@Composable (ArtworkPalette) -> Unit)? = null,
+    /** Triggers a fresh reload of this detail page if initial loading failed or was empty. */
+    onRetry: (() -> Unit)? = null,
 ) {
     val rawSongs = (page.songs as? UiState.Success)?.data.orEmpty()
     // A folder keeps its own sort — the one its top bar menu sets — rather
@@ -442,8 +449,23 @@ fun DetailScreen(
             if (signature != null) return@LaunchedEffect
         }
     }
+    var autoRetryAttempted by remember(page.browseId) { mutableStateOf(false) }
+    LaunchedEffect(page.browseId, page.songs) {
+        if (!autoRetryAttempted && page.type == BrowseType.PLAYLIST && (page.songs is UiState.Error || (page.songs is UiState.Success && (page.songs as UiState.Success).data.isEmpty()))) {
+            delay(1000)
+            autoRetryAttempted = true
+            onRetry?.invoke()
+        }
+    }
+    val playlistCover = remember(page.browseId) {
+        if (page.type == BrowseType.PLAYLIST) {
+            com.music.bitchord.data.canvas.PlaylistMotionStore.getCoverUrl(page.browseId)
+                ?: com.music.bitchord.data.spotify.LocalPlaylistStore.getPlaylist(page.browseId)?.coverUrl
+        } else null
+    }
+    val effectiveThumbnailUrl = playlistCover ?: page.thumbnailUrl
     val palette = rememberArtworkPalette(
-        imageUrl = appleArt?.heroUrl ?: page.thumbnailUrl,
+        imageUrl = appleArt?.heroUrl ?: effectiveThumbnailUrl,
         keyColors = appleArt?.keyColors(),
     )
 
@@ -507,8 +529,24 @@ fun DetailScreen(
     LaunchedEffect(page.browseId, page.title, credit, canvasEnabled, prioritizeSpotifyCanvas) {
         // An artist's clip is set below, by the lookup that finds it.
         if (isArtist) return@LaunchedEffect
-        if (!canvasEnabled || page.type != BrowseType.ALBUM) {
+        if (!canvasEnabled || (page.type != BrowseType.ALBUM && page.type != BrowseType.PLAYLIST)) {
             canvas = null
+            return@LaunchedEffect
+        }
+        if (page.type == BrowseType.PLAYLIST) {
+            val entry = com.music.bitchord.data.canvas.PlaylistMotionStore.getEntry(page.browseId)
+            val motionUrl = entry?.motionVideoUrl
+                ?: com.music.bitchord.data.spotify.LocalPlaylistStore.getPlaylist(page.browseId)?.motionVideoUrl
+            val effectiveUrl = motionUrl ?: if (entry?.applePlaylistId != null) {
+                com.music.bitchord.data.canvas.PlaylistMotionStore.refreshMotionUrl(page.browseId)
+            } else null
+            canvas = effectiveUrl?.let {
+                CanvasArtwork(
+                    url = it,
+                    title = page.title,
+                    source = com.music.bitchord.data.canvas.CanvasSource.APPLE,
+                )
+            }
             return@LaunchedEffect
         }
         // As on the player: the credit fills in once the tracks load, so this
@@ -970,114 +1008,39 @@ private fun ReleaseHeader(
     // the first one speaks for the whole page, the same source the rows'
     // own long-press "Open artist" already reads from.
     val artist = songs.firstOrNull()
-    var artFailed by remember(page.thumbnailUrl) { mutableStateOf(false) }
+    val playlistCover = remember(page.browseId) {
+        if (page.type == BrowseType.PLAYLIST) {
+            com.music.bitchord.data.canvas.PlaylistMotionStore.getCoverUrl(page.browseId)
+                ?: com.music.bitchord.data.spotify.LocalPlaylistStore.getPlaylist(page.browseId)?.coverUrl
+        } else null
+    }
+    val effectiveCover = playlistCover ?: page.thumbnailUrl
+    var artFailed by remember(effectiveCover) { mutableStateOf(false) }
     // A placeholder is a sleeve or it is nothing, as on the player: blown out
     // to the page's width it would only tint the top of the screen.
-    val bleed = fullBleed && page.thumbnailUrl != null && !artFailed
+    val bleed = fullBleed && effectiveCover != null && !artFailed
+    val isPlaylistWithMotion = fullBleed && page.type == BrowseType.PLAYLIST && canvas != null
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            // Clear of the floating bar, which only a full-bleed sleeve runs under.
-            .padding(top = if (bleed) 0.dp else topBarContentPadding(), bottom = 18.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        if (bleed) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    // Laid out shorter than it draws, so the title rides up into
-                    // the dissolve rather than starting under a band of page
-                    // colour where the sleeve has already gone.
-                    .layout { measurable, constraints ->
-                        val placeable = measurable.measure(constraints)
-                        val height = (placeable.height - FULL_BLEED_TITLE_OVERLAP.roundToPx()).coerceAtLeast(0)
-                        layout(placeable.width, height) { placeable.place(0, 0) }
-                    }
-                    .aspectRatio(1f)
-                    .coverSharedElement(page.browseId, RoundedCornerShape(0.dp)),
-            ) {
-                AsyncImage(
-                    model = page.thumbnailUrl.artworkAt(HEADER_ART_PX),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    onState = { artFailed = it is AsyncImagePainter.State.Error },
-                    modifier = Modifier
-                        .matchParentSize()
-                        // The mask below erases part of what this layer drew,
-                        // which it can only do in a buffer of its own.
-                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                        .drawWithContent {
-                            drawContent()
-                            // The player banner's dissolve, along smootherstep so
-                            // neither end of it shows as a line.
-                            drawRect(
-                                brush = Brush.verticalGradient(
-                                    colorStops = Array(FADE_CURVE_STOPS + 1) { i ->
-                                        val t = i / FADE_CURVE_STOPS.toFloat()
-                                        t to Color.Black.copy(alpha = 1f - smootherStep(t))
-                                    },
-                                    startY = size.height * (1f - FULL_BLEED_FADE_FRACTION),
-                                    endY = size.height,
-                                ),
-                                blendMode = BlendMode.DstIn,
-                            )
-                        }
-                        .background(palette.elevated),
-                )
-                // Beside the still rather than inside its layer: a clip's
-                // TextureView takes no Compose mask, so it dissolves itself.
-                canvas?.let { clip ->
-                    CanvasArtworkPlayer(
-                        canvas = clip,
-                        isPlaying = true,
-                        bottomFade = FULL_BLEED_FADE_FRACTION,
-                        modifier = Modifier.matchParentSize(),
-                    )
-                }
-            }
-        } else Box(
-            Modifier
-                .size(sleeveSize)
-                .shadow(SLEEVE_SHADOW, SLEEVE_SHAPE)
-                .coverSharedElement(page.browseId, SLEEVE_SHAPE)
-                .background(palette.elevated)
-                .thumbnailBorder(SLEEVE_SHAPE),
-        ) {
-            // A cover that isn't there, or wouldn't load — a device folder, a
-            // playlist with nothing on it yet, files with no picture — gets a
-            // placeholder sleeve rather than an empty square. Not shown while a
-            // real one is still on its way, so a loading cover doesn't flash
-            // a glyph first.
-            if (page.thumbnailUrl == null || artFailed) {
-                CoverPlaceholder(
-                    icon = page.placeholderIcon(),
-                    base = palette.elevated,
-                    tint = palette.onBackgroundVariant,
-                    modifier = Modifier.matchParentSize(),
-                )
-            }
-            AsyncImage(
-                model = page.thumbnailUrl.artworkAt(HEADER_ART_PX),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                onState = { artFailed = it is AsyncImagePainter.State.Error },
-                modifier = Modifier.matchParentSize(),
-            )
-            // Animated cover art, inside the same frame. Always running:
-            // unlike the player's sleeve there is no transport here to follow,
-            // and the page is only up while it's being read.
-            canvas?.let { clip ->
-                CanvasArtworkPlayer(
-                    canvas = clip,
-                    isPlaying = true,
-                    modifier = Modifier.matchParentSize(),
-                )
-            }
-        }
+    var showDescriptionDialog by remember { mutableStateOf(false) }
+    val effectiveDescription: String? = remember(page.browseId, page.description) {
+        PlaylistMotionStore.getDescription(page.browseId)?.takeIf { it.isNotBlank() }
+            ?: page.description?.takeIf { it.isNotBlank() }
+    }
 
+    if (showDescriptionDialog && !effectiveDescription.isNullOrBlank()) {
+        InfoAlert(
+            hazeState = remember { HazeState() },
+            title = page.title,
+            description = effectiveDescription,
+            actionLabel = stringResource(R.string.accept),
+            onDismiss = { showDescriptionDialog = false },
+            inOwnWindow = true,
+        )
+    }
+
+    val headerBody: @Composable (Modifier) -> Unit = { bodyModifier ->
         Column(
-            modifier = Modifier
+            modifier = bodyModifier
                 .fillMaxWidth()
                 .secondaryExitFade(100),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -1092,167 +1055,370 @@ private fun ReleaseHeader(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.enterReveal(150).padding(horizontal = HEADER_GUTTER),
             )
-        if (credit.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = credit,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 19.sp,
-                ),
-                color = palette.onBackgroundVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .enterReveal(200)
-                    .padding(horizontal = HEADER_GUTTER)
-                    .let { m ->
-                        val id = artist?.artistId
-                        if (id == null || onArtistClick == null) {
-                            m
-                        } else {
-                            m.clip(RoundedCornerShape(6.dp))
-                                .clickable { onArtistClick(id, artist.artist) }
-                        }
-                    },
-            )
-        }
-        if (meta.isNotBlank()) {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = meta,
-                style = MaterialTheme.typography.labelMedium,
-                color = palette.onBackgroundVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.enterReveal(240).padding(horizontal = HEADER_GUTTER),
-            )
-        }
+            if (credit.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = credit,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 19.sp,
+                    ),
+                    color = palette.onBackgroundVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .enterReveal(200)
+                        .padding(horizontal = HEADER_GUTTER)
+                        .let { m ->
+                            val id = artist?.artistId
+                            if (id == null || onArtistClick == null) {
+                                m
+                            } else {
+                                m.clip(RoundedCornerShape(6.dp))
+                                    .clickable { onArtistClick(id, artist.artist) }
+                            }
+                        },
+                )
+            }
+            if (meta.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = meta,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = palette.onBackgroundVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.enterReveal(240).padding(horizontal = HEADER_GUTTER),
+                )
+            }
 
-        if (songs.isNotEmpty()) {
-            // Only where YouTube said the release can be saved and the caller
-            // is willing to take the write — see [onToggleLibrary].
-            val library = page.library?.takeIf { onToggleLibrary != null }
-            Spacer(Modifier.height(18.dp))
-            Row(
-                modifier = Modifier
-                    .enterReveal(290)
-                    .widthIn(max = RELEASE_ACTIONS_MAX_WIDTH)
-                    .fillMaxWidth()
-                    .padding(horizontal = HEADER_GUTTER),
-                horizontalArrangement = Arrangement.spacedBy(RELEASE_ACTION_GAP),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (page.browseId.startsWith("local:")) {
-                    // Already on this device — a folder, a download, a local
-                    // playlist — so there is no library to add it to, and a
-                    // greyed-out plus would only promise one. Apple Music's
-                    // own pair for that case: Play and Shuffle, side by side.
-                    ActionPill(
-                        icon = BitChordIcons.Play,
-                        label = stringResource(R.string.play),
-                        onClick = onPlay,
-                        filled = true,
-                        size = RELEASE_SIDE_BUTTON,
-                        modifier = Modifier.weight(1f),
-                    )
-                    ActionPill(
-                        icon = BitChordIcons.Shuffle,
-                        label = stringResource(R.string.shuffle),
-                        onClick = onShuffle,
-                        filled = false,
-                        size = RELEASE_SIDE_BUTTON,
-                        modifier = Modifier.weight(1f),
-                    )
-                    // The song cache's copies, saved to Downloads in one go —
-                    // from disk, so it works offline. See [LocalFolder.onDownload].
-                    onDownloadAll?.let {
+            if (songs.isNotEmpty()) {
+                // Only where YouTube said the release can be saved and the caller
+                // is willing to take the write — see [onToggleLibrary].
+                val library = page.library?.takeIf { onToggleLibrary != null }
+                Spacer(Modifier.height(18.dp))
+                Row(
+                    modifier = Modifier
+                        .enterReveal(290)
+                        .widthIn(max = RELEASE_ACTIONS_MAX_WIDTH)
+                        .fillMaxWidth()
+                        .padding(horizontal = HEADER_GUTTER),
+                    horizontalArrangement = Arrangement.spacedBy(RELEASE_ACTION_GAP),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (page.browseId.startsWith("local:")) {
+                        // Already on this device — a folder, a download, a local
+                        // playlist — so there is no library to add it to, and a
+                        // greyed-out plus would only promise one. Apple Music's
+                        // own pair for that case: Play and Shuffle, side by side.
+                        ActionPill(
+                            icon = BitChordIcons.Play,
+                            label = stringResource(R.string.play),
+                            onClick = onPlay,
+                            filled = true,
+                            size = RELEASE_SIDE_BUTTON,
+                            modifier = Modifier.weight(1f),
+                        )
+                        ActionPill(
+                            icon = BitChordIcons.Shuffle,
+                            label = stringResource(R.string.shuffle),
+                            onClick = onShuffle,
+                            filled = false,
+                            size = RELEASE_SIDE_BUTTON,
+                            modifier = Modifier.weight(1f),
+                        )
+                        // The song cache's copies, saved to Downloads in one go —
+                        // from disk, so it works offline. See [LocalFolder.onDownload].
+                        onDownloadAll?.let {
+                            CircleIconButton(
+                                icon = Icons.Rounded.Download,
+                                contentDescription = stringResource(R.string.download_all),
+                                onClick = it,
+                                size = RELEASE_SIDE_BUTTON,
+                            )
+                        }
+                        return@Row
+                    }
+                    val canAddSongs = onAddSongs != null
+                    if (canAddSongs) {
                         CircleIconButton(
-                            icon = Icons.Rounded.Download,
-                            contentDescription = stringResource(R.string.download_all),
-                            onClick = it,
+                            icon = BitChordIcons.Shuffle,
+                            contentDescription = stringResource(R.string.shuffle),
+                            onClick = onShuffle,
+                            haptic = Haptic.Resume,
+                            size = RELEASE_SIDE_BUTTON,
+                        )
+                        ActionPill(
+                            icon = BitChordIcons.Play,
+                            label = stringResource(R.string.play),
+                            onClick = onPlay,
+                            filled = true,
+                            size = RELEASE_SIDE_BUTTON,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        ActionPill(
+                            icon = BitChordIcons.Play,
+                            label = stringResource(R.string.play),
+                            onClick = onPlay,
+                            filled = true,
+                            size = RELEASE_SIDE_BUTTON,
+                            modifier = Modifier.weight(1f),
+                        )
+                        ActionPill(
+                            icon = BitChordIcons.Shuffle,
+                            label = stringResource(R.string.shuffle),
+                            onClick = onShuffle,
+                            filled = false,
+                            size = RELEASE_SIDE_BUTTON,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    if (canAddSongs) {
+                        CircleIconButton(
+                            icon = BitChordIcons.Plus,
+                            contentDescription = stringResource(R.string.add_songs_to_playlist),
+                            onClick = { onAddSongs?.invoke() },
+                            haptic = Haptic.ToggleOn,
+                            size = RELEASE_SIDE_BUTTON,
+                        )
+                    } else if (library != null && page.type != BrowseType.PLAYLIST) {
+                        CircleIconButton(
+                            // A tick, not a filled-in plus: the pair reads as
+                            // "not yet / done", which is what the state is.
+                            icon = if (library.saved) BitChordIcons.Check else BitChordIcons.Plus,
+                            contentDescription = if (library.saved) {
+                                stringResource(R.string.remove_from_library)
+                            } else {
+                                stringResource(R.string.add_to_library)
+                            },
+                            onClick = { onToggleLibrary?.invoke() },
+                            haptic = if (library.saved) Haptic.ToggleOff else Haptic.ToggleOn,
                             size = RELEASE_SIDE_BUTTON,
                         )
                     }
-                    return@Row
                 }
-                val canAddSongs = onAddSongs != null
-                if (canAddSongs) {
-                    CircleIconButton(
-                        icon = BitChordIcons.Shuffle,
-                        contentDescription = stringResource(R.string.shuffle),
-                        onClick = onShuffle,
-                        haptic = Haptic.Resume,
-                        size = RELEASE_SIDE_BUTTON,
-                    )
-                    ActionPill(
-                        icon = BitChordIcons.Play,
-                        label = stringResource(R.string.play),
-                        onClick = onPlay,
-                        filled = true,
-                        size = RELEASE_SIDE_BUTTON,
-                        modifier = Modifier.weight(1f),
-                    )
-                } else {
-                    ActionPill(
-                        icon = BitChordIcons.Play,
-                        label = stringResource(R.string.play),
-                        onClick = onPlay,
-                        filled = true,
-                        size = RELEASE_SIDE_BUTTON,
-                        modifier = Modifier.weight(1f),
-                    )
-                    ActionPill(
-                        icon = BitChordIcons.Shuffle,
-                        label = stringResource(R.string.shuffle),
-                        onClick = onShuffle,
-                        filled = false,
-                        size = RELEASE_SIDE_BUTTON,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (canAddSongs) {
-                    CircleIconButton(
-                        icon = BitChordIcons.Plus,
-                        contentDescription = stringResource(R.string.add_songs_to_playlist),
-                        onClick = { onAddSongs?.invoke() },
-                        haptic = Haptic.ToggleOn,
-                        size = RELEASE_SIDE_BUTTON,
-                    )
-                } else if (library != null && page.type != BrowseType.PLAYLIST) {
-                    CircleIconButton(
-                        // A tick, not a filled-in plus: the pair reads as
-                        // "not yet / done", which is what the state is.
-                        icon = if (library.saved) BitChordIcons.Check else BitChordIcons.Plus,
-                        contentDescription = if (library.saved) {
-                            stringResource(R.string.remove_from_library)
-                        } else {
-                            stringResource(R.string.add_to_library)
+            }
+            if (onAddSongs != null && songs.isEmpty()) {
+                Spacer(Modifier.height(18.dp))
+                ActionPill(
+                    icon = BitChordIcons.Plus,
+                    label = stringResource(R.string.add_songs_to_playlist),
+                    onClick = { onAddSongs.invoke() },
+                    filled = true,
+                    size = RELEASE_SIDE_BUTTON,
+                    modifier = Modifier
+                        .enterReveal(290)
+                        .widthIn(max = RELEASE_ACTIONS_MAX_WIDTH)
+                        .fillMaxWidth()
+                        .padding(horizontal = HEADER_GUTTER),
+                )
+            }
+            if (!effectiveDescription.isNullOrBlank()) {
+                Spacer(Modifier.height(14.dp))
+                val moreLabel = stringResource(R.string.playlist_description_more)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = HEADER_GUTTER + 4.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showDescriptionDialog = true }
+                        .padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.Start,
+                ) {
+                    Text(
+                        text = buildAnnotatedString {
+                            append(effectiveDescription)
+                            append(" ")
+                            withStyle(
+                                SpanStyle(
+                                    fontWeight = FontWeight.Bold,
+                                    color = palette.onBackground,
+                                )
+                            ) {
+                                append(moreLabel)
+                            }
                         },
-                        onClick = { onToggleLibrary?.invoke() },
-                        haptic = if (library.saved) Haptic.ToggleOff else Haptic.ToggleOn,
-                        size = RELEASE_SIDE_BUTTON,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                        ),
+                        color = palette.onBackgroundVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
         }
-        if (onAddSongs != null && songs.isEmpty()) {
-            Spacer(Modifier.height(18.dp))
-            ActionPill(
-                icon = BitChordIcons.Plus,
-                label = stringResource(R.string.add_songs_to_playlist),
-                onClick = { onAddSongs.invoke() },
-                filled = true,
-                size = RELEASE_SIDE_BUTTON,
+    }
+
+    if (isPlaylistWithMotion) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .coverSharedElement(page.browseId, RoundedCornerShape(0.dp)),
+        ) {
+            Box(
                 modifier = Modifier
-                    .enterReveal(290)
-                    .widthIn(max = RELEASE_ACTIONS_MAX_WIDTH)
-                    .fillMaxWidth()
-                    .padding(horizontal = HEADER_GUTTER),
-            )
+                    .matchParentSize()
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colorStops = Array(FADE_CURVE_STOPS + 1) { i ->
+                                    val t = i / FADE_CURVE_STOPS.toFloat()
+                                    t to Color.Black.copy(alpha = 1f - smootherStep(t))
+                                },
+                                startY = size.height * (1f - FULL_BLEED_FADE_FRACTION),
+                                endY = size.height,
+                            ),
+                            blendMode = BlendMode.DstIn,
+                        )
+                    }
+                    .background(palette.elevated),
+            ) {
+                val staticCoverAlpha by animateFloatAsState(
+                    targetValue = if (canvas != null) 0f else 1f,
+                    animationSpec = tween(durationMillis = 400),
+                    label = "motion_cover_alpha",
+                )
+                AsyncImage(
+                    model = effectiveCover?.artworkAt(HEADER_ART_PX),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    onState = { artFailed = it is AsyncImagePainter.State.Error },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = staticCoverAlpha },
+                )
+                canvas?.let { clip ->
+                    CanvasArtworkPlayer(
+                        canvas = clip,
+                        isPlaying = true,
+                        contentMode = CanvasContentMode.CROP,
+                        bottomFade = FULL_BLEED_FADE_FRACTION,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+            headerBody(Modifier.padding(top = topBarContentPadding() + 204.dp, bottom = 18.dp))
         }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                // Clear of the floating bar, which only a full-bleed sleeve runs under.
+                .padding(top = if (bleed) 0.dp else topBarContentPadding(), bottom = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (bleed) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        // Laid out shorter than it draws, so the title rides up into
+                        // the dissolve rather than starting under a band of page
+                        // colour where the sleeve has already gone.
+                        .layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints)
+                            val height = (placeable.height - FULL_BLEED_TITLE_OVERLAP.roundToPx()).coerceAtLeast(0)
+                            layout(placeable.width, height) { placeable.place(0, 0) }
+                        }
+                        .aspectRatio(1f)
+                        .coverSharedElement(page.browseId, RoundedCornerShape(0.dp)),
+                ) {
+                    val staticCoverAlpha by animateFloatAsState(
+                        targetValue = if (canvas != null) 0f else 1f,
+                        animationSpec = tween(durationMillis = 400),
+                        label = "bleed_cover_alpha",
+                    )
+                    AsyncImage(
+                        model = effectiveCover?.artworkAt(HEADER_ART_PX),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        onState = { artFailed = it is AsyncImagePainter.State.Error },
+                        modifier = Modifier
+                            .matchParentSize()
+                            // The mask below erases part of what this layer drew,
+                            // which it can only do in a buffer of its own.
+                            .graphicsLayer {
+                                compositingStrategy = CompositingStrategy.Offscreen
+                                if (canvas != null) alpha = staticCoverAlpha
+                            }
+                            .drawWithContent {
+                                drawContent()
+                                // The player banner's dissolve, along smootherstep so
+                                // neither end of it shows as a line.
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        colorStops = Array(FADE_CURVE_STOPS + 1) { i ->
+                                            val t = i / FADE_CURVE_STOPS.toFloat()
+                                            t to Color.Black.copy(alpha = 1f - smootherStep(t))
+                                        },
+                                        startY = size.height * (1f - FULL_BLEED_FADE_FRACTION),
+                                        endY = size.height,
+                                    ),
+                                    blendMode = BlendMode.DstIn,
+                                )
+                            }
+                            .background(palette.elevated),
+                    )
+                    // Beside the still rather than inside its layer: a clip's
+                    // TextureView takes no Compose mask, so it dissolves itself.
+                    canvas?.let { clip ->
+                        CanvasArtworkPlayer(
+                            canvas = clip,
+                            isPlaying = true,
+                            bottomFade = FULL_BLEED_FADE_FRACTION,
+                            modifier = Modifier.matchParentSize(),
+                        )
+                    }
+                }
+            } else Box(
+                Modifier
+                    .size(sleeveSize)
+                    .shadow(SLEEVE_SHADOW, SLEEVE_SHAPE)
+                    .coverSharedElement(page.browseId, SLEEVE_SHAPE)
+                    .background(palette.elevated)
+                    .thumbnailBorder(SLEEVE_SHAPE),
+            ) {
+                // A cover that isn't there, or wouldn't load — a device folder, a
+                // playlist with nothing on it yet, files with no picture — gets a
+                // placeholder sleeve rather than an empty square. Not shown while a
+                // real one is still on its way, so a loading cover doesn't flash
+                // a glyph first.
+                if (effectiveCover == null || artFailed) {
+                    CoverPlaceholder(
+                        icon = page.placeholderIcon(),
+                        base = palette.elevated,
+                        tint = palette.onBackgroundVariant,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                }
+                AsyncImage(
+                    model = effectiveCover?.artworkAt(HEADER_ART_PX),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    onState = { artFailed = it is AsyncImagePainter.State.Error },
+                    modifier = Modifier.matchParentSize(),
+                )
+                // Animated cover art, inside the same frame. Always running:
+                // unlike the player's sleeve there is no transport here to follow,
+                // and the page is only up while it's being read.
+                canvas?.let { clip ->
+                    CanvasArtworkPlayer(
+                        canvas = clip,
+                        isPlaying = true,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                }
+            }
+
+            headerBody(Modifier)
         }
     }
 }

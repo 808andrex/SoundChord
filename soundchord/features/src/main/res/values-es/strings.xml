@@ -136,4 +136,26 @@
     <string name="output_cast">Transmitir</string>
     <string name="output_cast_subtitle">Chromecast y altavoces Google Cast</string>
     <string name="output_audio_pipeline">Flujo de procesamiento de audio</string>
+
+    <!-- Importación de playlists de Apple Music -->
+    <string name="apple_music_import_title">Importar playlist de Apple Music</string>
+    <string name="apple_music_import_description">Pega un enlace público de playlist de Apple Music. Las canciones se buscan en YouTube Music.</string>
+    <string name="apple_music_import_description_local">Pega un enlace público de playlist de Apple Music. Las canciones se buscan en YouTube Music y se guardan en este dispositivo.</string>
+    <string name="apple_music_import_hint">music.apple.com/…/playlist/…</string>
+    <string name="apple_music_import_invalid">Ese no es un enlace de playlist de Apple Music.</string>
+    <string name="apple_music_import_fetching">Leyendo la playlist de Apple Music…</string>
+    <string name="apple_music_import_matching">Buscando canciones %1$d de %2$d</string>
+    <string name="apple_music_import_none">No se encontró ninguna de esas canciones en YouTube Music.</string>
+    <string name="apple_music_import_failed">No se pudo importar la playlist: %1$s</string>
+    <string name="apple_music_import_button">Importar</string>
+    <string name="apple_music_import_preview_button">Vista previa</string>
+    <string name="apple_music_import_save">Guardar playlist</string>
+    <string name="apple_music_import_motion_badge">PORTADA ANIMADA</string>
+    <string name="apple_music_import_track_count">%1$d canciones</string>
+    <string name="apple_music_import_unmatched">%1$d canciones no se encontraron en YouTube Music</string>
+    <string name="apple_music_import_language_preference" translatable="false">Language preference</string>
+    <string name="apple_music_import_language_hint" translatable="false">p. ej. Punjabi, Marathi, Coreano…</string>
+    <string name="cancel">Cancelar</string>
+    <string name="done">Listo</string>
+    <string name="who_can_see_it">Quién puede verla</string>
 </resources>

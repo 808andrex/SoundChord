@@ -1339,6 +1339,7 @@ internal fun AppNavigationHost(
                     } else {
                         null
                     },
+                    onRetry = { viewModel.reloadDetail(page.browseId) },
                 )
             } else if (states.recognitionOpen) {
                 RecognitionScreen(
@@ -1625,6 +1626,7 @@ internal fun AppNavigationHost(
                     onShelfItemLongPress = actions.onBrowseLongPress,
                     onNewPlaylist = actions.onCreatingPlaylist,
                     onImportSpotifyPlaylist = actions.onShowSpotifyImport,
+                    onImportAppleMusicPlaylist = { AppleMusicImportController.showDialog = true },
                     onShowAll = { shelf -> navigator.push(AppRoute.LibraryShowAll(shelf)) },
                     replay = {
                         LibraryReplayEntry(

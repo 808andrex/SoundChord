@@ -5,6 +5,8 @@ import android.net.Uri
 import com.music.bitchord.BuildConfig
 import com.music.bitchord.data.PlaylistCoverBackup
 import com.music.bitchord.data.PlaylistCovers
+import com.music.bitchord.data.canvas.PlaylistMotionBackup
+import com.music.bitchord.data.canvas.PlaylistMotionStore
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.SearchHistory
 import com.music.bitchord.data.spotify.LocalPlaylistStore
@@ -100,6 +102,7 @@ object Backup {
         val radio = PreferencesRadioFavoritesStore(context).getAll()
         val covers = PlaylistCovers.exportCovers(context)
         val localPlaylists = LocalPlaylistStore.exportPlaylistsJson()
+        val playlistMotion = PlaylistMotionStore.exportMotionList()
         val file = BackupFile(
             versionName = BuildConfig.VERSION_NAME,
             exportedAt = Instant.now().toString(),
@@ -110,6 +113,7 @@ object Backup {
             recognitionHistory = recognition.takeIf { it.isNotEmpty() },
             radioFavorites = radio.takeIf { it.isNotEmpty() },
             playlistCovers = covers.takeIf { it.isNotEmpty() },
+            playlistMotion = playlistMotion.takeIf { it.isNotEmpty() },
             localPlaylists = localPlaylists,
             showPlayerShuffleRepeatButtons = AppSettings.showPlayerShuffleRepeatButtons.value,
         )
@@ -179,6 +183,10 @@ object Backup {
             file.radioFavorites?.let { PreferencesRadioFavoritesStore(ctx).restore(it) }
             file.localPlaylists?.let { LocalPlaylistStore.importPlaylistsJson(it) }
             file.playlistCovers?.let { PlaylistCovers.importCovers(ctx, it) }
+            file.playlistMotion?.let {
+                PlaylistMotionStore.importMotionList(it)
+                PlaylistMotionStore.refreshAllImportedPlaylists()
+            }
         }
 
         Summary(
@@ -218,6 +226,7 @@ object Backup {
         val recognitionHistory: List<RecognitionHistoryEntry>? = null,
         val radioFavorites: List<RadioStation>? = null,
         val playlistCovers: List<PlaylistCoverBackup>? = null,
+        val playlistMotion: List<PlaylistMotionBackup>? = null,
         val localPlaylists: String? = null,
         val showPlayerShuffleRepeatButtons: Boolean? = null,
     )

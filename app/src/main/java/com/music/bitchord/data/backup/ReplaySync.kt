@@ -4,6 +4,8 @@ import android.content.Context
 import com.music.bitchord.BuildConfig
 import com.music.bitchord.data.PlaylistCoverBackup
 import com.music.bitchord.data.PlaylistCovers
+import com.music.bitchord.data.canvas.PlaylistMotionBackup
+import com.music.bitchord.data.canvas.PlaylistMotionStore
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.SearchHistory
 import com.music.bitchord.data.spotify.LocalPlaylistStore
@@ -68,6 +70,7 @@ data class DeviceManifest(
     val radioFavorites: List<RadioStation>? = null,
     val playlistCovers: List<PlaylistCoverBackup>? = null,
     val localPlaylists: String? = null,
+    val playlistMotion: List<PlaylistMotionBackup>? = null,
 ) {
     companion object {
         const val SCHEMA = 1
@@ -283,6 +286,7 @@ object ReplaySync {
                 radioFavorites = PreferencesRadioFavoritesStore(context).getAll().takeIf { it.isNotEmpty() },
                 playlistCovers = PlaylistCovers.exportCovers(context).takeIf { it.isNotEmpty() },
                 localPlaylists = LocalPlaylistStore.exportPlaylistsJson(),
+                playlistMotion = PlaylistMotionStore.exportMotionList().takeIf { it.isNotEmpty() },
             )
             val written = DriveApi.put(
                 token = token,
@@ -406,6 +410,10 @@ object ReplaySync {
         manifest.radioFavorites?.let { PreferencesRadioFavoritesStore(context).restore(it) }
         manifest.localPlaylists?.let { LocalPlaylistStore.importPlaylistsJson(it) }
         manifest.playlistCovers?.let { PlaylistCovers.importCovers(context, it) }
+        manifest.playlistMotion?.let {
+            PlaylistMotionStore.importMotionList(it)
+            PlaylistMotionStore.refreshAllImportedPlaylists()
+        }
 
         // What is in Drive for this partition is exactly what came down, so
         // the next sync uploads only what this phone adds to it.
