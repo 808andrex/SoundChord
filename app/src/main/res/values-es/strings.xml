@@ -80,6 +80,47 @@
     <string name="about_whats_new_subtitle">Notas de la versión y novedades de la versión %1$s</string>
     <string name="about_whats_new_title">Novedades de SoundChord %1$s</string>
     <string name="about_changelog_unavailable">Las notas de esta versión todavía no están disponibles.</string>
+    <!-- What's New Dialog (Ticket #40) -->
+    <string name="whats_new_title_version">Novedades de %1$s</string>
+    <string name="whats_new_version_label">VERSIÓN</string>
+    <string name="whats_new_hero_status">Instalado · listo para escuchar</string>
+    <string name="whats_new_highlights_title">Lo más destacado</string>
+    <string name="whats_new_visual_improvements_title">Mejoras visuales</string>
+    <string name="whats_new_visual_improvements_count">%1$d mejoras</string>
+    <string name="whats_new_fixes_title">Correcciones</string>
+    <string name="whats_new_fixes_count">%1$d correcciones</string>
+    <string name="whats_new_start_listening">Empezar a escuchar</string>
+    <string name="expand">Expandir</string>
+    <string name="collapse">Colapsar</string>
+
+    <!-- Software Update Available Dialog (Ticket #40) -->
+    <string name="update_dialog_title">Actualización disponible</string>
+    <string name="update_hero_version_label">NUEVA VERSIÓN</string>
+    <string name="update_hero_status">Disponible en GitHub · lista para descargar</string>
+
+    <!-- What's New v1.3 Catalog Fallback -->
+    <string name="whats_new_v13_highlight_radio_title">Radio en directo y mixes de SoundChord</string>
+    <string name="whats_new_v13_highlight_radio_desc">Explora miles de emisoras globales por género y país, con biblioteca de favoritas y mixes inteligentes.</string>
+    <string name="whats_new_v13_highlight_automix_title">AutoMix y crossfade inteligente</string>
+    <string name="whats_new_v13_highlight_automix_desc">Transiciones fluidas emparejadas por tono y tempo, con modo sin pausas para álbumes completos.</string>
+    <string name="whats_new_v13_highlight_widgets_title">Widgets 2x2 y 4x2 al estilo Apple Music</string>
+    <string name="whats_new_v13_highlight_widgets_desc">Controles interactivos táctiles y paletas dinámicas translúcidas que se adaptan a la carátula.</string>
+    <string name="whats_new_v13_highlight_glass_title">Liquid Glass y animaciones a 120 FPS</string>
+    <string name="whats_new_v13_highlight_glass_desc">Menús contextuales esmerilados flotantes, alertas estilo iOS y físicas de resorte ultra suaves.</string>
+    <string name="whats_new_v13_highlight_lyrics_title">Historias animadas y letras sincronizadas</string>
+    <string name="whats_new_v13_highlight_lyrics_desc">Sincronización de letras palabra por palabra y exportación de fragmentos en video para tus historias.</string>
+
+    <string name="whats_new_v13_visual_1">Separadores sutiles estilo editorial en listas de álbumes, artistas y radio.</string>
+    <string name="whats_new_v13_visual_2">Superposición de vídeo a pantalla completa con controles de cristal esmerilado.</string>
+    <string name="whats_new_v13_visual_3">Paleta cromática de radio refinada con degradados suaves y mayor legibilidad.</string>
+    <string name="whats_new_v13_visual_4">Barra de navegación flotante con actualización inmediata de color de acento.</string>
+    <string name="whats_new_v13_visual_5">Indicadores de reproducción aleatoria y reproducción automática en la cola.</string>
+
+    <string name="whats_new_v13_fix_1">Restaurado el fundido cruzado manual para listas de reproducción y álbumes.</string>
+    <string name="whats_new_v13_fix_2">Corregidas pantallas congeladas y superposiciones al regresar a la pestaña Inicio.</string>
+    <string name="whats_new_v13_fix_3">Conservación fiable de la posición de desplazamiento al navegar en Radio.</string>
+    <string name="whats_new_v13_fix_4">Optimización de rendimiento en renders, apertura de letras y reglas R8.</string>
+    <string name="whats_new_v13_fix_5">Manejo más robusto de reconexión y errores en copias de seguridad de Google Drive.</string>
     <string name="about_check_updates">Buscar actualizaciones</string>
     <string name="about_current_version">Versión actual: %1$s</string>
     <string name="about_update_found">Hay una nueva versión disponible para descargar.</string>

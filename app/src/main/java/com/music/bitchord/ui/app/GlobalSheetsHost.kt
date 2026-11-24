@@ -142,10 +142,13 @@ import com.music.bitchord.ui.components.SongActionsMenu
 import com.music.bitchord.ui.player.MixViewRequest
 import com.music.bitchord.playback.OriginalVersion
 import com.music.bitchord.data.NerdStats
+import com.music.bitchord.BuildConfig
 import com.music.bitchord.playback.hasYouTubeOriginal
 import com.music.bitchord.playback.revertToOriginal
 import com.music.bitchord.playback.upgradeQuality
 import com.music.bitchord.shouldSkipAfterDislike
+import com.music.bitchord.ui.components.WhatsNewManager
+import com.music.bitchord.ui.components.WhatsNewSheet
 import com.music.bitchord.ui.screens.AboutWhatsNewOverlay
 import com.music.bitchord.ui.screens.DiscordDialog
 import com.music.bitchord.ui.screens.DiscordDialogHost
@@ -1691,7 +1694,10 @@ internal fun GlobalSheetsHost(
                 },
                 onInstall = {
                     val ready = AppUpdateChecker.download.value as? AppUpdateChecker.DownloadState.Ready
-                    ready?.let { AppUpdateChecker.installApk(context, it.file) }
+                    ready?.let {
+                        WhatsNewManager.markPendingUpdate(context)
+                        AppUpdateChecker.installApk(context, it.file)
+                    }
                 },
                 onOpenReleasePage = {
                     AppUpdateChecker.resetDownload()
@@ -2202,11 +2208,29 @@ internal fun GlobalSheetsHost(
         )
     }
 
-    AboutWhatsNewOverlay(
-        visible = state.showAboutWhatsNew,
-        hazeState = state.hazeState,
-        onDismiss = actions.onDismissAboutWhatsNew,
-    )
+    val currentVersion = BuildConfig.VERSION_NAME
+    var autoShowWhatsNew by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (WhatsNewManager.checkAndMarkDue(context, currentVersion)) {
+            autoShowWhatsNew = true
+        }
+    }
+
+    val showWhatsNew = state.showAboutWhatsNew || autoShowWhatsNew
+    val isFromSettings = state.showAboutWhatsNew && !autoShowWhatsNew
+
+    if (showWhatsNew) {
+        WhatsNewSheet(
+            version = currentVersion,
+            fromSettings = isFromSettings,
+            hazeState = state.hazeState,
+            onDismiss = {
+                if (autoShowWhatsNew) autoShowWhatsNew = false
+                if (state.showAboutWhatsNew) actions.onDismissAboutWhatsNew()
+            },
+        )
+    }
 }
 
 @Composable

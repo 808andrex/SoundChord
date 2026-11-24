@@ -3,22 +3,11 @@ package com.music.bitchord.ui.screens
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -26,7 +15,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,15 +27,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,26 +41,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.music.bitchord.BuildConfig
 import com.music.bitchord.R
 import com.music.bitchord.data.AppUpdateChecker
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.ui.components.IosSwitch
-import com.music.bitchord.ui.components.AlertAction
-import com.music.bitchord.ui.components.AlertRule
-import com.music.bitchord.ui.components.optimizedHazeEffect
 import com.music.bitchord.ui.icons.SfIcons
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
 
 private const val REPOSITORY_URL = "https://github.com/808andrex/SoundChord"
@@ -290,175 +264,19 @@ fun AboutScreen(
 
 }
 
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun AboutWhatsNewOverlay(
     visible: Boolean,
     hazeState: HazeState,
     onDismiss: () -> Unit,
 ) {
-    val version = BuildConfig.VERSION_NAME
-    val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsState()
-    val lightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
-    val glassSurface = if (lightTheme) {
-        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f)
-    } else {
-        Color(0xFF141418).copy(alpha = 0.88f)
-    }
-    val glassBorder = if (lightTheme) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.14f)
-    var changelog by remember { mutableStateOf<String?>(null) }
-    var loadingChangelog by remember { mutableStateOf(false) }
-    BackHandler(enabled = visible, onBack = onDismiss)
-    LaunchedEffect(visible) {
-        if (visible && changelog == null && !loadingChangelog) {
-            loadingChangelog = true
-            try {
-                changelog = AppUpdateChecker.currentReleaseNotes()
-            } finally {
-                loadingChangelog = false
-            }
-        }
-    }
-    AnimatedVisibility(
-        visible = visible,
-        modifier = Modifier.fillMaxSize().zIndex(100f),
-        enter = fadeIn(tween(160)) + scaleIn(
-            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 600f),
-            initialScale = 0.9f,
-        ),
-        exit = fadeOut(tween(120)) + scaleOut(tween(140), targetScale = 0.94f),
-    ) {
-        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            val notesMaxHeight = minOf(560.dp, maxHeight * 0.72f)
-            val notesMinHeight = minOf(340.dp, notesMaxHeight)
-            Box(
-                Modifier.fillMaxSize().then(
-                    if (reduceDynamicBlur) {
-                        Modifier.background(if (lightTheme) MaterialTheme.colorScheme.surfaceContainer else Color(0xFF141418))
-                    } else {
-                        Modifier.optimizedHazeEffect(
-                            state = hazeState,
-                            style = HazeMaterials.regular(glassSurface),
-                        )
-                    },
-                ),
-            )
-            Box(
-                Modifier.fillMaxSize()
-                    .background(Color.Black.copy(alpha = if (lightTheme) 0.25f else 0.65f))
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                        onClick = onDismiss,
-                    ),
-            )
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .clip(RoundedCornerShape(24.dp))
-                    .then(
-                        if (reduceDynamicBlur) {
-                            Modifier.background(if (lightTheme) MaterialTheme.colorScheme.surfaceContainer else Color(0xFF141418))
-                        } else {
-                            Modifier.optimizedHazeEffect(
-                                state = hazeState,
-                                style = HazeMaterials.regular(glassSurface),
-                            )
-                        },
-                    )
-                    .border(BorderStroke(1.dp, glassBorder), RoundedCornerShape(24.dp))
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                        onClick = {},
-                    ),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = stringResource(R.string.about_whats_new_title, version),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp, bottom = 4.dp)
-                            .heightIn(min = notesMinHeight, max = notesMaxHeight)
-                            .verticalScroll(rememberScrollState()),
-                    ) {
-                        when {
-                            loadingChangelog -> CircularProgressIndicator()
-                            changelog.isNullOrBlank() -> Text(
-                                stringResource(R.string.about_changelog_unavailable),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                            )
-                            else -> Text(
-                                text = remember(changelog) { releaseNotesAnnotatedString(changelog.orEmpty()) },
-                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
-                }
-                AlertRule()
-                AlertAction(label = stringResource(R.string.close), emphasised = true, onClick = onDismiss)
-            }
-        }
-    }
-}
-
-private fun releaseNotesAnnotatedString(markdown: String) = buildAnnotatedString {
-    markdown.lineSequence().forEach { rawLine ->
-        val line = rawLine.trim()
-        if (line.isEmpty()) {
-            append("\n")
-            return@forEach
-        }
-
-        val heading = line.startsWith("##")
-        val bullet = line.startsWith("- ") || line.startsWith("* ") || line.startsWith("+ ")
-        val content = when {
-            heading -> line.dropWhile { it == '#' }.trim()
-            bullet -> line.drop(2).trim()
-            else -> line
-        }
-
-        if (heading) withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 16.sp)) {
-            appendInlineMarkdown(content)
-        } else {
-            if (bullet) append("•  ")
-            appendInlineMarkdown(content)
-        }
-        append("\n")
-    }
-}
-
-private fun androidx.compose.ui.text.AnnotatedString.Builder.appendInlineMarkdown(text: String) {
-    var index = 0
-    while (index < text.length) {
-        val boldStart = text.indexOf("**", index)
-        if (boldStart < 0) {
-            append(text.substring(index))
-            break
-        }
-        append(text.substring(index, boldStart))
-        val boldEnd = text.indexOf("**", boldStart + 2)
-        if (boldEnd < 0) {
-            append(text.substring(boldStart))
-            break
-        }
-        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-            append(text.substring(boldStart + 2, boldEnd))
-        }
-        index = boldEnd + 2
-    }
+    if (!visible) return
+    com.music.bitchord.ui.components.WhatsNewSheet(
+        version = BuildConfig.VERSION_NAME,
+        fromSettings = true,
+        hazeState = hazeState,
+        onDismiss = onDismiss,
+    )
 }
 
 private fun openUrl(context: Context, url: String) {
