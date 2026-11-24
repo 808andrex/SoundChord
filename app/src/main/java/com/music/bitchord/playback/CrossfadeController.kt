@@ -940,7 +940,14 @@ class CrossfadeController(
         val originalTargetIndex = (0 until out.mediaItemCount).firstOrNull { index ->
             out.getMediaItemAt(index).mediaId == items[targetIndex].mediaId
         }
-        manualDirection = if (originalTargetIndex != null && originalTargetIndex < out.currentMediaItemIndex) -1f else 1f
+        val outCurrentItem = out.currentMediaItem
+        val currentCanonical = outCurrentItem?.canonicalIndex
+        val targetCanonical = items[targetIndex].canonicalIndex
+        manualDirection = when {
+            originalTargetIndex != null -> if (originalTargetIndex < out.currentMediaItemIndex) -1f else 1f
+            currentCanonical != null && targetCanonical != null -> if (targetCanonical < currentCanonical) -1f else 1f
+            else -> 1f
+        }
         val fade = skipFadeMs().let { configured ->
             val remaining = out.duration.takeIf { it != C.TIME_UNSET && it > 0L }
                 ?.minus(out.currentPosition)

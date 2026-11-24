@@ -3454,6 +3454,15 @@ class PlaybackService : MediaLibraryService() {
         val request = BoundedContextRequests.take(requestToken) ?: return
         val result = prepareBoundedContext(request) ?: return
         val exoPlayer = player ?: return
+        if (crossfade?.tryQueueSelectionWithCrossfade(
+                result.mediaItems,
+                result.startIndex,
+                result.startPositionMs,
+                onFallback = { saveBoundedContextSnapshot(exoPlayer) },
+            ) == true
+        ) {
+            return
+        }
         exoPlayer.setMediaItems(result.mediaItems, result.startIndex, result.startPositionMs)
         saveBoundedContextSnapshot(exoPlayer)
         exoPlayer.prepare()
