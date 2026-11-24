@@ -18,7 +18,7 @@
 
 <br/>
 
-[**Descargar APK**](#download) · [**Características**](#features) · [**Novedades v1.2.0**](#whats-new) · [**Arquitectura**](#architecture) · [**Créditos**](#contributing) · [**Aviso Legal**](#disclaimer)
+[**Descargar APK**](#download) · [**Características**](#features) · [**Novedades v1.3.0**](#whats-new) · [**Arquitectura**](#architecture) · [**Créditos**](#contributing) · [**Privacidad**](#privacy) · [**Aviso Legal**](#disclaimer)
 
 </div>
 
@@ -37,10 +37,10 @@
 
 #### Reproducción y Audio
 - **Streaming de alta fidelidad** — Búsqueda y reproducción desde YouTube Music con soporte para formatos sin pérdidas (FLAC / Lossless / DSD) en módulos compatibles.
-- **Radio Global & Historial** — Búsqueda global en Radio Browser con rotación automática de servidores espejo, estaciones personalizadas con recomendaciones, menús contextuales e historial reciente.
+- **Radio Global & Estaciones Personalizadas** — Emisoras organizadas por género y país con degradados vibrantes estilo Apple Music, rotación automática de servidores espejo, estaciones personalizadas, menús contextuales *Liquid Glass* e historial reciente.
+- **AutoMix & Reproducción sin pausas (*Gapless*)** — Mezclas inteligentes emparejadas por tempo (BPM) y tonalidad con barra de progreso animada, fundido cruzado en siguiente/anterior y pausa automática en álbumes para conservar transiciones originales.
 - **Reconocimiento musical (Shazam) + Historial** — Identificación de canciones en tiempo real mediante el micrófono con historial local persistente, buscador instantáneo y reproducción directa.
-- **Crossfade y AutoMix inteligente** — Transiciones suaves de 0 a 12 segundos y fundido cruzado al saltar pistas sincronizado con el punto de mezcla DJ.
-- **Sesiones Escuchar Juntos con Control Remoto** — Modo de silenciado local para actuar únicamente como controlador remoto sin interrumpir la reproducción activa.
+- **Sesiones Escuchar Juntos & Copias en Google Drive** — Control remoto en tiempo real entre dispositivos y respaldo opcional de tu historial *Replay*, listas y ajustes en Google Drive.
 - **Reproducción local y descargas** — Guarda pistas con metadatos embebidos e integra la música almacenada en tu dispositivo.
 
     </td>
@@ -48,11 +48,11 @@
 
 #### Experiencia e Interfaz
 - **Onboarding Interactivo & Color de Acento Global** — Flujo inicial de 4 pasos con selección inteligente de artistas, vista previa en vivo de tema/cristal, paleta de colores de acento dinámicos e iconos alternativos (*Monocromo*, *Rojo clásico*, *Verde Spotify*).
-- **Diseño "Liquid Glass" (Glassmorphism)** — Tarjetas flotantes translúcidas adaptativas a Tema Claro y Oscuro para *Salida de audio*, controles del reproductor, diálogos de calidad y menús contextuales.
-- **Transiciones Fluidas de Carátula (AGSL)** — Shader de disolución líquida en Android 13+, precarga inteligente de portadas vecinas, portadas animadas y Spotify Canvas.
-- **Gestión Rápida de Cola y Playlists** — Buscador modal con sugerencias inteligentes para añadir canciones directamente a la cola, a tus playlists propias o a *Música que me gusta*.
+- **Diseño "Liquid Glass" & Animaciones estilo iOS** — Tarjetas flotantes translúcidas adaptativas a Tema Claro y Oscuro, transiciones compartidas fluidas en carátulas (AGSL), física de resorte (*spring*), portadas animadas y Spotify Canvas.
+- **Widgets de Pantalla de Inicio & Video Fullscreen** — Widgets rediseñados al estilo Apple Music / iOS y controles minimalistas para reproducción de video a pantalla completa.
+- **Gestión Rápida de Cola y Playlists** — Creación y edición de playlists con selector de portada personalizado y sincronización con YouTube Music, selección múltiple y gestos al deslizar en la cola, e insignia circular de Aleatorio/Autoplay.
 - **Letras sincronizadas palabra por palabra** — Animación tipo Apple Music con soporte multi-proveedor (Musixmatch, LRCLIB, BiniLyrics, Genius).
-- **Actualizador OTA & Pantalla *Acerca de*** — Detección automática desde GitHub Releases con notas de versión integradas, historial de cambios e instalación directa.
+- **Actualizador OTA & Novedades Integradas** — Detección automática desde GitHub Releases con tarjeta flotante de novedades, historial por categorías e instalación directa del APK.
 
     </td>
   </tr>
@@ -64,15 +64,15 @@
 
 <div align="center">
 
-<h1><a id="whats-new"></a>Novedades en v1.2.0</h1>
+<h1><a id="whats-new"></a>Novedades en v1.3.0</h1>
 
 </div>
 
-- **Nuevo Flujo de Bienvenida (Onboarding de 4 Pasos):** Configuración inicial guiada con identidad para *Escuchar juntos*, selección interactiva de artistas favoritos (con sugerencias dinámicas *«Similares a...»* que alimentan tus recomendaciones de Inicio), vista previa en vivo (*Hazlo tuyo*) para probar **Tema**, **Cristal** y **Color de acento**, y conexión directa con YouTube Music.
-- **Color de Acento Global e Iconos Alternativos:** Nuevo selector en *Apariencia → Tema e icono* con paleta de colores dinámicos en toda la interfaz, además de 3 nuevos iconos de aplicación (**Monocromo**, **Rojo clásico** y **Verde Spotify**).
-- **Historial de Radio y Búsqueda Global Mejorada:** Acceso rápido a emisoras escuchadas recientemente desde *Radio* y solución de búsqueda internacional en Radio Browser mediante rotación automática de mirrors (`de1`, `de2`, `fi1`, `nl1`) y filtros globales.
-- **Pulido Integral de Tema Claro (*Light Mode*) y Cabeceras:** Adaptación completa de contraste en *Radio*, búsqueda, estaciones personalizadas (*Canciones recomendadas*), historiales, botón flotante de Shazam y diálogos *Liquid Glass*, junto con cabeceras alineadas entre *Explorar*, *Radio* y *Biblioteca*.
-- **Ajustes Reorganizados, Badges «NUEVO» y Pantalla *Acerca de*:** Categorías más claras con distintivos interactivos que desaparecen al explorar cada novedad, y nueva vista *Información de SoundChord* con actualizador integrado y notas de versión.
+- **Nueva Pestaña Radio con Degradados Vibrantes y Menús *Liquid Glass*:** Exploración de emisoras por género y país con tarjetas inspiradas en Apple Music, conservación de desplazamiento, estaciones personalizadas con separadores limpios y menú contextual flotante con respuesta háptica al mantener presionado.
+- **AutoMix Inteligente & Reproducción sin Pausas en Álbumes:** Motor de mezcla automática con análisis de tono/tempo y barra animada (*Mezclando*), modo *gapless* para escuchar álbumes completos sin cortes ni fundidos artificiales, y restauración del fundido cruzado manual al saltar pistas o elegir canciones en listas.
+- **Nuevos Widgets estilo Apple Music / iOS & Video a Pantalla Completa:** Widgets de inicio completamente rediseñados y nuevos controles de video en pantalla completa con estética minimalista.
+- **Creación y Edición Avanzada de Playlists & Controles Rápidos:** Nueva vista *Nueva lista* con selector de portada y sincronización con YouTube Music, opción *Editar playlist* (título y carátula), botones opcionales de Aleatorio y Repetir en la barra del reproductor e insignia circular de estado en el botón de Cola.
+- **Rediseño de Novedades, Actualizaciones OTA & Transiciones Fluidas:** Nuevo modal flotante inferior con tarjeta Hero, onda sonora animada y acordeones desplegables para *Actualización disponible* y *Novedades*, además de mejoras de fluidez, color de acento en tiempo real y respaldo en Google Drive listo para producción.
 
 ---
 
@@ -85,17 +85,17 @@
 SoundChord está construido bajo una arquitectura **Kotlin Multiplatform / Android Modular** diseñada para mantener las funcionalidades propias desacopladas del núcleo de reproducción:
 
 - **Lenguaje & UI:** Kotlin, Jetpack Compose, Material 3, Haze (Glassmorphism) y shaders AGSL nativos.
-- **Motor de Audio:** Media3 / ExoPlayer con soporte para procesamiento de audio de alta resolución, crossfade dinámico y sesiones remotas.
+- **Motor de Audio:** Media3 / ExoPlayer con soporte para procesamiento de audio de alta resolución, AutoMix, crossfade dinámico, reproducción *gapless* y sesiones remotas.
 - **Estructura Modular:**
-  - `:app` — Punto de entrada Android, navegación principal, integración de servicios y vistas específicas de plataforma.
-  - `:shared` & `:sharedUi` — Lógica compartida, componentes de interfaz del reproductor, recursos multiplataforma y modelos de dominio.
-  - `:soundchord:features` — Módulo dedicado para las extensiones exclusivas de SoundChord (*Radio Browser & Historial*, *Shazam & Historial*, diálogos *Liquid Glass* y selector de *Salida de audio*).
+  - `:app` — Punto de entrada Android, navegación principal, widgets, copias de seguridad en Google Drive, actualizador OTA y vistas específicas de plataforma.
+  - `:shared` & `:sharedUi` — Lógica compartida, componentes de interfaz del reproductor, animaciones, recursos multiplataforma y modelos de dominio.
+  - `:soundchord:features` — Módulo dedicado para las extensiones exclusivas de SoundChord (*Radio Browser & Estaciones*, *Shazam & Historial*, diálogos *Liquid Glass* y selector de *Salida de audio*).
 
 ---
 
 <div align="center">
 
-<h1><a id="download"></a>Descargas (Versión 1.2.0)</h1>
+<h1><a id="download"></a>Descargas (Versión 1.3.0)</h1>
 
 <a href="https://github.com/808andrex/SoundChord/releases/latest" target="_blank" rel="noopener noreferrer"><img src="https://cdn.jsdelivr.net/gh/JMcrafter26/badges@main/src/assets/supported/android/cozy.svg" alt="Descargar SoundChord para Android" height="55"/></a>
 
@@ -121,6 +121,18 @@ Al instalar el APK por primera vez fuera de Google Play, Android puede mostrar l
 SoundChord es un fork modular desarrollado por [808andrex](https://github.com/808andrex), basado originalmente en el proyecto de código abierto **BitChord** de [kushagrasinghx](https://github.com/kushagrasinghx).
 
 Gracias a la comunidad de desarrolladores y proyectos open-source que hicieron posible este reproductor.
+
+</div>
+
+---
+
+<div align="center">
+
+<h1><a id="privacy"></a>Privacidad</h1>
+
+SoundChord almacena tu historial *Replay*, descargas y preferencias de forma local en tu dispositivo. Las copias de seguridad opcionales en Google Drive utilizan únicamente el permiso limitado `drive.file` para gestionar los archivos generados por la propia aplicación.
+
+Consulta la [Política de Privacidad completa (`PRIVACY.md`)](https://github.com/808andrex/SoundChord/blob/main/PRIVACY.md) para más detalles.
 
 </div>
 
