@@ -43,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.SaveableStateHolder
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -627,6 +628,7 @@ data class AppNavigationListStates(
     val explorePull: PullToRefreshState,
     val libraryPull: PullToRefreshState,
     val radioPull: PullToRefreshState,
+    val radioListState: LazyListState? = null,
 )
 
 @OptIn(ExperimentalAnimationApi::class, ExperimentalMaterial3Api::class)
@@ -655,6 +657,7 @@ internal fun AppNavigationHost(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val radioSort = AppSettings.librarySort.collectAsStateWithLifecycle().value
+    val radioListState = lists.radioListState ?: rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
 
     SharedTransitionLayout {
         CompositionLocalProvider(
@@ -1418,6 +1421,7 @@ internal fun AppNavigationHost(
                     contentPadding = states.listPadding,
                 )
                 TAB_RADIO -> RadioScreen(
+                    listState = radioListState,
                     currentSong = states.player.song,
                     contentPadding = states.listPadding,
                     pullToRefreshState = lists.radioPull,

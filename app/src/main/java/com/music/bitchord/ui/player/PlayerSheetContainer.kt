@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.SheetState
@@ -141,6 +142,7 @@ data class BottomPlayerBarState(
     val isLoading: Boolean,
     val controlsLocked: Boolean,
     val reducePlayerMotion: Boolean,
+    val accentColor: Color = Color.Unspecified,
 )
 
 @Composable
@@ -154,6 +156,7 @@ internal fun rememberBottomPlayerBarState(
     isLoading: Boolean,
     controlsLocked: Boolean,
     reducePlayerMotion: Boolean,
+    accentColor: Color = MaterialTheme.colorScheme.primary,
 ): BottomPlayerBarState = remember(
     glassActive,
     queueNotice,
@@ -164,6 +167,7 @@ internal fun rememberBottomPlayerBarState(
     isLoading,
     controlsLocked,
     reducePlayerMotion,
+    accentColor,
 ) {
     BottomPlayerBarState(
         glassActive = glassActive,
@@ -175,6 +179,7 @@ internal fun rememberBottomPlayerBarState(
         isLoading = isLoading,
         controlsLocked = controlsLocked,
         reducePlayerMotion = reducePlayerMotion,
+        accentColor = accentColor,
     )
 }
 

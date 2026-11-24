@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -63,6 +64,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -154,6 +156,7 @@ fun RadioScreen(
     contentPadding: PaddingValues = PaddingValues(),
     onSubpageBackHandlerChanged: ((() -> Unit)?) -> Unit = {},
     pullToRefreshState: androidx.compose.material3.pulltorefresh.PullToRefreshState? = null,
+    listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() },
 ) {
     val context = LocalContext.current
     val vm = viewModel ?: composeViewModel(factory = remember(context) { RadioViewModel.Factory(context) })
@@ -169,15 +172,12 @@ fun RadioScreen(
     val country by vm.countryCode.collectAsState()
     val genre by vm.genre.collectAsState()
     val personalizedMixes by vm.personalizedMixes.collectAsState()
-    val radioListState = rememberLazyListState()
+    val radioListState = listState
     var showAllNearby by remember { mutableStateOf(false) }
     // Only a user-requested refresh drives the pull/chrome indicator. Initial
     // loads have their own inline placeholders and must not look like a refresh.
     val refreshing = vm.isRefreshing.collectAsState().value
     LaunchedEffect(refreshing) { onRadioRefreshStateChanged(refreshing) }
-    LaunchedEffect(showAllNearby) {
-        if (showAllNearby) radioListState.scrollToItem(0)
-    }
     LaunchedEffect(searchQuery) { if (searchQuery == null) vm.loadPersonalizedMixes() }
     LaunchedEffect(searchQuery) { if (searchQuery != null) vm.onSearchQueryChanged(searchQuery) }
     LaunchedEffect(currentSong?.videoId) {
@@ -216,6 +216,7 @@ fun RadioScreen(
         else -> categoryDetailTitle
     }
     val detailStateActive = detailTitle != null
+    val subpageListState = rememberSaveable(detailTitle, saver = LazyListState.Saver) { LazyListState() }
     val subpageBack = remember(detailStateActive, showAllNearby, vm) {
         when {
             showAllNearby -> ({ showAllNearby = false })
@@ -269,7 +270,7 @@ fun RadioScreen(
         indicator = {},
     ) {
     LazyColumn(
-        state = radioListState,
+        state = if (detailStateActive) subpageListState else radioListState,
         modifier = if (searchQuery != null) Modifier.fillMaxWidth().heightIn(max = 1600.dp) else Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = 16.dp,

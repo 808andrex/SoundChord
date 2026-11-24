@@ -53,11 +53,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
 import com.music.bitchord.data.model.ROW_ART_PX
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.artworkAt
+import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.ui.components.floatingtabbar.FloatingTabBar
 import com.music.bitchord.ui.components.floatingtabbar.FloatingTabBarDefaults
 import com.music.bitchord.ui.components.floatingtabbar.FloatingTabBarScrollConnection
@@ -119,13 +121,15 @@ fun GlassNavBar(
     val pillShape = remember { RoundedCornerShape(percent = 50) }
     val contentColor = glassContentColor()
     val isDarkGlass = contentColor == Color.White
+    val accentSetting by AppSettings.accentColor.collectAsStateWithLifecycle()
+    val primaryColor = MaterialTheme.colorScheme.primary
     // Keep the selected tab on the global accent over Liquid Glass too. In a
     // dark glass bar the small lift toward white preserves contrast over bright
     // artwork, matching Zenith; the default monochrome accent remains white.
     val selectedColor = if (isDarkGlass) {
-        lerp(MaterialTheme.colorScheme.primary, Color.White, 0.06f)
+        lerp(primaryColor, Color.White, 0.06f)
     } else {
-        MaterialTheme.colorScheme.primary
+        primaryColor
     }
     val unselectedColor = contentColor.copy(alpha = 0.65f)
     val haptics = rememberHaptics()
@@ -236,19 +240,18 @@ fun GlassNavBar(
         ),
         // Held too: this is declared `Any?`, so a fresh list every pass is a
         // changed argument by identity and defeats skipping on its own.
-        contentKey = remember(selectedIndex, tabs, contentColor) {
-            listOf(selectedIndex, tabs, contentColor)
+        contentKey = remember(selectedIndex, tabs, contentColor, selectedColor) {
+            listOf(selectedIndex, tabs, contentColor, selectedColor)
         },
     ) {
         tabs.forEachIndexed { index, tab ->
             val isSelected = index == selectedIndex
             val tint = if (isSelected) selectedColor else unselectedColor
             val onClick = {
+                haptics.play(Haptic.Select)
+                currentOnTabSelected(index)
                 if (index == currentSelectedIndex) {
                     currentOnActiveTabTap()
-                } else {
-                    haptics.play(Haptic.Select)
-                    currentOnTabSelected(index)
                 }
             }
             if (index == standaloneIndex) {

@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -189,6 +190,8 @@ fun FloatingBottomBar(
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
     val useGlass = LocalLiquidGlassEnabled.current && isGlassSupported()
     val reduceAnimation by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
+    val accentSetting by AppSettings.accentColor.collectAsStateWithLifecycle()
+    val primaryColor = MaterialTheme.colorScheme.primary
     // The glass settle is exactly the motion "reduce animation" promises to
     // drop — snapping both the indicator's travel and the glyph's pop to
     // their target leaves the tap itself instant rather than eased.
@@ -345,20 +348,25 @@ fun FloatingBottomBar(
             // color instead and picks pure black or white, same as the tint
             // Echo's floating nav bar uses for its own liquid glass.
             val glassTint = glassContentColor()
-            val adaptiveTint = if (useGlass) glassTint else null
+            val isDarkGlass = glassTint == Color.White
+            val selectedColor = if (useGlass && isDarkGlass) {
+                lerp(primaryColor, Color.White, 0.06f)
+            } else {
+                primaryColor
+            }
+            val unselectedTint = if (useGlass) glassTint.copy(alpha = 0.65f) else null
             tabs.forEachIndexed { index, tab ->
                 BottomBarItem(
                     tab = tab,
                     selected = index == selectedIndex,
                     glassSpec = glassSpec,
-                    selectedTint = adaptiveTint,
-                    unselectedTint = adaptiveTint?.copy(alpha = 0.65f),
+                    selectedTint = selectedColor,
+                    unselectedTint = unselectedTint,
                     onClick = {
+                        haptics.play(Haptic.Select)
+                        currentOnTabSelected(index)
                         if (index == currentSelectedIndex) {
                             currentOnActiveTabTap()
-                        } else {
-                            haptics.play(Haptic.Select)
-                            currentOnTabSelected(index)
                         }
                     },
                     modifier = Modifier.weight(1f),
