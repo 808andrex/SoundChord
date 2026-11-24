@@ -1,5 +1,7 @@
 # Code of Conduct
 
+[**English**](CODE_OF_CONDUCT.md) · [**Español**](CODE_OF_CONDUCT.es.md)
+
 ## Expected Behavior
 Contributors and maintainers participating in SoundChord discussions, issues, and pull requests are expected to:
 - Communicate constructively and professionally.
