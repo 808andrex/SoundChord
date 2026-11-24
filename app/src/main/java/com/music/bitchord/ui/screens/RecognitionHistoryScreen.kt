@@ -2,6 +2,8 @@ package com.music.bitchord.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -169,11 +171,11 @@ fun RecognitionHistoryScreen(
       AnimatedVisibility(
         visible = showClearConfirmation,
         modifier = Modifier.fillMaxSize().zIndex(1f),
-        enter = fadeIn(tween(160)) + scaleIn(
-            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 600f),
-            initialScale = 0.9f,
+        enter = fadeIn(tween(160, easing = FastOutSlowInEasing)) + scaleIn(
+            animationSpec = spring(dampingRatio = 0.76f, stiffness = 420f),
+            initialScale = 0.90f,
         ),
-        exit = fadeOut(tween(120)) + scaleOut(tween(140), targetScale = 0.94f),
+        exit = fadeOut(tween(140, easing = FastOutLinearInEasing)) + scaleOut(tween(140), targetScale = 0.90f),
       ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Box(

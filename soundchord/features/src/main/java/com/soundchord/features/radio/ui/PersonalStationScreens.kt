@@ -32,6 +32,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import com.music.bitchord.ui.components.coverSharedElement
+import com.music.bitchord.ui.components.rememberCoverTap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -93,13 +96,16 @@ internal fun PersonalStationsSection(
 
 @Composable
 private fun PersonalStationCard(seed: Song, onOpen: () -> Unit, onPlay: () -> Unit) {
+    val cardToken = remember { Any() }
+    val openStation = rememberCoverTap("station:${seed.videoId}", cardToken, onOpen)
     Box(
         Modifier
             .width(300.dp)
             .height(330.dp)
             .clip(RoundedCornerShape(28.dp))
+            .coverSharedElement("station:${seed.videoId}", RoundedCornerShape(28.dp), cardToken)
             .background(Color(0xFF202124))
-            .clickable(onClick = onOpen),
+            .clickable(onClick = openStation),
     ) {
         seed.thumbnailUrl.artworkAt(CARD_ART_PX)?.let { artwork ->
             AsyncImage(
@@ -248,7 +254,11 @@ private fun PersonalStationHero(seed: Song, onPlay: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(112.dp).clip(RoundedCornerShape(18.dp)).background(Color(0xFF292A2D)),
+            Modifier
+                .size(112.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .coverSharedElement("station:${seed.videoId}", RoundedCornerShape(18.dp))
+                .background(Color(0xFF292A2D)),
             contentAlignment = Alignment.Center,
         ) {
             seed.thumbnailUrl?.let { AsyncImage(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }

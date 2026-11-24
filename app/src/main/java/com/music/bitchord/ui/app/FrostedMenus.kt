@@ -2,6 +2,15 @@ package com.music.bitchord.ui.app
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.TransformOrigin
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -272,12 +281,47 @@ internal fun FrostedMenuPanel(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+    val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     val shape = MaterialTheme.shapes.extraLarge
+    val scrimColor = MaterialTheme.colorScheme.scrim
+
+    val pop = remember { Animatable(if (reduceMotion) 1f else 0.35f) }
+    val fade = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var closing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (reduceMotion) {
+            fade.animateTo(1f, tween(120))
+            pop.snapTo(1f)
+        } else {
+            launch { fade.animateTo(1f, tween(160, easing = FastOutSlowInEasing)) }
+            launch { pop.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 380f)) }
+        }
+    }
+
+    val close: () -> Unit = {
+        if (!closing) {
+            closing = true
+            scope.launch {
+                if (reduceMotion) {
+                    fade.animateTo(0f, tween(100))
+                } else {
+                    launch { fade.animateTo(0f, tween(180, easing = FastOutLinearInEasing)) }
+                    pop.animateTo(0.6f, tween(200, easing = FastOutSlowInEasing))
+                }
+                onDismiss()
+            }
+        }
+    }
+
+    BackHandler(enabled = !closing, onBack = close)
+
     Box(
         Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.scrim.copy(alpha = .48f))
-            .clickable(onClick = onDismiss),
+            .drawBehind { drawRect(scrimColor.copy(alpha = 0.48f * fade.value.coerceIn(0f, 1f))) }
+            .clickable(onClick = close),
         contentAlignment = Alignment.TopEnd,
     ) {
         Surface(
@@ -287,6 +331,13 @@ internal fun FrostedMenuPanel(
             modifier = Modifier
                 .padding(top = 56.dp, end = 20.dp)
                 .width(IntrinsicSize.Max)
+                .graphicsLayer {
+                    val s = if (reduceMotion) 1f else pop.value.coerceAtLeast(0f)
+                    scaleX = s
+                    scaleY = s
+                    alpha = fade.value.coerceIn(0f, 1f)
+                    transformOrigin = TransformOrigin(1f, 0f)
+                }
                 .clip(shape)
                 .then(
                     if (reduceDynamicBlur) {

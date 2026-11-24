@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalSharedTransitionApi::class)
+
 package com.music.bitchord.ui.app
 
 import com.music.bitchord.TAB_EXPLORE
@@ -11,9 +13,18 @@ import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import com.music.bitchord.ui.components.LocalCoverTransitionScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -645,11 +656,15 @@ internal fun AppNavigationHost(
     val scope = rememberCoroutineScope()
     val radioSort = AppSettings.librarySort.collectAsStateWithLifecycle().value
 
-    AnimatedContent(
-        targetState = targetState,
-        contentKey = { destination ->
-            if (destination is AppDestination.Tab) "tabs" else destination.key
-        },
+    SharedTransitionLayout {
+        CompositionLocalProvider(
+            LocalCoverTransitionScope provides this@SharedTransitionLayout,
+        ) {
+            AnimatedContent(
+                targetState = targetState,
+                contentKey = { destination ->
+                    if (destination is AppDestination.Tab) "tabs" else destination.key
+                },
         transitionSpec = {
             val initial = initialState
             val target = targetState
@@ -659,10 +674,61 @@ internal fun AppNavigationHost(
                 (this as? AppDestination.Route)?.entry?.route is AppRoute.LibraryShowAll
             val libraryShowAllSwap = (initial.isShowAll() && target == libraryTab) ||
                 (target.isShowAll() && initial == libraryTab)
+
+            fun AppDestination.isSettingsRoot() =
+                (this as? AppDestination.Route)?.entry?.route == AppRoute.Settings
+
+            fun AppDestination.isSettingsSubPage() =
+                ((this as? AppDestination.Route)?.entry?.route).let { r ->
+                    r is AppRoute.SettingsSection || r is AppRoute.SettingsChoice || r == AppRoute.About ||
+                        r is AppRoute.AccountScrobbling || r is AppRoute.Discord || r is AppRoute.DriveBackup ||
+                        r is AppRoute.DriveDevices || r is AppRoute.WearOs || r is AppRoute.Equalizer ||
+                        r is AppRoute.EqualizerPresets
+                }
+
+            val pushingSettings = (initial.isSettingsRoot() && target.isSettingsSubPage()) ||
+                (initial.isSettingsSubPage() && (target as? AppDestination.Route)?.entry?.route is AppRoute.SettingsChoice)
+            val poppingSettings = (initial.isSettingsSubPage() && target.isSettingsRoot()) ||
+                ((initial as? AppDestination.Route)?.entry?.route is AppRoute.SettingsChoice && target.isSettingsSubPage())
+
+            val poppingRelease = initial is AppDestination.Release &&
+                (target !is AppDestination.Release || !states.detailStack.any { it.browseId == initial.browseId })
+            val pushingRelease = target is AppDestination.Release && !poppingRelease
+
             if (tabSwap || libraryShowAllSwap) {
                 (EnterTransition.None togetherWith ExitTransition.None).apply {
                     targetContentZIndex = 1f
                 }
+            } else if (pushingRelease) {
+                // Entering a playlist/album/artist/mix: the release page arrives fully opaque immediately
+                // so the underlying screen never ghosts through behind the buttons. The header
+                // cover flies in while title, credits, action capsules and track list stagger in via enterReveal.
+                (EnterTransition.None togetherWith fadeOut(tween(160))).apply {
+                    targetContentZIndex = 1f
+                }
+            } else if (poppingRelease) {
+                // Leaving a playlist/album/artist/mix back to previous screen (popBackStack):
+                // keep the outgoing release on top (targetContentZIndex = 0f) so the cover
+                // contracts smoothly back into its card on top of the underlying screen.
+                (fadeIn(tween(280)) togetherWith fadeOut(tween(560, easing = FastOutLinearInEasing))).apply {
+                    targetContentZIndex = 0f
+                }
+            } else if (pushingSettings) {
+                // iOS-style push animation when navigating into Settings sub-screens
+                ((slideInHorizontally(tween(340, easing = FastOutSlowInEasing)) { it } +
+                    fadeIn(tween(260))) togetherWith
+                    (slideOutHorizontally(tween(340, easing = FastOutSlowInEasing)) { -it / 3 } +
+                        fadeOut(tween(200)))).apply {
+                        targetContentZIndex = 1f
+                    }
+            } else if (poppingSettings) {
+                // iOS-style pop animation when popping back from Settings sub-screens
+                ((slideInHorizontally(tween(340, easing = FastOutSlowInEasing)) { -it / 3 } +
+                    fadeIn(tween(200))) togetherWith
+                    (slideOutHorizontally(tween(340, easing = FastOutSlowInEasing)) { it } +
+                        fadeOut(tween(260)))).apply {
+                        targetContentZIndex = 1f
+                    }
             } else {
                 fadeIn(tween(180)) togetherWith fadeOut(tween(180))
             }
@@ -749,9 +815,9 @@ internal fun AppNavigationHost(
                 }
             }
         }
-        val onRadioPlayMix: (String, String) -> Unit = remember(viewModel) {
-            { browseId: String, title: String ->
-                viewModel.openDetail(browseId, title, "YouTube Music mix", null, BrowseType.PLAYLIST)
+        val onRadioPlayMix: (String, String, String?) -> Unit = remember(viewModel) {
+            { browseId: String, title: String, thumbnailUrl: String? ->
+                viewModel.openDetail(browseId, title, "YouTube Music mix", thumbnailUrl, BrowseType.PLAYLIST)
             }
         }
         val onRadioPlayStation: (Song) -> Unit = remember(actions, states.radioLabel) {
@@ -1579,7 +1645,10 @@ internal fun AppNavigationHost(
         }
 
         val barsMotion = states.artworkMotion && transition.targetState == EnterExitState.Visible
-        CompositionLocalProvider(LocalPlayingBarsMotion provides barsMotion) {
+        CompositionLocalProvider(
+            LocalPlayingBarsMotion provides barsMotion,
+            com.music.bitchord.ui.components.LocalCoverVisibilityScope provides this@AnimatedContent,
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1598,6 +1667,8 @@ internal fun AppNavigationHost(
                     pageStates.SaveableStateProvider(key, pageContent)
                 }
             }
+        }
+    }
         }
     }
 }

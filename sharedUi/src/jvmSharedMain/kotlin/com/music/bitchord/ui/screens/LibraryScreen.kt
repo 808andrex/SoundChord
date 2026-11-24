@@ -29,7 +29,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
+import com.music.bitchord.ui.components.staggeredEntrance
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -60,6 +62,7 @@ import com.music.bitchord.ui.components.PullToRefresh
 import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
 import com.music.bitchord.ui.components.libraryGrid
 import com.music.bitchord.ui.components.librarySkeleton
+import com.music.bitchord.ui.components.PinnedGridSkeleton
 
 /**
  * The signed-in library: the saved collections, as shelves of cards.
@@ -178,7 +181,12 @@ fun LibraryScreen(
                 return@LazyColumn
             }
             when (state) {
-                is UiState.Loading -> librarySkeleton()
+                is UiState.Loading -> {
+                    if (pinnedPlaylists.isNotEmpty()) {
+                        item(key = "pinned_skeleton") { PinnedGridSkeleton(count = pinnedPlaylists.size) }
+                    }
+                    librarySkeleton()
+                }
                 is UiState.Error -> item {
                     MessageState(state.message, actionLabel = stringResource(Res.string.retry), onAction = onRetry)
                 }
@@ -442,20 +450,24 @@ fun LibraryGridPage(
                             label = stringResource(Res.string.new_playlist),
                             subtitle = stringResource(Res.string.saved_to_youtube_music),
                             onClick = onNewPlaylist,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .staggeredEntrance(0),
                         )
                     }
                 }
-                items(
+                itemsIndexed(
                     items = sortedShelf.items,
-                    key = { it.browseId ?: it.title },
-                    contentType = { "library_grid_card" },
-                ) { item ->
+                    key = { _, item -> item.browseId ?: item.title },
+                    contentType = { _, _ -> "library_grid_card" },
+                ) { index, item ->
                     ShelfCard(
                         item = item,
                         onClick = { onItemClick(item) },
                         onLongPress = { onItemLongPress(item) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .staggeredEntrance(if (onNewPlaylist != null) index + 1 else index),
                         isPinned = item.browseId != null && item.browseId in pinnedPlaylists,
                     )
                 }

@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.ui.components.coverSharedElement
+import com.music.bitchord.ui.components.rememberCoverTap
 import com.music.bitchord.ui.components.trackArtSize
 import com.music.bitchord.ui.components.contextClick
 import com.music.bitchord.ui.AppUi
@@ -806,9 +808,11 @@ fun VideoShelfCard(
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     placeholderColor: Color = MaterialTheme.colorScheme.surfaceVariant,
 ) {
+    val cardToken = remember { Any() }
+    val openCard = rememberCoverTap(item.browseId ?: item.videoId, cardToken, onClick)
     Column(
         modifier = modifier
-            .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
+            .longPressMenuClickable(onClick = openCard, onLongClick = onLongPress)
             .contextClick(onLongPress),
     ) {
         Box(
@@ -816,6 +820,7 @@ fun VideoShelfCard(
                 .fillMaxWidth()
                 .aspectRatio(VIDEO_ASPECT)
                 .clip(RoundedCornerShape(12.dp))
+                .coverSharedElement(item.browseId ?: item.videoId, RoundedCornerShape(12.dp), cardToken)
                 .thumbnailBorder(RoundedCornerShape(12.dp))
                 .background(placeholderColor),
         ) {
@@ -957,9 +962,11 @@ internal fun ShelfCard(
     isCurrent: Boolean = false,
     isPlaying: Boolean = false,
 ) {
+    val cardToken = remember { Any() }
+    val openCard = rememberCoverTap(item.browseId, cardToken, onClick)
     Column(
         modifier = modifier
-            .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
+            .longPressMenuClickable(onClick = openCard, onLongClick = onLongPress)
             .contextClick(onLongPress),
     ) {
         when (item.browseId) {
@@ -1012,6 +1019,7 @@ internal fun ShelfCard(
                         .fillMaxWidth()
                         .aspectRatio(1f)
                         .clip(RoundedCornerShape(12.dp))
+                        .coverSharedElement(item.browseId, RoundedCornerShape(12.dp), cardToken)
                         .thumbnailBorder(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                 ) {

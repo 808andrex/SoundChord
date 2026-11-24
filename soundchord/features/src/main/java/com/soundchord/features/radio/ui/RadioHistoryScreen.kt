@@ -2,6 +2,8 @@ package com.soundchord.features.radio.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -110,16 +112,16 @@ fun RadioHistoryScreen(
         AnimatedVisibility(
             visible = showClearDialog,
             modifier = Modifier.fillMaxSize().zIndex(1f),
-            enter = fadeIn(tween(160)) + scaleIn(
+            enter = fadeIn(tween(160, easing = FastOutSlowInEasing)) + scaleIn(
                 animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = 600f,
+                    dampingRatio = 0.76f,
+                    stiffness = 420f,
                 ),
-                initialScale = 0.9f,
+                initialScale = 0.90f,
             ),
-            exit = fadeOut(tween(120)) + scaleOut(
+            exit = fadeOut(tween(140, easing = FastOutLinearInEasing)) + scaleOut(
                 animationSpec = tween(140),
-                targetScale = 0.94f,
+                targetScale = 0.90f,
             ),
         ) {
             Box(

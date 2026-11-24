@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.ui.components.coverSharedElement
+import com.music.bitchord.ui.components.rememberCoverTap
 import com.music.bitchord.ui.components.trackArtSize
 import androidx.compose.ui.layout.ContentScale
 import com.music.bitchord.data.model.toSong
@@ -949,6 +951,9 @@ private fun RecentSearchEntityRow(
     onRemove: () -> Unit,
     onSwipeToQueue: (() -> Unit)? = null,
 ) {
+    val cardToken = remember { Any() }
+    val openEntity = rememberCoverTap(entity.id, cardToken, onClick)
+    val shape = if (entity.entityType == EntityType.ARTIST) CircleShape else RoundedCornerShape(8.dp)
     SwipeToQueueBox(
         onSwipeToQueue = onSwipeToQueue,
         modifier = Modifier.fillMaxWidth(),
@@ -958,7 +963,7 @@ private fun RecentSearchEntityRow(
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.background)
                 .longPressMenuClickable(
-                    onClick = onClick,
+                    onClick = openEntity,
                     onLongClick = onLongPress,
                     liftPadding = PaddingValues(start = PAGE_GUTTER, end = 8.dp),
                 )
@@ -972,8 +977,9 @@ private fun RecentSearchEntityRow(
                     contentDescription = null,
                     modifier = Modifier
                         .size(52.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .thumbnailBorder(RoundedCornerShape(8.dp))
+                        .clip(shape)
+                        .coverSharedElement(entity.id, shape, cardToken)
+                        .thumbnailBorder(shape)
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                 )
                 if (isCurrent && isPlaying) {
@@ -1019,11 +1025,14 @@ private fun RecentSearchEntityRow(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BrowseRow(item: BrowseItem, onClick: () -> Unit, onLongPress: (() -> Unit)? = null) {
+    val cardToken = remember { Any() }
+    val openItem = rememberCoverTap(item.browseId, cardToken, onClick)
+    val shape = if (item.type == BrowseType.ARTIST) CircleShape else RoundedCornerShape(8.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .longPressMenuClickable(
-                onClick = onClick,
+                onClick = openItem,
                 onLongClick = onLongPress,
                 liftPadding = PaddingValues(horizontal = PAGE_GUTTER),
             )
@@ -1036,14 +1045,9 @@ private fun BrowseRow(item: BrowseItem, onClick: () -> Unit, onLongPress: (() ->
             contentDescription = null,
             modifier = Modifier
                 .size(52.dp)
-                .clip(
-                    if (item.type == BrowseType.ARTIST) CircleShape
-                    else RoundedCornerShape(8.dp),
-                )
-                .thumbnailBorder(
-                    if (item.type == BrowseType.ARTIST) CircleShape
-                    else RoundedCornerShape(8.dp),
-                )
+                .clip(shape)
+                .coverSharedElement(item.browseId, shape, cardToken)
+                .thumbnailBorder(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         )
         Spacer(Modifier.width(14.dp))

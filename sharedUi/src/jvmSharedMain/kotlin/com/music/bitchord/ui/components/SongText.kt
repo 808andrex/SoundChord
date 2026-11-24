@@ -1,5 +1,16 @@
 package com.music.bitchord.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.draw.clipToBounds
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.music.bitchord.ui.player.PlayerSettings
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -44,6 +55,91 @@ fun Modifier.thumbnailBorder(shape: Shape): Modifier = composed {
         color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.15f),
         shape = shape
     )
+}
+
+/**
+ * Which way the change that brought a song on screen went. Every text that
+ * shows the song asks it, so the big player and the mini player slide the
+ * same way: back to the song before the last one is Previous, anything else
+ * is Next.
+ */
+object TrackFlow {
+    private const val HINT_VALID_MS = 2_000L
+    private const val TRAIL_SIZE = 32
+
+    private val trail = ArrayList<String>()
+    private var cursor = -1
+    private var currentId: String? = null
+    private var forward = true
+    private var hintForward: Boolean? = null
+    private var hintAt = 0L
+
+    /** Called when Next/Previous is pressed so direction is certain. */
+    fun hint(forward: Boolean) {
+        hintForward = forward
+        hintAt = System.currentTimeMillis()
+    }
+
+    fun forwardTo(id: String): Boolean {
+        if (id == currentId) return forward
+        val hinted = hintForward?.takeIf { System.currentTimeMillis() - hintAt < HINT_VALID_MS }
+        hintForward = null
+        val at = trail.lastIndexOf(id)
+        val back = hinted?.not() ?: (at in 0 until cursor)
+        if (back) {
+            if (at in 0 until cursor) {
+                cursor = at
+            } else {
+                trail.add(0, id)
+                cursor = 0
+            }
+        } else if (at > cursor) {
+            cursor = at
+        } else {
+            while (trail.size > cursor + 1) trail.removeAt(trail.lastIndex)
+            trail.add(id)
+            cursor = trail.lastIndex
+        }
+        if (trail.size > TRAIL_SIZE) {
+            trail.removeAt(0)
+            cursor = (cursor - 1).coerceAtLeast(0)
+        }
+        forward = !back
+        currentId = id
+        return forward
+    }
+}
+
+/**
+ * Title and artist that slide out and in, sideways and faded, when the song
+ * changes: to the left on Next, to the right on Previous, as Apple Music's
+ * players do. A cut that keeps the same words stays put. With reduced
+ * animation it is a plain cross-fade.
+ */
+@Composable
+fun TrackTextSwitch(song: Song, modifier: Modifier = Modifier, content: @Composable (Song) -> Unit) {
+    val reduceAnimation by PlayerSettings.reduceAnimation.collectAsStateWithLifecycle()
+    val forward = TrackFlow.forwardTo(song.videoId)
+    AnimatedContent(
+        targetState = song,
+        contentKey = { it.videoId },
+        transitionSpec = {
+            if (reduceAnimation) {
+                fadeIn(tween(150)) togetherWith fadeOut(tween(150))
+            } else {
+                val sign = if (forward) 1 else -1
+                (
+                    slideInHorizontally(tween(340, easing = FastOutSlowInEasing)) { width -> sign * width / 4 } +
+                        fadeIn(tween(260, delayMillis = 60))
+                    ) togetherWith (
+                    slideOutHorizontally(tween(340, easing = FastOutSlowInEasing)) { width -> -sign * width / 4 } +
+                        fadeOut(tween(160))
+                    )
+            }
+        },
+        modifier = modifier.clipToBounds(),
+        label = "trackText",
+    ) { shown -> content(shown) }
 }
 
 /**

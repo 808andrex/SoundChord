@@ -30,7 +30,9 @@ import kotlin.math.abs
  * spends most of its time settling, slower and slower, into place, which is
  * where the eye is following the artwork home.
  */
-private const val SLIDE_STIFFNESS = 195f
+// Softer than before: 195/300 made the whole trip over too quickly.
+// Still critically damped (no bounce), just a longer, gentler settle (Apple Music style).
+private const val SLIDE_STIFFNESS = 150f
 
 /** Close enough to stop, in pixels — rather than a spring's whole long tail. */
 private const val SLIDE_SETTLED_PX = 0.5f
@@ -317,6 +319,38 @@ class PlayerSheetMotion(
         }
     }
 
+    private var dismissPull = false
+
+    /** Whether a finger is pulling the open player down. */
+    val pulling: Boolean get() = dismissPull
+
+    /**
+     * A finger pulling the open player down by [delta] pixels (negative: back
+     * up). Returns how much of it the player took, for a nested scroll that
+     * has to hand the rest on. Only a downward pull starts one.
+     */
+    fun pullBy(delta: Float): Float {
+        if (!shown() || closing) return 0f
+        if (!dismissPull) {
+            if (delta <= 0f) return 0f
+            settle?.cancel()
+            dismissPull = true
+            if (!holding) held = 0f
+            pullStartAt = held
+            pullStartNanos = System.nanoTime()
+        }
+        val before = held
+        held = (held + delta).coerceIn(0f, travel())
+        return held - before
+    }
+
+    /** The finger lifted off a pull down: it goes home or it goes, as any other pull does. */
+    fun releasePull(velocity: Float) {
+        if (!dismissPull) return
+        dismissPull = false
+        release(velocity)
+    }
+
     /** From the host, once the sheet has left composition. */
     fun onSheetGone() {
         closing = false
@@ -326,6 +360,7 @@ class PlayerSheetMotion(
         windowRestore?.cancel()
         held = Float.NaN
         laidOut = false
+        dismissPull = false
         sheet = null
         window = null
     }

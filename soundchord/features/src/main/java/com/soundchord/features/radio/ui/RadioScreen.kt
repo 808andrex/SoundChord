@@ -7,11 +7,19 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import com.music.bitchord.ui.components.coverSharedElement
+import com.music.bitchord.ui.components.rememberCoverTap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
@@ -136,7 +144,7 @@ private val radioCountries = listOf(
 fun RadioScreen(
     onPlayStation: (Song) -> Unit,
     currentSong: Song? = null,
-    onPlayMix: (browseId: String, title: String) -> Unit = { _, _ -> },
+    onPlayMix: (browseId: String, title: String, thumbnailUrl: String?) -> Unit = { _, _, _ -> },
     onRadioRefreshStateChanged: (Boolean) -> Unit = {},
     onStartStation: (Song) -> Unit = onPlayStation,
     viewModel: RadioViewModel? = null,
@@ -281,11 +289,18 @@ fun RadioScreen(
                 is RadioUiState.Success -> if (searchState.stations.isEmpty()) {
                     item { Text(stringResource(R.string.radio_search_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 } else itemsIndexed(searchState.stations, key = { _, it -> "radio_search_${it.uuid}" }) { index, station ->
-                    StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
-                        playStation(station)
-                    }, onLongPress = { bounds ->
-                        onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
-                    }, showDivider = index < searchState.stations.lastIndex)
+                    StationRow(
+                        station = station,
+                        isPlaying = station.uuid == playing?.uuid,
+                        isFavorite = station.uuid in favoriteUuids,
+                        onFavorite = { vm.toggleFavorite(station) },
+                        onClick = { playStation(station) },
+                        onLongPress = { bounds ->
+                            onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
+                        },
+                        showDivider = index < searchState.stations.lastIndex,
+                        modifier = Modifier.animateItem(),
+                    )
                 }
             }
         } else if (searchQuery != null) {
@@ -327,6 +342,7 @@ fun RadioScreen(
                                 onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
                             },
                             showDivider = index < nearby.lastIndex,
+                            modifier = Modifier.animateItem(),
                         )
                     }
                 }
@@ -337,11 +353,18 @@ fun RadioScreen(
                     val stations = (state as RadioUiState.Success).stations
                     if (stations.isEmpty()) item { Text(stringResource(R.string.radio_category_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     itemsIndexed(stations, key = { _, it -> "detail_${it.uuid}" }) { index, station ->
-                        StationRow(station, station.uuid == playing?.uuid, station.uuid in favoriteUuids, { vm.toggleFavorite(station) }, {
-                            playStation(station)
-                        }, onLongPress = { bounds ->
-                            onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
-                        }, showDivider = index < stations.lastIndex)
+                        StationRow(
+                            station = station,
+                            isPlaying = station.uuid == playing?.uuid,
+                            isFavorite = station.uuid in favoriteUuids,
+                            onFavorite = { vm.toggleFavorite(station) },
+                            onClick = { playStation(station) },
+                            onLongPress = { bounds ->
+                                onStationLongPress(station, station.uuid in favoriteUuids, bounds) { vm.toggleFavorite(station) }
+                            },
+                            showDivider = index < stations.lastIndex,
+                            modifier = Modifier.animateItem(),
+                        )
                     }
                 }
             }
@@ -360,7 +383,7 @@ fun RadioScreen(
                 PersonalizedMixesSection(
                     state = personalizedMixes,
                     onRetry = { vm.loadPersonalizedMixes(force = true) },
-                    onPlayMix = { mix -> mix.browseId?.let { onPlayMix(it, mix.title) } },
+                    onPlayMix = { mix -> mix.browseId?.let { onPlayMix(it, mix.title, mix.thumbnailUrl) } },
                     glass = LocalLiquidGlassEnabled.current,
                     showQuickGrid = true,
                     showPersonalMixRows = false,
@@ -401,7 +424,7 @@ fun RadioScreen(
                     state = personalizedMixes,
                     onRetry = { vm.loadPersonalizedMixes(force = true) },
                     onPlayMix = { mix ->
-                        mix.browseId?.let { id -> onPlayMix(id, mix.title) }
+                        mix.browseId?.let { id -> onPlayMix(id, mix.title, mix.thumbnailUrl) }
                     },
                     glass = LocalLiquidGlassEnabled.current,
                     showQuickGrid = false,
@@ -613,11 +636,15 @@ private fun NearbyStationsSection(
 @Composable
 private fun QuickMixCard(item: ShelfItem, glass: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(if (glass) 18.dp else 12.dp)
+    val cardKey = item.browseId ?: item.title
+    val cardToken = remember(cardKey) { Any() }
+    val onCardClick = rememberCoverTap(cardKey, cardToken, onClick)
     Box(
         modifier.aspectRatio(1f).clip(shape)
+            .coverSharedElement(cardKey, shape, cardToken)
             .background(Brush.linearGradient(quickMixGradient(item)))
             .then(if (glass) Modifier else Modifier)
-            .combinedClickable(onClick = onClick)
+            .combinedClickable(onClick = onCardClick)
     ) {
         item.thumbnailUrl?.let { url ->
             AsyncImage(
@@ -645,16 +672,23 @@ private fun QuickMixCard(item: ShelfItem, glass: Boolean, modifier: Modifier, on
 @Composable
 private fun MixCarouselCard(item: ShelfItem, glass: Boolean, darkContainer: Boolean, onClick: () -> Unit) {
     val cardShape = RoundedCornerShape(if (glass) 20.dp else 12.dp)
+    val cardKey = item.browseId ?: item.title
+    val cardToken = remember(cardKey) { Any() }
+    val onCardClick = rememberCoverTap(cardKey, cardToken, onClick)
     Column(
         Modifier.width(if (darkContainer) 280.dp else 150.dp)
             .clip(cardShape)
-            .combinedClickable(onClick = onClick),
+            .combinedClickable(onClick = onCardClick),
     ) {
         AsyncImage(
             model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(12.dp))
+                .coverSharedElement(cardKey, RoundedCornerShape(12.dp), cardToken),
         )
         Column(
             Modifier.fillMaxWidth()
@@ -778,9 +812,31 @@ private fun CategoryGridRow(categories: List<CategoryOption>, onClick: (Int) -> 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         categories.forEachIndexed { index, category ->
             val title = stringResource(category.label)
+            val interactionSource = remember { MutableInteractionSource() }
+            val isPressed by interactionSource.collectIsPressedAsState()
+            val scale by animateFloatAsState(
+                targetValue = if (isPressed) 0.96f else 1f,
+                animationSpec = spring(
+                    dampingRatio = 0.65f,
+                    stiffness = Spring.StiffnessMedium,
+                ),
+                label = "category_card_scale",
+            )
             Card(
-                modifier = Modifier.weight(1f).height(148.dp).clickable { onClick(index) },
-                shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(148.dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = { onClick(index) },
+                    ),
+                shape = RoundedCornerShape(26.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             ) {
                 Column(
                     Modifier.fillMaxSize().background(Brush.linearGradient(category.colors)).padding(16.dp),
@@ -805,11 +861,12 @@ private fun StationRow(
     onClick: () -> Unit,
     onLongPress: (Rect) -> Unit,
     showDivider: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     var artworkFailed by remember(station.uuid) { mutableStateOf(false) }
     var rowBounds by remember(station.uuid) { mutableStateOf<Rect?>(null) }
     val haptics = LocalHapticFeedback.current
-    Column(Modifier.fillMaxWidth()) {
+    Column(modifier.fillMaxWidth()) {
         Surface(
             modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
             shape = RoundedCornerShape(18.dp),

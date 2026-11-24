@@ -50,8 +50,8 @@ import com.music.bitchord.ui.components.liveMenuFrost
 import com.music.bitchord.ui.player.*
 import dev.chrisbanes.haze.HazeState
 
-private val OUTPUT_OPEN_SPRING = spring<Float>(dampingRatio = 1f, stiffness = 400f, visibilityThreshold = 0.001f)
-private val OUTPUT_CLOSE_SPRING = spring<Float>(dampingRatio = 1f, stiffness = 520f, visibilityThreshold = 0.001f)
+private val OUTPUT_OPEN_SPRING = spring<Float>(dampingRatio = 0.82f, stiffness = 450f, visibilityThreshold = 0.001f)
+private val OUTPUT_CLOSE_SPRING = spring<Float>(dampingRatio = 1f, stiffness = 550f, visibilityThreshold = 0.001f)
 
 /** Floating player output picker. The caller mounts this only while it is open. */
 @Composable

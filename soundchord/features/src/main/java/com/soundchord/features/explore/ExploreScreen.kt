@@ -38,6 +38,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.soundchord.features.R
+import com.music.bitchord.ui.components.coverSharedElement
+import com.music.bitchord.ui.components.rememberCoverTap
 import com.music.bitchord.data.model.CARD_ART_PX
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.MoodGenre
@@ -400,13 +402,18 @@ fun ExploreShelfSection(
 @Composable
 private fun ExploreShelfCard(item: ShelfItem, video: Boolean, onClick: () -> Unit) {
     val cardWidth = if (video) 270.dp else 190.dp
+    val cardToken = remember { Any() }
+    val openCard = rememberCoverTap(item.browseId ?: item.videoId, cardToken, onClick)
+    val shape = RoundedCornerShape(18.dp)
     Column(
-        Modifier.width(cardWidth).clickable(onClick = onClick),
+        Modifier.width(cardWidth).clickable(onClick = openCard),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(
             Modifier.fillMaxWidth().aspectRatio(if (video) 16f / 9f else 1f)
-                .clip(RoundedCornerShape(18.dp)).background(Color(0xFF222222)),
+                .clip(shape)
+                .coverSharedElement(item.browseId ?: item.videoId, shape, cardToken)
+                .background(Color(0xFF222222)),
         ) {
             item.thumbnailUrl?.let { artwork ->
                 AsyncImage(

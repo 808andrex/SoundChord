@@ -451,21 +451,23 @@ fun MiniPlayer(
                 }
             }
             Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                // The badge in the artist line's colour and a long line faded
-                // out at its end, as on the glass bar's mini player.
-                ExplicitSongTitle(
-                    song = song,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    badgeColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fadeOverflow = true,
-                )
-                FadingLine(
-                    text = song.artist,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            TrackTextSwitch(song, Modifier.weight(1f)) { currentSong ->
+                Column {
+                    // The badge in the artist line's colour and a long line faded
+                    // out at its end, as on the glass bar's mini player.
+                    ExplicitSongTitle(
+                        song = currentSong,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        badgeColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fadeOverflow = true,
+                    )
+                    FadingLine(
+                        text = currentSong.artist,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             if (isLoading) {
                 Box(Modifier.size(GLYPH_SLOT), contentAlignment = Alignment.Center) {

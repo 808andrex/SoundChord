@@ -19,6 +19,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.basicMarquee
+import com.music.bitchord.ui.components.TrackTextSwitch
 import androidx.compose.animation.core.Animatable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.Channel
@@ -504,6 +506,15 @@ private const val DOCK_FADE_LEAD = 0.15f
 
 /** The least the faded player is drawn at while docking — see the player's fade. */
 private const val DOCK_FADE_FLOOR = 1f / 255f
+
+/** For thumbnail header (lyrics/queue menu): cover follows panel until this drag threshold, then joins mini player. */
+private const val DOCK_THUMB_FULL_AT = 0.35f
+
+/** Smoothstep: cover thumbnail stays in panel, then descends to mini player at the end of drag. */
+private fun dockEaseThumb(t: Float): Float {
+    val x = (t / DOCK_THUMB_FULL_AT).coerceIn(0f, 1f)
+    return x * x * (3f - 2f * x)
+}
 
 /**
  * What one frame of docking into the mini player worked out — see
@@ -1158,11 +1169,33 @@ fun NowPlayingScreen(
         // the queue can then dismiss it without this effect firing again.
         if (queueOpen) queueControlsOpen = true
     }
+    // Smooth crossfade between lyrics and queue: paneSwap runs 0 -> 1 when switching panels directly.
+    var leavingQueue by remember { mutableStateOf(false) }
+    var leavingLyrics by remember { mutableStateOf(false) }
+    val paneSwap = remember { mutableFloatStateOf(1f) }
+    var paneSwapTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(paneSwapTick) {
+        if (paneSwapTick == 0) return@LaunchedEffect
+        animate(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 340, easing = FastOutSlowInEasing),
+        ) { value, _ -> paneSwap.floatValue = value }
+        leavingQueue = false
+        leavingLyrics = false
+    }
+
     // Change the panel and its controls in the same snapshot. Driving the
     // controls from a LaunchedEffect left one composed frame where lyrics were
     // open but the half-player was not, so every trip into lyrics briefly
     // started an exit animation and reversed it on the following frame.
     val openLyrics: () -> Unit = {
+        if (queueOpen && queueSlide.floatValue >= 0.99f) {
+            paneSwap.floatValue = 0f
+            leavingQueue = true
+            leavingLyrics = false
+            paneSwapTick++
+        }
         lyricsControlsOpen = true
         lyricsOpen = true
         queueOpen = false
@@ -1179,7 +1212,13 @@ fun NowPlayingScreen(
     }
     val toggleQueue: () -> Unit = {
         val opening = !queueOpen
-        if (opening && lyricsOpen) queueSlide.floatValue = 1f
+        if (opening && lyricsOpen) {
+            queueSlide.floatValue = 1f
+            paneSwap.floatValue = 0f
+            leavingLyrics = true
+            leavingQueue = false
+            paneSwapTick++
+        }
         // With the queue rather than after it, for the reason [openLyrics]
         // gives: left to the effect above, it was a second recomposition of
         // the whole player on the sleeve's first frame of moving.
@@ -3386,8 +3425,10 @@ fun NowPlayingScreen(
                         // the sheet has gone.
                         fun towardsDock(rect: Rect, mini: Rect?): Rect {
                             if (mini == null) return rect
-                            val unridden = dockFrame.offset * (1f - dockFrame.ride)
-                            return lerp(mini, rect.translate(0f, -unridden), dockT())
+                            val unridden = dockFrame.offset * (1f - (dockFrame.ride * (1f - p())))
+                            val open = dockT()
+                            val ease = open + (dockEaseThumb(open) - open) * p()
+                            return lerp(mini, rect.translate(0f, -unridden), ease)
                         }
                         // The banner's dissolve, firmed up into the cover's hard edge as
                         // it docks.
@@ -3995,7 +4036,7 @@ fun NowPlayingScreen(
                                 // first, so a collapse a tap asked for stops the crawl
                                 // with the tap, instead of a frame into the movement.
                                 val scrolls = {
-                                    !(lyricsOpen || queueOpen || queueDragging) && !collapsePastSettling
+                                    !queueDragging && !collapsePastSettling
                                 }
                                 // Targeted on the words rather than the videoId: two
                                 // cuts that share a title cross-fade into the exact
@@ -4004,20 +4045,15 @@ fun NowPlayingScreen(
                                 // ("… (Live)") dissolves into the new one instead of
                                 // snapping while the rest of the switch moves around
                                 // it.
-                                Crossfade(
-                                    targetState = song.title to (radioTrackTitle ?: song.artist),
-                                    // Round the fade and the marquee's edge masks, whose
-                                    // layers would otherwise hide the backdrop from it. The
-                                    // title is in it too and stays white: see [additiveChrome].
-                                    modifier = Modifier.additiveChrome(LocalPlayerChrome.current),
-                                    animationSpec = tween(durationMillis = 300),
-                                    label = "playerCredits",
-                                ) {
+                                TrackTextSwitch(
+                                    song = song,
+                                    modifier = Modifier.fillMaxWidth().additiveChrome(LocalPlayerChrome.current),
+                                ) { currentSong ->
                                     val scrolling = scrolls()
                                     val artistColor = chromeWhite(0.55f)
                                     Column {
                                         MarqueeText(
-                                            text = song.title,
+                                            text = currentSong.title,
                                             style = MaterialTheme.typography.titleLarge.copy(
                                                 fontSize = 20.sp,
                                             ),
@@ -4025,7 +4061,7 @@ fun NowPlayingScreen(
                                             enabled = scrolling,
                                             // Before the title, in the artist line's
                                             // colour.
-                                            leading = if (song.isExplicit == true) {
+                                            leading = if (currentSong.isExplicit == true) {
                                                 { ExplicitBadge(color = artistColor) }
                                             } else {
                                                 null
@@ -4033,13 +4069,15 @@ fun NowPlayingScreen(
                                             onOverflowChange = { titleOverflowing = it },
                                             // Only the tracks YouTube hands us a browse id for
                                             // lead anywhere; the rest stay plain text.
-                                            modifier = Modifier.opensPage(song.albumId, onOpenAlbum),
+                                            modifier = Modifier
+                                                .opensPage(currentSong.albumId, onOpenAlbum)
+                                                .basicMarquee(iterations = Int.MAX_VALUE),
                                         )
                                         ArtistCreditsMarquee(
-                                            text = radioTrackTitle ?: song.artist,
-                                            credits = remember(song.artist, song.artists, song.artistId, radioTrackTitle) {
+                                            text = radioTrackTitle ?: currentSong.artist,
+                                            credits = remember(currentSong.artist, currentSong.artists, currentSong.artistId, radioTrackTitle) {
                                                 if (radioTrackTitle != null) emptyList()
-                                                else artistCredits(song.artist, song.artists, song.artistId)
+                                                else artistCredits(currentSong.artist, currentSong.artists, currentSong.artistId)
                                             },
                                             style = MaterialTheme.typography.titleLarge.copy(
                                                 fontWeight = FontWeight.W500,
@@ -4128,8 +4166,9 @@ fun NowPlayingScreen(
                         // [lyricsOpen] asked first: a close has already hidden the
                         // panel, and doesn't then listen for the sleeve leaving the
                         // header — which is its first frame of moving.
-                        val lyricsPanelVisible by remember { derivedStateOf { lyricsOpen && collapseDone } }
-                        if (lyricsPanelVisible || playerPrewarmStage >= 2) {
+                        val lyricsPanelVisible = lyricsOpen && collapseDone
+                        val lyricsPanelShown = lyricsPanelVisible || (leavingLyrics && !lyricsOpen)
+                        if (lyricsPanelShown || playerPrewarmStage >= 2) {
                                 LyricsTranslationMotion(
                                     trigger = lyricsTranslation.transition,
                                     reduceMotion = lyricsTranslation.reduceMotion,
@@ -4139,15 +4178,31 @@ fun NowPlayingScreen(
                                         // Keep the prepared list measured but completely
                                         // outside hit-testing/drawing until it is needed.
                                         .offset {
-                                            if (lyricsPanelVisible) IntOffset.Zero else IntOffset(100_000, 0)
+                                            if (lyricsPanelShown) IntOffset.Zero else IntOffset(100_000, 0)
                                         }
                                         // Arrives after the sleeve has finished collapsing
                                         // into the header rather than during — see
-                                        // [collapseDone]. Fading lyrics in over a sleeve
-                                        // still mid-collapse doubled the same movement in
-                                        // two places on screen at once, and composing them
-                                        // there was what made the collapse stutter.
-                                        .graphicsLayer { alpha = if (lyricsPanelVisible) panelFade.value else 0f }
+                                        // [collapseDone]. Smoothly cross-fades when swapping
+                                        // directly between lyrics and queue.
+                                        .graphicsLayer {
+                                            val swap = paneSwap.floatValue
+                                            val travel = 18.dp.toPx()
+                                            if (lyricsPanelVisible) {
+                                                alpha = panelFade.value * swap
+                                                translationY = (1f - swap) * travel
+                                                val s = 0.97f + 0.03f * swap
+                                                scaleX = s
+                                                scaleY = s
+                                            } else if (lyricsPanelShown) {
+                                                alpha = panelFade.value * (1f - swap)
+                                                translationY = -swap * travel * 0.5f
+                                                val s = 1f - 0.03f * swap
+                                                scaleX = s
+                                                scaleY = s
+                                            } else {
+                                                alpha = 0f
+                                            }
+                                        }
                                         .then(if (!frostOff) Modifier.hazeSource(queueHaze, zIndex = 1f) else Modifier),
                                 ) { particleProgress ->
                                     LyricsPanel(
@@ -4252,26 +4307,36 @@ fun NowPlayingScreen(
                         val queueDeckInset = (queueContentHeight - maxHeight).coerceAtLeast(0.dp)
                         val queuePanelVisible = !lyricsOpen &&
                             (queueDragging || (queueOpen && queueShowing && collapseDone))
-                        if (queuePanelVisible || playerPrewarmStage >= 3) {
+                        val queuePanelShown = queuePanelVisible || (leavingQueue && lyricsOpen)
+                        if (queuePanelShown || playerPrewarmStage >= 3) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(top = HEADER_HEIGHT)
                                     .offset {
-                                        if (queuePanelVisible) IntOffset.Zero else IntOffset(100_000, 0)
+                                        if (queuePanelShown) IntOffset.Zero else IntOffset(100_000, 0)
                                     }
                                     .graphicsLayer {
-                                        alpha = if (!queuePanelVisible) {
-                                            0f
-                                        } else if (queueDragging) {
-                                            ((queueSlide.floatValue - 0.45f) / 0.55f).coerceIn(0f, 1f)
+                                        val swap = paneSwap.floatValue
+                                        val travel = 18.dp.toPx()
+                                        if (!queuePanelVisible) {
+                                            // Leaving towards lyrics: fade while rising slightly.
+                                            alpha = if (queuePanelShown) panelFade.value * (1f - swap) else 0f
+                                            translationY = if (queuePanelShown) -swap * travel * 0.5f else 0f
+                                            val s = if (queuePanelShown) 1f - 0.03f * swap else 1f
+                                            scaleX = s
+                                            scaleY = s
                                         } else {
-                                            panelFade.value
-                                        }
-                                        translationY = if (queuePanelVisible) {
-                                            (1f - queueSlide.floatValue) * 26.dp.toPx()
-                                        } else {
-                                            0f
+                                            alpha = if (queueDragging) {
+                                                ((queueSlide.floatValue - 0.45f) / 0.55f).coerceIn(0f, 1f)
+                                            } else {
+                                                panelFade.value * swap
+                                            }
+                                            translationY = (1f - queueSlide.floatValue) * 26.dp.toPx() +
+                                                (1f - swap) * travel
+                                            val s = 0.97f + 0.03f * swap
+                                            scaleX = s
+                                            scaleY = s
                                         }
                                     },
                             ) {

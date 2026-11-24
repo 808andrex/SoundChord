@@ -1,6 +1,11 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.ui.components.coverSharedElement
+import com.music.bitchord.ui.components.rememberCoverTap
+import com.music.bitchord.ui.components.secondaryExitFade
+import com.music.bitchord.ui.components.staggeredEntrance
 import com.music.bitchord.ui.components.trackArtSize
+import com.music.bitchord.ui.components.enterReveal
 import android.os.Build
 import com.music.bitchord.R
 
@@ -611,15 +616,17 @@ fun DetailScreen(
 
             if (searching) {
                 item(key = "search") {
-                    DetailSearchField(
-                        query = query,
-                        onQueryChange = { query = it },
-                        onClose = closeSearch,
-                        autoFocus = focusSearch,
-                        onFocused = { focusSearch = false },
-                        palette = palette,
-                        type = page.type,
-                    )
+                    Box(Modifier.secondaryExitFade(100)) {
+                        DetailSearchField(
+                            query = query,
+                            onQueryChange = { query = it },
+                            onClose = closeSearch,
+                            autoFocus = focusSearch,
+                            onFocused = { focusSearch = false },
+                            palette = palette,
+                            type = page.type,
+                        )
+                    }
                 }
             }
 
@@ -627,14 +634,16 @@ fun DetailScreen(
 
             if (songs.isNotEmpty() && isArtist) {
                 item(key = "actions") {
-                    ActionRow(
-                        onPlay = { onPlay(songs) },
-                        onShuffle = { onShuffle(songs) },
-                        subscription = page.subscription?.takeIf { onToggleSubscription != null },
-                        onToggleSubscription = onToggleSubscription,
-                        bottomSpace = 22.dp,
-                        playColor = appleArt?.keyColor?.let { Color(it) },
-                    )
+                    Box(Modifier.secondaryExitFade(100)) {
+                        ActionRow(
+                            onPlay = { onPlay(songs) },
+                            onShuffle = { onShuffle(songs) },
+                            subscription = page.subscription?.takeIf { onToggleSubscription != null },
+                            onToggleSubscription = onToggleSubscription,
+                            bottomSpace = 22.dp,
+                            playColor = appleArt?.keyColor?.let { Color(it) },
+                        )
+                    }
                 }
             }
 
@@ -642,16 +651,18 @@ fun DetailScreen(
             val topRelease = if (isArtist) page.sections.topRelease() else null
             if (topRelease != null) {
                 item(key = "top-release") {
-                    TopReleaseCard(
-                        item = topRelease,
-                        palette = palette,
-                        onClick = { onSectionItemClick(topRelease) },
-                        onLongPress = onSectionItemLongPress?.let { { it(topRelease) } },
-                        saved = topRelease.browseId?.let { releaseLibrary[it]?.saved },
-                        onToggleSaved = onToggleReleaseLibrary?.let { toggle ->
-                            topRelease.browseId?.let { id -> { toggle(id) } }
-                        },
-                    )
+                    Box(Modifier.secondaryExitFade(100)) {
+                        TopReleaseCard(
+                            item = topRelease,
+                            palette = palette,
+                            onClick = { onSectionItemClick(topRelease) },
+                            onLongPress = onSectionItemLongPress?.let { { it(topRelease) } },
+                            saved = topRelease.browseId?.let { releaseLibrary[it]?.saved },
+                            onToggleSaved = onToggleReleaseLibrary?.let { toggle ->
+                                topRelease.browseId?.let { id -> { toggle(id) } }
+                            },
+                        )
+                    }
                 }
             }
 
@@ -673,7 +684,7 @@ fun DetailScreen(
                 if (!showAbout) return
                 item(key = "about") {
                     // Clear of the last shelf above it.
-                    Box(Modifier.padding(top = if (isArtist) 28.dp else 0.dp)) {
+                    Box(Modifier.secondaryExitFade(100).padding(top = if (isArtist) 28.dp else 0.dp)) {
                     AboutSection(
                         title = stringResource(
                             if (isArtist) R.string.about_artist else R.string.about_album,
@@ -730,42 +741,46 @@ fun DetailScreen(
                     // An artist's full song list would bury the album shelves, so
                     // it pages sideways four at a time and stops at twenty.
                     item {
-                        val top = state.data.take(MAX_ARTIST_SONGS)
-                        val isCurrentRow = playingRowMatcher(top, currentSong)
-                        SectionHeading(
-                            title = stringResource(R.string.top_songs),
-                            palette = palette,
-                            horizontalPadding = ARTIST_CONTENT_GUTTER,
-                        )
-                        BoxWithConstraints {
-                            val columnWidth = trackColumnWidth(maxWidth)
-                            val topSongsState = rememberLazyListState()
-                            LazyRow(
-                                state = topSongsState,
-                                contentPadding = PaddingValues(horizontal = ARTIST_CONTENT_GUTTER),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                flingBehavior = rememberSnapFlingBehavior(lazyListState = topSongsState),
-                            ) {
-                                items(top.chunked(SONGS_PER_COLUMN)) { column ->
-                                    Column(Modifier.width(columnWidth)) {
-                                        column.forEachIndexed { index, song ->
-                                            CompactSongRow(
-                                                song = song,
-                                                palette = palette,
-                                                onClick = { onSongClick(top, top.indexOf(song)) },
-                                                onLongPress = { onSongLongPress(song) },
-                                                downloadedTint = downloadedTint,
-                                                isCurrent = isCurrentRow(song),
-                                                isPlaying = isCurrentRow(song) && isPlaying,
-                                            )
-                                            if (index < column.lastIndex) {
-                                                HorizontalDivider(
-                                                    modifier = Modifier.padding(
-                                                        start = if (song.isVideo) 97.dp else 60.dp,
-                                                    ),
-                                                    thickness = 0.5.dp,
-                                                    color = palette.divider,
-                                                )
+                        Box(Modifier.secondaryExitFade(100)) {
+                            val top = state.data.take(MAX_ARTIST_SONGS)
+                            val isCurrentRow = playingRowMatcher(top, currentSong)
+                            Column {
+                                SectionHeading(
+                                    title = stringResource(R.string.top_songs),
+                                    palette = palette,
+                                    horizontalPadding = ARTIST_CONTENT_GUTTER,
+                                )
+                                BoxWithConstraints {
+                                    val columnWidth = trackColumnWidth(maxWidth)
+                                    val topSongsState = rememberLazyListState()
+                                    LazyRow(
+                                        state = topSongsState,
+                                        contentPadding = PaddingValues(horizontal = ARTIST_CONTENT_GUTTER),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        flingBehavior = rememberSnapFlingBehavior(lazyListState = topSongsState),
+                                    ) {
+                                        items(top.chunked(SONGS_PER_COLUMN)) { column ->
+                                            Column(Modifier.width(columnWidth)) {
+                                                column.forEachIndexed { index, song ->
+                                                    CompactSongRow(
+                                                        song = song,
+                                                        palette = palette,
+                                                        onClick = { onSongClick(top, top.indexOf(song)) },
+                                                        onLongPress = { onSongLongPress(song) },
+                                                        downloadedTint = downloadedTint,
+                                                        isCurrent = isCurrentRow(song),
+                                                        isPlaying = isCurrentRow(song) && isPlaying,
+                                                    )
+                                                    if (index < column.lastIndex) {
+                                                        HorizontalDivider(
+                                                            modifier = Modifier.padding(
+                                                                start = if (song.isVideo) 97.dp else 60.dp,
+                                                            ),
+                                                            thickness = 0.5.dp,
+                                                            color = palette.divider,
+                                                        )
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -791,6 +806,7 @@ fun DetailScreen(
                         val song = entry.value
                         val isCurrent = isCurrentRow(song)
                         SongRow(
+                            modifier = Modifier.staggeredEntrance(position),
                             song = if (numbered) {
                                 song
                             } else {
@@ -845,6 +861,7 @@ fun DetailScreen(
                         downloadedTint = downloadedTint,
                         isCurrent = isSuggestedCurrent(song),
                         isPlaying = isSuggestedCurrent(song) && isPlaying,
+                        modifier = Modifier.staggeredEntrance(index),
                     )
                     if (index < suggested.lastIndex) {
                         HorizontalDivider(
@@ -862,7 +879,7 @@ fun DetailScreen(
                 val displayItems = remember(shelf.items) {
                     if (canShowAll) shelf.items.take(ARTIST_ROW_MAX_ITEMS) else shelf.items
                 }
-                Column(Modifier.padding(top = 22.dp)) {
+                Column(Modifier.secondaryExitFade(100).padding(top = 22.dp)) {
                     SectionHeading(
                         title = shelf.title,
                         palette = palette,
@@ -904,13 +921,15 @@ fun DetailScreen(
 
     }
 } else {
-    ArtistShelfGridPage(
-        shelf = targetShelf,
-        palette = palette,
-        onItemClick = onSectionItemClick,
-        onItemLongPress = onSectionItemLongPress,
-        contentPadding = contentPadding,
-    )
+    Box(Modifier.fillMaxSize().secondaryExitFade(100)) {
+        ArtistShelfGridPage(
+            shelf = targetShelf,
+            palette = palette,
+            onItemClick = onSectionItemClick,
+            onItemLongPress = onSectionItemLongPress,
+            contentPadding = contentPadding,
+        )
+    }
 }
 }
 }
@@ -975,7 +994,8 @@ private fun ReleaseHeader(
                         val height = (placeable.height - FULL_BLEED_TITLE_OVERLAP.roundToPx()).coerceAtLeast(0)
                         layout(placeable.width, height) { placeable.place(0, 0) }
                     }
-                    .aspectRatio(1f),
+                    .aspectRatio(1f)
+                    .coverSharedElement(page.browseId, RoundedCornerShape(0.dp)),
             ) {
                 AsyncImage(
                     model = page.thumbnailUrl.artworkAt(HEADER_ART_PX),
@@ -1020,6 +1040,7 @@ private fun ReleaseHeader(
             Modifier
                 .size(sleeveSize)
                 .shadow(SLEEVE_SHADOW, SLEEVE_SHAPE)
+                .coverSharedElement(page.browseId, SLEEVE_SHAPE)
                 .background(palette.elevated)
                 .thumbnailBorder(SLEEVE_SHAPE),
         ) {
@@ -1055,16 +1076,22 @@ private fun ReleaseHeader(
             }
         }
 
-        Spacer(Modifier.height(20.dp))
-        Text(
-            text = page.title,
-            style = MaterialTheme.typography.headlineMedium,
-            color = palette.onBackground,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = HEADER_GUTTER),
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .secondaryExitFade(100),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = page.title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = palette.onBackground,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.enterReveal(150).padding(horizontal = HEADER_GUTTER),
+            )
         if (credit.isNotBlank()) {
             Spacer(Modifier.height(2.dp))
             Text(
@@ -1078,6 +1105,7 @@ private fun ReleaseHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
+                    .enterReveal(200)
                     .padding(horizontal = HEADER_GUTTER)
                     .let { m ->
                         val id = artist?.artistId
@@ -1099,7 +1127,7 @@ private fun ReleaseHeader(
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = HEADER_GUTTER),
+                modifier = Modifier.enterReveal(240).padding(horizontal = HEADER_GUTTER),
             )
         }
 
@@ -1110,6 +1138,7 @@ private fun ReleaseHeader(
             Spacer(Modifier.height(18.dp))
             Row(
                 modifier = Modifier
+                    .enterReveal(290)
                     .widthIn(max = RELEASE_ACTIONS_MAX_WIDTH)
                     .fillMaxWidth()
                     .padding(horizontal = HEADER_GUTTER),
@@ -1218,10 +1247,12 @@ private fun ReleaseHeader(
                 filled = true,
                 size = RELEASE_SIDE_BUTTON,
                 modifier = Modifier
+                    .enterReveal(290)
                     .widthIn(max = RELEASE_ACTIONS_MAX_WIDTH)
                     .fillMaxWidth()
                     .padding(horizontal = HEADER_GUTTER),
             )
+        }
         }
     }
 }
@@ -1449,7 +1480,7 @@ private fun ArtistHeader(
             val sizeFactor = if (isSignature) SIGNATURE_SCALE else 1f
             val maxLogoHeight = artHeight * ARTIST_LOGO_MAX_HEIGHT * sizeFactor
             Column(
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier.align(Alignment.BottomCenter).secondaryExitFade(100),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
             AsyncImage(
@@ -1499,6 +1530,7 @@ private fun ArtistHeader(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .secondaryExitFade(100)
                 // Bottom is half the top inset — the stats pills (or, absent
                 // those, the action row) sit closer under the name than the
                 // name sits under the artwork.
@@ -1545,7 +1577,8 @@ private fun PageBackground(
             Modifier
                 .fillMaxWidth()
                 .height(artHeight)
-                .offset { IntOffset(0, listState.headerTop(artHeight.toPx()).roundToInt()) },
+                .offset { IntOffset(0, listState.headerTop(artHeight.toPx()).roundToInt()) }
+                .coverSharedElement(page.browseId, RoundedCornerShape(0.dp)),
         ) {
             AsyncImage(
                 model = art,
@@ -1553,7 +1586,7 @@ private fun PageBackground(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .matchParentSize()
-                    .background(palette.elevated),
+                    .background(Color.Transparent),
             )
 
             // Above the still art but below the scrim, so the scrim that
@@ -2166,9 +2199,10 @@ private fun SuggestedSongRow(
     downloadedTint: Color? = null,
     isCurrent: Boolean = false,
     isPlaying: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .longPressMenuClickable(
                 onClick = onClick,
@@ -2290,6 +2324,8 @@ private fun TopReleaseCard(
     val coverShape = remember { RoundedCornerShape(TOP_RELEASE_CORNER - TOP_RELEASE_INSET).continuous() }
     val haptics = rememberHaptics()
     val hasButton = onToggleSaved != null && saved != null
+    val cardToken = remember { Any() }
+    val openCard = rememberCoverTap(item.browseId, cardToken, onClick)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2301,7 +2337,7 @@ private fun TopReleaseCard(
             .background(Color.White.copy(alpha = LIGHT_FILL_ALPHA), shape)
             .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_EDGE_ALPHA), shape)
             .clip(shape)
-            .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
+            .longPressMenuClickable(onClick = openCard, onLongClick = onLongPress)
             .padding(
                 start = TOP_RELEASE_INSET,
                 top = TOP_RELEASE_INSET,
@@ -2316,6 +2352,7 @@ private fun TopReleaseCard(
             modifier = Modifier
                 .size(96.dp)
                 .clip(coverShape)
+                .coverSharedElement(item.browseId, coverShape, cardToken)
                 .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_COVER_EDGE_ALPHA), coverShape)
                 .background(palette.elevated),
         )
@@ -2418,9 +2455,11 @@ private fun SectionCard(
         )
         return
     }
+    val cardToken = remember { Any() }
+    val openCard = rememberCoverTap(item.browseId, cardToken, onClick)
     Column(
         modifier = modifier
-            .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress),
+            .longPressMenuClickable(onClick = openCard, onLongClick = onLongPress),
     ) {
         AsyncImage(
             model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
@@ -2429,6 +2468,7 @@ private fun SectionCard(
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(10.dp))
+                .coverSharedElement(item.browseId, RoundedCornerShape(10.dp), cardToken)
                 .thumbnailBorder(RoundedCornerShape(10.dp))
                 .background(palette.elevated),
         )

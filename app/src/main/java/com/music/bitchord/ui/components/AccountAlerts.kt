@@ -2,6 +2,15 @@ package com.music.bitchord.ui.components
 
 import com.music.bitchord.R
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -925,22 +934,63 @@ internal fun AlertScaffold(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+    val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     val shape = RoundedCornerShape(ALERT_CORNER)
+    val scope = rememberCoroutineScope()
+    var closing by remember { mutableStateOf(false) }
+
+    val pop = remember { Animatable(if (reduceMotion) 1f else 0.90f) }
+    val fade = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        if (reduceMotion) {
+            fade.animateTo(1f, tween(120))
+            pop.snapTo(1f)
+        } else {
+            launch { fade.animateTo(1f, tween(160, easing = FastOutSlowInEasing)) }
+            launch { pop.animateTo(1f, spring(dampingRatio = 0.76f, stiffness = 420f)) }
+        }
+    }
+
+    val close: () -> Unit = {
+        if (!closing) {
+            closing = true
+            scope.launch {
+                if (reduceMotion) {
+                    fade.animateTo(0f, tween(100))
+                } else {
+                    launch { fade.animateTo(0f, tween(160, easing = FastOutLinearInEasing)) }
+                    pop.animateTo(0.90f, tween(160, easing = FastOutSlowInEasing))
+                }
+                onDismiss()
+            }
+        }
+    }
+
+    BackHandler(enabled = !closing, onBack = close)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(SCRIM_COLOR)
+            .drawBehind {
+                drawRect(SCRIM_COLOR.copy(alpha = SCRIM_COLOR.alpha * fade.value.coerceIn(0f, 1f)))
+            }
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
-                onClick = onDismiss,
+                onClick = close,
             ),
         contentAlignment = Alignment.Center,
     ) {
         Column(
             modifier = Modifier
                 .width(ALERT_WIDTH)
+                .graphicsLayer {
+                    val s = if (reduceMotion) 1f else pop.value.coerceAtLeast(0f)
+                    scaleX = s
+                    scaleY = s
+                    alpha = fade.value.coerceIn(0f, 1f)
+                }
                 .clip(shape)
                 .then(
                     if (reduceDynamicBlur || !frosted) {

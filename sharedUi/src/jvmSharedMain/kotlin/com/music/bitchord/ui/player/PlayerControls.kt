@@ -28,7 +28,13 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -751,6 +757,7 @@ internal fun TransportRow(
                 enabled = previousEnabled,
                 onBlocked = if (controlsLocked) onBlockedControl else null,
                 haptic = Haptic.SkipPrevious,
+                direction = -1,
             )
             if (isLoading) {
                 // Same footprint as the play/pause target — a smaller box here
@@ -765,6 +772,7 @@ internal fun TransportRow(
             } else {
                 TransportGlyph(
                     icon = if (isPlaying) Res.drawable.ic_player_pause else Res.drawable.ic_player_play,
+                    altIcon = if (isPlaying) Res.drawable.ic_player_play else Res.drawable.ic_player_pause,
                     contentDescription = stringResource(if (isPlaying) Res.string.pause else Res.string.play),
                     size = playSize,
                     touchSize = playTouch,
@@ -782,6 +790,7 @@ internal fun TransportRow(
                 enabled = nextEnabled,
                 onBlocked = if (controlsLocked) onBlockedControl else null,
                 haptic = Haptic.SkipNext,
+                direction = 1,
             )
         }
         return
@@ -861,6 +870,7 @@ internal fun TransportRow(
                 enabled = previousEnabled,
                 onBlocked = if (controlsLocked) onBlockedControl else null,
                 haptic = Haptic.SkipPrevious,
+                direction = -1,
             )
         }
         if (isLoading) {
@@ -874,6 +884,7 @@ internal fun TransportRow(
         } else {
             TransportGlyph(
                 icon = if (isPlaying) Res.drawable.ic_player_pause else Res.drawable.ic_player_play,
+                altIcon = if (isPlaying) Res.drawable.ic_player_play else Res.drawable.ic_player_pause,
                 contentDescription = stringResource(if (isPlaying) Res.string.pause else Res.string.play),
                 size = playSize,
                 touchSize = playTouch,
@@ -892,6 +903,7 @@ internal fun TransportRow(
                 enabled = nextEnabled,
                 onBlocked = if (controlsLocked) onBlockedControl else null,
                 haptic = Haptic.SkipNext,
+                direction = 1,
             )
             ModeIndicatorGlyph(
                 vector = repeatIcon,
@@ -1153,6 +1165,7 @@ private fun ModeIndicatorGlyph(
 @Composable
 private fun TransportGlyph(
     icon: DrawableResource,
+    altIcon: DrawableResource? = null,
     contentDescription: String,
     size: androidx.compose.ui.unit.Dp,
     touchSize: androidx.compose.ui.unit.Dp = size,
@@ -1162,6 +1175,8 @@ private fun TransportGlyph(
     haptic: Haptic = Haptic.Tap,
     /** Vertical squash of the glyph alone; its width and touch box are untouched. */
     heightScale: Float = 1f,
+    /** -1 kicks the glyph left, 1 kicks it right on tap; 0 means no kick. */
+    direction: Int = 0,
 ) {
     val haptics = rememberHaptics()
     // Faded rather than hidden: the row keeps its shape at the ends of a queue.
@@ -1169,11 +1184,39 @@ private fun TransportGlyph(
         targetValue = if (enabled) 1f else 0.3f,
         label = "transportAlpha",
     )
+    // Apple Music style press: the glyph shrinks under the finger and springs
+    // back with a small overshoot on release. Read only in graphicsLayer, so it
+    // never recomposes.
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val pressScale = animateFloatAsState(
+        targetValue = if (pressed && enabled) 0.72f else 1f,
+        animationSpec = spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium),
+        label = "transportPress",
+    )
+    // Soft disc under the finger while it is held.
+    val pressDisc by animateFloatAsState(
+        targetValue = if (pressed && enabled) 0.18f else 0f,
+        animationSpec = tween(durationMillis = if (pressed) 70 else 260),
+        label = "transportDisc",
+    )
+    val iconPainter = painterResource(icon)
+    val altPainter = altIcon?.let { painterResource(it) }
+    val scope = rememberCoroutineScope()
+    val kick = remember { Animatable(0f) }
     Box(
         modifier = Modifier
             .size(touchSize)
+            .drawBehind {
+                if (pressDisc > 0f) {
+                    drawCircle(
+                        color = Color.White.copy(alpha = pressDisc),
+                        radius = this.size.minDimension / 2f,
+                    )
+                }
+            }
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = interaction,
                 indication = null,
                 enabled = enabled || onBlocked != null,
             ) {
@@ -1181,19 +1224,50 @@ private fun TransportGlyph(
                     onBlocked()
                 } else {
                     haptics.play(haptic)
+                    if (direction != 0) {
+                        scope.launch {
+                            kick.snapTo(0f)
+                            kick.animateTo(direction.toFloat(), tween(durationMillis = 80, easing = FastOutSlowInEasing))
+                            kick.animateTo(0f, spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessMediumLow))
+                        }
+                    }
                     onClick()
                 }
             },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = contentDescription,
-            tint = Color.White.copy(alpha = alpha),
-            modifier = Modifier
-                .size(size)
-                .then(if (heightScale != 1f) Modifier.graphicsLayer { scaleY = heightScale } else Modifier),
-        )
+        AnimatedContent(
+            targetState = icon,
+            transitionSpec = {
+                (
+                    fadeIn(tween(110)) +
+                        scaleIn(
+                            initialScale = 0.6f,
+                            animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium),
+                        )
+                    ) togetherWith (
+                    fadeOut(tween(70)) +
+                        scaleOut(targetScale = 0.6f, animationSpec = tween(90))
+                    )
+            },
+            contentAlignment = Alignment.Center,
+            label = "transportGlyph",
+        ) { glyph ->
+            Icon(
+                painter = if (glyph == icon) iconPainter else altPainter ?: iconPainter,
+                contentDescription = contentDescription,
+                tint = Color.White.copy(alpha = alpha),
+                modifier = Modifier
+                    .size(size)
+                    .graphicsLayer {
+                        val k = kick.value
+                        translationX = k * 12.dp.toPx()
+                        scaleX = pressScale.value * (1f + kotlin.math.abs(k) * 0.15f)
+                        scaleY = pressScale.value * (1f - kotlin.math.abs(k) * 0.06f)
+                    }
+                    .then(if (heightScale != 1f) Modifier.graphicsLayer { scaleY = heightScale } else Modifier),
+            )
+        }
     }
 }
 
