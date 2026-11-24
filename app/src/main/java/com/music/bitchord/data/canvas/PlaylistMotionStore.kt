@@ -3,6 +3,8 @@ package com.music.bitchord.data.canvas
 import android.content.Context
 import android.content.SharedPreferences
 import com.soundchord.features.playlistimport.data.AppleMusicPlaylistClient
+import com.soundchord.features.playlistimport.data.AppleMusicPlaylistRepository
+import com.music.bitchord.data.spotify.LocalPlaylistStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -310,6 +312,25 @@ object PlaylistMotionStore {
                         storefront = sf,
                         description = refreshed.description.takeIf { it.isNotBlank() } ?: entry.description,
                     )
+                    val local = LocalPlaylistStore.getPlaylist(key)
+                        ?: LocalPlaylistStore.playlists.value.firstOrNull { it.applePlaylistId == appleId }
+                    if (local != null) {
+                        val matchedSongs = if (refreshed.tracks.isNotEmpty()) {
+                            runCatching {
+                                val (songs, _) = AppleMusicPlaylistRepository.resolveAndMatchTracks(refreshed.tracks) { _, _ -> }
+                                songs
+                            }.getOrNull()
+                        } else null
+
+                        LocalPlaylistStore.updatePlaylistFromAppleMusic(
+                            id = local.id,
+                            title = refreshed.name.takeIf { it.isNotBlank() },
+                            songs = matchedSongs?.takeIf { it.isNotEmpty() },
+                            coverUrl = refreshed.coverUrl,
+                            motionVideoUrl = refreshed.motionVideoUrl,
+                            description = refreshed.description.takeIf { it.isNotBlank() },
+                        )
+                    }
                 }
             }
         }

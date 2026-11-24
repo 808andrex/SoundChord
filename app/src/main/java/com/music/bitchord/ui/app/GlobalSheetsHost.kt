@@ -1272,7 +1272,7 @@ internal fun GlobalSheetsHost(
         )
     }
 
-    var showAppleMusicDriveNotice by remember { mutableStateOf(false) }
+    val showAppleMusicDriveNotice by viewModel.showAppleMusicDriveNotice.collectAsStateWithLifecycle()
 
     if (AppleMusicImportController.showDialog) {
         BackHandler { AppleMusicImportController.showDialog = false }
@@ -1307,7 +1307,7 @@ internal fun GlobalSheetsHost(
                         !driveSettings.needsDevice &&
                         driveSettings.frequency != BackupFrequency.OFF
                     if (!isDriveActive) {
-                        showAppleMusicDriveNotice = true
+                        viewModel.triggerAppleMusicDriveNotice()
                     }
                 }
             },
@@ -1318,15 +1318,15 @@ internal fun GlobalSheetsHost(
     if (showAppleMusicDriveNotice) {
         ConfirmationAlert(
             hazeState = state.hazeState,
-            title = stringResource(R.string.playlist_cover_local_notice_title),
-            description = stringResource(R.string.playlist_cover_local_notice_message),
+            title = stringResource(R.string.playlist_local_save_notice_title),
+            description = stringResource(R.string.playlist_local_save_notice_message),
             confirmLabel = stringResource(R.string.playlist_cover_configure_drive),
             cancelLabel = stringResource(R.string.playlist_cover_understood),
             onConfirm = {
-                showAppleMusicDriveNotice = false
+                viewModel.dismissAppleMusicDriveNotice()
                 navigator.push(AppRoute.DriveBackup)
             },
-            onDismiss = { showAppleMusicDriveNotice = false },
+            onDismiss = { viewModel.dismissAppleMusicDriveNotice() },
             inOwnWindow = true,
         )
     }

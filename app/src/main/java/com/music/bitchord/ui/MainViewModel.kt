@@ -31,6 +31,12 @@ import kotlin.coroutines.cancellation.CancellationException
 import com.music.bitchord.data.model.SPOTIFY_MISSING_PREFIX
 import com.music.bitchord.data.model.SPOTIFY_PENDING_PREFIX
 import com.music.bitchord.data.spotify.SPOTIFY_PAGE_PREFIX
+import com.soundchord.features.playlistimport.data.AppleMusicPlaylistClient
+import com.soundchord.features.playlistimport.data.AppleMusicPlaylistRepository
+import com.music.bitchord.data.canvas.PlaylistMotionStore
+import com.music.bitchord.data.spotify.LocalPlaylistStore
+import com.music.bitchord.data.backup.DriveBackup
+import com.music.bitchord.data.backup.BackupFrequency
 import com.music.bitchord.data.spotify.SpotifyImporter
 import com.music.bitchord.data.spotify.SpotifyLibrary
 import com.music.bitchord.data.spotify.SpotifyTrack
@@ -114,6 +120,8 @@ import com.music.bitchord.data.matchesSearch
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
+
+const val APPLE_MUSIC_PAGE_PREFIX = "apple:playlist:"
 
 /** What the Search tab searches: YouTube Music, or the Local Music folder on this device. */
 enum class SearchSource { YOUTUBE, LIBRARY, RADIO, ADDONS }
@@ -876,17 +884,133 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * — a local page, an auto-playlist, a generated mix — and the UI has no
      * control on it to have been tapped, so this is a no-op rather than a guess.
      */
+    private val _showAppleMusicDriveNotice = MutableStateFlow(false)
+    val showAppleMusicDriveNotice: StateFlow<Boolean> = _showAppleMusicDriveNotice.asStateFlow()
+
+    fun triggerAppleMusicDriveNotice() {
+        _showAppleMusicDriveNotice.value = true
+    }
+
+    fun dismissAppleMusicDriveNotice() {
+        _showAppleMusicDriveNotice.value = false
+    }
+
+    fun toggleAppleMusicLibrary(browseId: String) {
+        val page = _detailStack.value.firstOrNull { it.browseId == browseId } ?: return
+        val currentSaved = page.library?.saved == true
+        val target = !currentSaved
+        val raw = browseId.removePrefix(APPLE_MUSIC_PAGE_PREFIX)
+        val appleId = PlaylistMotionStore.getApplePlaylistId(browseId)
+            ?: if (raw.contains(":")) raw.substringAfter(":") else raw
+        val storefront = PlaylistMotionStore.getStorefront(browseId)
+            ?: if (raw.contains(":")) raw.substringBefore(":") else "us"
+        val motionUrl = PlaylistMotionStore.getMotionVideoUrl(browseId)
+        val coverUrl = PlaylistMotionStore.getCoverUrl(browseId) ?: page.thumbnailUrl
+        val description = PlaylistMotionStore.getDescription(browseId) ?: page.description
+
+        if (target) {
+            val songs = (page.songs as? UiState.Success)?.data.orEmpty()
+            val videoIds = songs.map { it.videoId }
+
+            setSavedOnPage(browseId, true)
+
+            createPlaylistWithVideoIds(
+                title = page.title,
+                privacy = PlaylistPrivacy.PRIVATE,
+                videoIds = videoIds,
+                songs = songs,
+                motionVideoUrl = motionUrl,
+                coverUrl = coverUrl,
+                applePlaylistId = appleId,
+                storefront = storefront,
+                description = description,
+            ) { _, _, _ ->
+                viewModelScope.launch(Dispatchers.Main) {
+                    android.widget.Toast.makeText(getApplication(), R.string.playlist_added_to_library, android.widget.Toast.LENGTH_SHORT).show()
+                }
+                val driveSettings = DriveBackup.settings.value
+                val isDriveActive = driveSettings.account != null &&
+                    !driveSettings.needsSignIn &&
+                    !driveSettings.needsDevice &&
+                    driveSettings.frequency != BackupFrequency.OFF
+                if (isDriveActive) {
+                    DriveBackup.syncSilently(getApplication())
+                } else {
+                    _showAppleMusicDriveNotice.value = true
+                }
+            }
+        } else {
+            setSavedOnPage(browseId, false)
+            val local = LocalPlaylistStore.playlists.value.firstOrNull { it.applePlaylistId == appleId }
+            if (local != null) {
+                LocalPlaylistStore.deletePlaylist(local.id)
+            }
+            val remote = _playlists.value.firstOrNull {
+                PlaylistMotionStore.getApplePlaylistId(it.browseId) == appleId ||
+                PlaylistMotionStore.getApplePlaylistId(it.playlistId) == appleId
+            }
+            if (remote != null) {
+                deletePlaylist(remote)
+            }
+            val driveSettings = DriveBackup.settings.value
+            val isDriveActive = driveSettings.account != null &&
+                !driveSettings.needsSignIn &&
+                !driveSettings.needsDevice &&
+                driveSettings.frequency != BackupFrequency.OFF
+            if (isDriveActive) {
+                DriveBackup.syncSilently(getApplication())
+            }
+            viewModelScope.launch(Dispatchers.Main) {
+                android.widget.Toast.makeText(getApplication(), R.string.playlist_removed_from_library, android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    /**
+     * Saves or removes a release / playlist from the user's library.
+     */
     fun toggleLibrary(browseId: String) {
+        if (browseId.startsWith(APPLE_MUSIC_PAGE_PREFIX) ||
+            PlaylistMotionStore.getApplePlaylistId(browseId) != null ||
+            LocalPlaylistStore.getPlaylist(browseId)?.applePlaylistId != null
+        ) {
+            toggleAppleMusicLibrary(browseId)
+            return
+        }
         if (!requireSignIn()) return
-        val current = _detailStack.value.firstOrNull { it.browseId == browseId }?.library ?: return
+        val page = _detailStack.value.firstOrNull { it.browseId == browseId }
+        val current = page?.library ?: if (browseId.startsWith("VL") || browseId.startsWith("PL") || browseId.startsWith("RDAMPL")) {
+            val norm = normalizedPlaylistId(browseId)
+            val saved = _playlists.value.any { normalizedPlaylistId(it.playlistId) == norm }
+            LibraryState(playlistId = norm, saved = saved)
+        } else null
+        if (current == null) return
+
         val target = !current.saved
         setSavedOnPage(browseId, target)
         viewModelScope.launch {
             if (YtMusicRepository.setSaved(current.playlistId, target).isSuccess) {
                 // The Library tab's Albums/Playlists shelf is now out of date.
                 libraryStale = true
+                if (target) {
+                    loadPlaylists()
+                } else {
+                    _playlists.value = _playlists.value.filterNot {
+                        normalizedPlaylistId(it.playlistId) == normalizedPlaylistId(current.playlistId)
+                    }
+                }
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        if (target) R.string.playlist_added_to_library else R.string.playlist_removed_from_library,
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                }
             } else {
                 setSavedOnPage(browseId, current.saved)
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(getApplication(), R.string.failed, android.widget.Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -933,8 +1057,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun setSavedOnPage(browseId: String, saved: Boolean) {
         _detailStack.value = _detailStack.value.map { page ->
             val library = page.library
-            if (page.browseId != browseId || library == null) {
+            if (page.browseId != browseId) {
                 page
+            } else if (library == null) {
+                val pId = PlaylistMotionStore.getApplePlaylistId(browseId) ?: normalizedPlaylistId(browseId)
+                page.copy(library = LibraryState(playlistId = pId, saved = saved))
             } else {
                 page.copy(library = library.copy(saved = saved))
             }
@@ -3171,6 +3298,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     ?: BrowseType.PLAYLIST
             browseId.startsWith(LocalGroups.PREFIX) -> LocalGroups.typeOf(browseId) ?: fallback
             browseId.startsWith(OfflinePlaylists.PREFIX) -> BrowseType.PLAYLIST
+            browseId.startsWith(SPOTIFY_PAGE_PREFIX) -> BrowseType.PLAYLIST
+            browseId.startsWith(APPLE_MUSIC_PAGE_PREFIX) -> BrowseType.PLAYLIST
             browseId.startsWith("UC") -> BrowseType.ARTIST
             browseId.startsWith("MPREb") || browseId.startsWith("VLOLAK") || browseId.startsWith("OLAK") -> BrowseType.ALBUM
             browseId.startsWith("VL") || browseId.startsWith("PL") -> BrowseType.PLAYLIST
@@ -3234,6 +3363,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         ) return
         if (browseId.startsWith(SPOTIFY_PAGE_PREFIX)) {
             openSpotifyPage(browseId, title, subtitle, thumbnailUrl)
+            return
+        }
+        if (browseId.startsWith(APPLE_MUSIC_PAGE_PREFIX)) {
+            openAppleMusicPage(browseId, title, subtitle, thumbnailUrl)
             return
         }
         val resolved = browseTypeOf(browseId, type)
@@ -3372,7 +3505,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 pendingPlaylistSongs.remove(browseId.removePrefix("VL"))
                                 more = page.continuation
                                 suggested = page.suggested.withArtwork(thumbnailUrl ?: artwork)
-                                library = page.library
+                                library = page.library ?: if (resolved == BrowseType.PLAYLIST && !browseId.startsWith("local:")) {
+                                    val norm = normalizedPlaylistId(browseId)
+                                    val saved = _playlists.value.any { normalizedPlaylistId(it.playlistId) == norm }
+                                    LibraryState(playlistId = norm, saved = saved)
+                                } else null
                                 UiState.Success(page.songs.withArtwork(thumbnailUrl ?: artwork))
                             }
                         },
@@ -3520,6 +3657,81 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         albumName = album,
     )
 
+    private fun openAppleMusicPage(
+        browseId: String,
+        title: String,
+        subtitle: String,
+        thumbnailUrl: String?,
+    ) {
+        val resolved = BrowseType.PLAYLIST
+        _detailStack.value += DetailPage(
+            browseId = browseId,
+            title = title,
+            subtitle = subtitle,
+            thumbnailUrl = thumbnailUrl,
+            songs = UiState.Loading,
+            type = resolved,
+        )
+        viewModelScope.launch {
+            val raw = browseId.removePrefix(APPLE_MUSIC_PAGE_PREFIX)
+            val storefront = if (raw.contains(":")) raw.substringBefore(":") else "us"
+            val playlistId = if (raw.contains(":")) raw.substringAfter(":") else raw
+
+            fun setPage(transform: (DetailPage) -> DetailPage) {
+                _detailStack.value = _detailStack.value.map {
+                    if (it.browseId == browseId) transform(it) else it
+                }
+            }
+
+            val applePlaylist = runCatching {
+                AppleMusicPlaylistClient.fetchPlaylist(storefront, playlistId)
+            }.getOrNull()
+
+            if (applePlaylist == null) {
+                setPage { it.copy(songs = UiState.Error(text(R.string.failed))) }
+                return@launch
+            }
+
+            PlaylistMotionStore.setEntry(
+                playlistIdOrBrowseId = browseId,
+                motionVideoUrl = applePlaylist.motionVideoUrl,
+                coverUrl = applePlaylist.coverUrl,
+                applePlaylistId = playlistId,
+                storefront = storefront,
+                description = applePlaylist.description,
+            )
+
+            val isSavedInLibrary = LocalPlaylistStore.playlists.value.any { it.applePlaylistId == playlistId } ||
+                _playlists.value.any {
+                    it.browseId == browseId ||
+                    PlaylistMotionStore.getApplePlaylistId(it.browseId) == playlistId ||
+                    PlaylistMotionStore.getApplePlaylistId(it.playlistId) == playlistId
+                }
+
+            setPage { page ->
+                page.copy(
+                    title = applePlaylist.name,
+                    subtitle = applePlaylist.curator.ifBlank {
+                        getApplication<Application>().getString(R.string.apple_music_import_track_count, applePlaylist.tracks.size)
+                    },
+                    thumbnailUrl = applePlaylist.coverUrl ?: page.thumbnailUrl,
+                    description = applePlaylist.description,
+                    library = LibraryState(playlistId = playlistId, saved = isSavedInLibrary),
+                )
+            }
+
+            val (matchedSongs, _) = runCatching {
+                AppleMusicPlaylistRepository.resolveAndMatchTracks(applePlaylist.tracks) { _, _ -> }
+            }.getOrElse { Pair(emptyList(), emptyList()) }
+
+            if (matchedSongs.isEmpty()) {
+                setPage { it.copy(songs = UiState.Error(text(R.string.no_tracks_here))) }
+            } else {
+                setPage { it.copy(songs = UiState.Success(matchedSongs)) }
+            }
+        }
+    }
+
     /**
      * Pushes one album, playlist or artist out of a device folder as a page of
      * its own, with the rows the folder already had in hand — so it opens on
@@ -3556,7 +3768,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun reloadDetail(browseId: String) {
-        if (browseId.startsWith(SPOTIFY_PAGE_PREFIX)) return
+        if (browseId.startsWith(SPOTIFY_PAGE_PREFIX) || browseId.startsWith(APPLE_MUSIC_PAGE_PREFIX)) return
         val localPlaylist = com.music.bitchord.data.spotify.LocalPlaylistStore.getPlaylist(browseId)
         if (localPlaylist != null || browseId.startsWith("local:") || remoteLibrary(browseId) != null) {
             reloadLocalDetail(browseId)
@@ -3587,7 +3799,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 songs = targetSongs,
                                 continuation = page.continuation,
                                 suggestedSongs = page.suggested,
-                                library = page.library,
+                                library = page.library ?: if (it.type == BrowseType.PLAYLIST && !browseId.startsWith("local:")) {
+                                    val norm = normalizedPlaylistId(browseId)
+                                    val saved = _playlists.value.any { normalizedPlaylistId(it.playlistId) == norm }
+                                    LibraryState(playlistId = norm, saved = saved)
+                                } else null,
                                 description = page.description ?: it.description,
                             )
                         } else it

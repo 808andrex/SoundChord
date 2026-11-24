@@ -122,6 +122,14 @@ object MusicLink {
         if (host == "youtu.be") {
             return segments.firstOrNull()?.let(::track)
         }
+        if (host == "music.apple.com") {
+            val parsed = com.soundchord.features.playlistimport.data.AppleMusicPlaylistClient.parsePlaylistUrl(uri.toString())
+            if (parsed != null) {
+                val (storefront, playlistId) = parsed
+                return LinkRequest.Page("apple:playlist:$storefront:$playlistId")
+            }
+            return null
+        }
         if (host != "youtube.com" && host != "music.youtube.com" && host != "m.youtube.com") {
             return null
         }

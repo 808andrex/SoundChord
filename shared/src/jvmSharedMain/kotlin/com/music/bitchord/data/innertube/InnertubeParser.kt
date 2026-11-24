@@ -1541,10 +1541,13 @@ object InnertubeParser {
         // A play button states the release as a playlist, which is the one
         // thing on the page that names what saving would act on.
         val play = buttons.firstNotNullOfOrNull { it.o("musicPlayButtonRenderer").o("playNavigationEndpoint") }
+        val playlistId = play.o("watchPlaylistEndpoint").s("playlistId")
+            ?: play.o("watchEndpoint").s("playlistId")
+            ?: save.o("defaultServiceEndpoint").o("likeEndpoint").o("target").s("playlistId")
+            ?: save.o("toggledServiceEndpoint").o("likeEndpoint").o("target").s("playlistId")
+            ?: return null
         return LibraryState(
-            playlistId = play.o("watchPlaylistEndpoint").s("playlistId")
-                ?: play.o("watchEndpoint").s("playlistId")
-                ?: return null,
+            playlistId = playlistId,
             // The toggle carries the answer directly, rather than the
             // which-icon-leads reading a menu toggle needs: a button that is
             // *shown* toggled is one whose release is already saved.

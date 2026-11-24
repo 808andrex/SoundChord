@@ -1290,11 +1290,7 @@ internal fun AppNavigationHost(
                         }
                         else -> null
                     },
-                    onToggleLibrary = if (states.signedIn) {
-                        { viewModel.toggleLibrary(page.browseId) }
-                    } else {
-                        null
-                    },
+                    onToggleLibrary = { viewModel.toggleLibrary(page.browseId) },
                     onToggleSubscription = if (states.signedIn) {
                         { viewModel.toggleSubscription(page.browseId) }
                     } else {

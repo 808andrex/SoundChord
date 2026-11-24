@@ -197,7 +197,31 @@ object LocalPlaylistStore {
 
     fun getPlaylist(id: String): LocalPlaylist? {
         val cleanId = id.removePrefix("local:playlist:").removePrefix("VL")
-        return _playlists.value.firstOrNull { it.id == cleanId || it.id == id || it.browseId == id }
+        return _playlists.value.firstOrNull { it.id == cleanId || it.id == id || it.browseId == id || it.applePlaylistId == cleanId }
+    }
+
+    fun updatePlaylistFromAppleMusic(
+        id: String,
+        title: String? = null,
+        songs: List<Song>? = null,
+        coverUrl: String? = null,
+        motionVideoUrl: String? = null,
+        description: String? = null,
+    ) {
+        val cleanId = id.removePrefix("local:playlist:").removePrefix("VL")
+        val updated = _playlists.value.map { playlist ->
+            if (playlist.id == cleanId || playlist.id == id || playlist.browseId == id || playlist.applePlaylistId == cleanId) {
+                playlist.copy(
+                    title = title ?: playlist.title,
+                    songs = songs ?: playlist.songs,
+                    coverUrl = coverUrl ?: playlist.coverUrl,
+                    motionVideoUrl = motionVideoUrl ?: playlist.motionVideoUrl,
+                    description = description ?: playlist.description,
+                )
+            } else playlist
+        }
+        _playlists.value = updated
+        persist(updated)
     }
 
     fun refreshCovers() {

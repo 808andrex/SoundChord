@@ -168,6 +168,11 @@
     <string name="add_to_playlist">Añadir a la lista</string>
     <string name="add_to_library">Añadir a la biblioteca</string>
     <string name="remove_from_library">Quitar de la biblioteca</string>
+    <string name="playlist_added_to_library">Añadida a tu biblioteca</string>
+    <string name="playlist_removed_from_library">Eliminada de tu biblioteca</string>
+    <string name="playlist_local_save_notice_title">Información guardada localmente</string>
+    <string name="playlist_local_save_notice_message">Esta playlist y sus datos se guardaron en este dispositivo. Te recomendamos activar el respaldo en Google Drive para sincronizar tus playlists y protegerlas en todos tus dispositivos.</string>
+    <string name="apple_music_import_track_count">%1$d canciones</string>
     <string name="download_all">Descargar todo</string>
     <string name="top_songs">Canciones principales</string>
     <string name="suggested">Sugerencias</string>

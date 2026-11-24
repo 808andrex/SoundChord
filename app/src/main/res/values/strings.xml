@@ -191,6 +191,11 @@
     <string name="add_to_playlist">Add to playlist</string>
     <string name="add_to_library">Add to library</string>
     <string name="remove_from_library">Remove from library</string>
+    <string name="playlist_added_to_library">Added to your library</string>
+    <string name="playlist_removed_from_library">Removed from your library</string>
+    <string name="playlist_local_save_notice_title">Information saved locally</string>
+    <string name="playlist_local_save_notice_message">This playlist and its details were saved on this device. We recommend setting up Google Drive backup to sync your playlists and keep them protected across devices.</string>
+    <string name="apple_music_import_track_count">%1$d tracks</string>
     <string name="subscribe">Subscribe</string>
     <string name="unsubscribe">Unsubscribe</string>
     <string name="download_all">Download all</string>

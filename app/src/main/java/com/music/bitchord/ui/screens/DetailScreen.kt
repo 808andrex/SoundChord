@@ -646,6 +646,7 @@ fun DetailScreen(
                         // A folder's credit says where its tracks live, not who made them.
                         onArtistClick = onArtistClick.takeIf { folder == null },
                         onToggleLibrary = onToggleLibrary,
+                        releaseLibrary = releaseLibrary,
                         onAddSongs = onAddSongs,
                         onDownloadAll = folder?.onDownload?.let { download -> { download(songs) } },
                     )
@@ -999,6 +1000,7 @@ private fun ReleaseHeader(
     onShuffle: () -> Unit,
     onArtistClick: ((String, String) -> Unit)?,
     onToggleLibrary: (() -> Unit)?,
+    releaseLibrary: Map<String, LibraryState> = emptyMap(),
     onAddSongs: (() -> Unit)?,
     /** The Cached songs folder's: saves every track on it to Downloads. Null hides it. */
     onDownloadAll: (() -> Unit)? = null,
@@ -1095,9 +1097,9 @@ private fun ReleaseHeader(
             }
 
             if (songs.isNotEmpty()) {
-                // Only where YouTube said the release can be saved and the caller
-                // is willing to take the write — see [onToggleLibrary].
-                val library = page.library?.takeIf { onToggleLibrary != null }
+                val library = (releaseLibrary[page.browseId] ?: page.library)?.takeIf { onToggleLibrary != null }
+                val isSaved = library?.saved == true
+                val canAddSongs = onAddSongs != null
                 Spacer(Modifier.height(18.dp))
                 Row(
                     modifier = Modifier
@@ -1108,74 +1110,26 @@ private fun ReleaseHeader(
                     horizontalArrangement = Arrangement.spacedBy(RELEASE_ACTION_GAP),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (page.browseId.startsWith("local:")) {
-                        // Already on this device — a folder, a download, a local
-                        // playlist — so there is no library to add it to, and a
-                        // greyed-out plus would only promise one. Apple Music's
-                        // own pair for that case: Play and Shuffle, side by side.
-                        ActionPill(
-                            icon = BitChordIcons.Play,
-                            label = stringResource(R.string.play),
-                            onClick = onPlay,
-                            filled = true,
-                            size = RELEASE_SIDE_BUTTON,
-                            modifier = Modifier.weight(1f),
-                        )
-                        ActionPill(
-                            icon = BitChordIcons.Shuffle,
-                            label = stringResource(R.string.shuffle),
-                            onClick = onShuffle,
-                            filled = false,
-                            size = RELEASE_SIDE_BUTTON,
-                            modifier = Modifier.weight(1f),
-                        )
-                        // The song cache's copies, saved to Downloads in one go —
-                        // from disk, so it works offline. See [LocalFolder.onDownload].
-                        onDownloadAll?.let {
-                            CircleIconButton(
-                                icon = Icons.Rounded.Download,
-                                contentDescription = stringResource(R.string.download_all),
-                                onClick = it,
-                                size = RELEASE_SIDE_BUTTON,
-                            )
-                        }
-                        return@Row
-                    }
-                    val canAddSongs = onAddSongs != null
-                    if (canAddSongs) {
-                        CircleIconButton(
-                            icon = BitChordIcons.Shuffle,
-                            contentDescription = stringResource(R.string.shuffle),
-                            onClick = onShuffle,
-                            haptic = Haptic.Resume,
-                            size = RELEASE_SIDE_BUTTON,
-                        )
-                        ActionPill(
-                            icon = BitChordIcons.Play,
-                            label = stringResource(R.string.play),
-                            onClick = onPlay,
-                            filled = true,
-                            size = RELEASE_SIDE_BUTTON,
-                            modifier = Modifier.weight(1f),
-                        )
-                    } else {
-                        ActionPill(
-                            icon = BitChordIcons.Play,
-                            label = stringResource(R.string.play),
-                            onClick = onPlay,
-                            filled = true,
-                            size = RELEASE_SIDE_BUTTON,
-                            modifier = Modifier.weight(1f),
-                        )
-                        ActionPill(
-                            icon = BitChordIcons.Shuffle,
-                            label = stringResource(R.string.shuffle),
-                            onClick = onShuffle,
-                            filled = false,
-                            size = RELEASE_SIDE_BUTTON,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
+                    // Left: Translucent circular Shuffle button
+                    CircleIconButton(
+                        icon = BitChordIcons.Shuffle,
+                        contentDescription = stringResource(R.string.shuffle),
+                        onClick = onShuffle,
+                        haptic = Haptic.Resume,
+                        size = RELEASE_SIDE_BUTTON,
+                    )
+
+                    // Center: Prominent white pill Play button with full label Play / Reproducir
+                    ActionPill(
+                        icon = BitChordIcons.Play,
+                        label = stringResource(R.string.play),
+                        onClick = onPlay,
+                        filled = true,
+                        size = RELEASE_SIDE_BUTTON,
+                        modifier = Modifier.weight(1f),
+                    )
+
+                    // Right: Translucent circular action button (+ / ✓ / Download)
                     if (canAddSongs) {
                         CircleIconButton(
                             icon = BitChordIcons.Plus,
@@ -1184,18 +1138,23 @@ private fun ReleaseHeader(
                             haptic = Haptic.ToggleOn,
                             size = RELEASE_SIDE_BUTTON,
                         )
-                    } else if (library != null && page.type != BrowseType.PLAYLIST) {
+                    } else if (onToggleLibrary != null) {
                         CircleIconButton(
-                            // A tick, not a filled-in plus: the pair reads as
-                            // "not yet / done", which is what the state is.
-                            icon = if (library.saved) BitChordIcons.Check else BitChordIcons.Plus,
-                            contentDescription = if (library.saved) {
+                            icon = if (isSaved) BitChordIcons.Check else BitChordIcons.Plus,
+                            contentDescription = if (isSaved) {
                                 stringResource(R.string.remove_from_library)
                             } else {
                                 stringResource(R.string.add_to_library)
                             },
                             onClick = { onToggleLibrary?.invoke() },
-                            haptic = if (library.saved) Haptic.ToggleOff else Haptic.ToggleOn,
+                            haptic = if (isSaved) Haptic.ToggleOff else Haptic.ToggleOn,
+                            size = RELEASE_SIDE_BUTTON,
+                        )
+                    } else if (onDownloadAll != null) {
+                        CircleIconButton(
+                            icon = Icons.Rounded.Download,
+                            contentDescription = stringResource(R.string.download_all),
+                            onClick = onDownloadAll,
                             size = RELEASE_SIDE_BUTTON,
                         )
                     }
