@@ -18,41 +18,45 @@
 
 <br/>
 
-[**Descargar APK**](#download) · [**Características**](#features) · [**Novedades v1.3.0**](#whats-new) · [**Arquitectura**](#architecture) · [**Créditos**](#contributing) · [**Privacidad**](#privacy) · [**Aviso Legal**](#disclaimer)
+[**English**](README.md) · [**Español**](README.es.md)
+
+<br/>
+
+[**Download APK**](#download) · [**Features**](#features) · [**What's New v1.3.0**](#whats-new) · [**Architecture**](#architecture) · [**Credits**](#credits) · [**Privacy**](#privacy) · [**Disclaimer**](#disclaimer)
 
 </div>
 
 > [!IMPORTANT]
-> SoundChord es una aplicación independiente de código abierto y no está afiliada, respaldada ni vinculada oficialmente con YouTube o Google.
+> SoundChord is an independent open-source application and is not affiliated, endorsed, or officially connected with YouTube or Google.
 
 ---
 
 <div align="center">
 
-<h1><a id="features"></a>Características Destacadas</h1>
+<h1><a id="features"></a>Key Features</h1>
 
 <table>
   <tr>
     <td width="50%" valign="top">
 
-#### Reproducción y Audio
-- **Streaming de alta fidelidad** — Búsqueda y reproducción desde YouTube Music con soporte para formatos sin pérdidas (FLAC / Lossless / DSD) en módulos compatibles.
-- **Radio Global & Estaciones Personalizadas** — Emisoras organizadas por género y país con degradados vibrantes estilo Apple Music, rotación automática de servidores espejo, estaciones personalizadas, menús contextuales *Liquid Glass* e historial reciente.
-- **AutoMix & Reproducción sin pausas (*Gapless*)** — Mezclas inteligentes emparejadas por tempo (BPM) y tonalidad con barra de progreso animada, fundido cruzado en siguiente/anterior y pausa automática en álbumes para conservar transiciones originales.
-- **Reconocimiento musical (Shazam) + Historial** — Identificación de canciones en tiempo real mediante el micrófono con historial local persistente, buscador instantáneo y reproducción directa.
-- **Sesiones Escuchar Juntos & Copias en Google Drive** — Control remoto en tiempo real entre dispositivos y respaldo opcional de tu historial *Replay*, listas y ajustes en Google Drive.
-- **Reproducción local y descargas** — Guarda pistas con metadatos embebidos e integra la música almacenada en tu dispositivo.
+#### Playback & Audio
+- **High-Fidelity Streaming** — Search and stream from YouTube Music with support for lossless audio formats (FLAC / Lossless / DSD) on compatible modules.
+- **Global Radio & Custom Stations** — Browse radio stations organized by genre and country with vibrant Apple Music-inspired gradients, automatic mirror server rotation, custom stations, *Liquid Glass* context menus, and recent playback history.
+- **AutoMix & Gapless Playback** — Intelligent DJ mixes matching tempo (BPM) and harmonic key with an animated progress bar, crossfade on next/previous track, and automatic pause for albums to preserve original transitions.
+- **Music Recognition (Shazam) + History** — Real-time song identification via microphone with persistent local history, instant search, and direct playback.
+- **Listen Together Sessions & Google Drive Backups** — Real-time remote playback control across devices and optional cloud backup for your *Replay* history, playlists, and settings on Google Drive.
+- **Local Playback & Downloads** — Cache and download tracks with embedded metadata and seamlessly integrate audio stored on your device.
 
     </td>
     <td width="50%" valign="top">
 
-#### Experiencia e Interfaz
-- **Onboarding Interactivo & Color de Acento Global** — Flujo inicial de 4 pasos con selección inteligente de artistas, vista previa en vivo de tema/cristal, paleta de colores de acento dinámicos e iconos alternativos (*Monocromo*, *Rojo clásico*, *Verde Spotify*).
-- **Diseño "Liquid Glass" & Animaciones estilo iOS** — Tarjetas flotantes translúcidas adaptativas a Tema Claro y Oscuro, transiciones compartidas fluidas en carátulas (AGSL), física de resorte (*spring*), portadas animadas y Spotify Canvas.
-- **Widgets de Pantalla de Inicio & Video Fullscreen** — Widgets rediseñados al estilo Apple Music / iOS y controles minimalistas para reproducción de video a pantalla completa.
-- **Gestión Rápida de Cola y Playlists** — Creación y edición de playlists con selector de portada personalizado y sincronización con YouTube Music, selección múltiple y gestos al deslizar en la cola, e insignia circular de Aleatorio/Autoplay.
-- **Letras sincronizadas palabra por palabra** — Animación tipo Apple Music con soporte multi-proveedor (Musixmatch, LRCLIB, BiniLyrics, Genius).
-- **Actualizador OTA & Novedades Integradas** — Detección automática desde GitHub Releases con tarjeta flotante de novedades, historial por categorías e instalación directa del APK.
+#### Experience & Interface
+- **Interactive Onboarding & Global Accent Color** — 4-step onboarding flow featuring smart artist selection, live theme/glass preview, dynamic accent color palette, and alternative app icons (*Monochrome*, *Classic Red*, *Spotify Green*).
+- **"Liquid Glass" Design & iOS-Style Physics** — Translucent floating cards adaptive to Light and Dark themes, smooth AGSL shared element cover transitions, spring physics, animated covers, and Spotify Canvas support.
+- **Home Screen Widgets & Fullscreen Video** — Redesigned Apple Music / iOS-style home screen widgets and minimalist controls for fullscreen video playback.
+- **Fast Queue & Playlist Management** — Create and edit playlists with custom cover art picker and YouTube Music sync, multi-select and swipe gestures in the queue, and circular Shuffle/Autoplay status badge.
+- **Time-Synced Lyrics (Word-by-Word)** — Apple Music-style lyrics animation with multi-provider integration (Musixmatch, LRCLIB, BiniLyrics, Genius).
+- **OTA Updater & Built-in Release Notes** — Automatic GitHub Releases update checker with a floating release modal, categorized changelog, and direct in-app APK installation.
 
     </td>
   </tr>
@@ -64,63 +68,51 @@
 
 <div align="center">
 
-<h1><a id="whats-new"></a>Novedades en v1.3.0</h1>
+<h1><a id="whats-new"></a>What's New in v1.3.0</h1>
 
 </div>
 
-- **Nueva Pestaña Radio con Degradados Vibrantes y Menús *Liquid Glass*:** Exploración de emisoras por género y país con tarjetas inspiradas en Apple Music, conservación de desplazamiento, estaciones personalizadas con separadores limpios y menú contextual flotante con respuesta háptica al mantener presionado.
-- **AutoMix Inteligente & Reproducción sin Pausas en Álbumes:** Motor de mezcla automática con análisis de tono/tempo y barra animada (*Mezclando*), modo *gapless* para escuchar álbumes completos sin cortes ni fundidos artificiales, y restauración del fundido cruzado manual al saltar pistas o elegir canciones en listas.
-- **Nuevos Widgets estilo Apple Music / iOS & Video a Pantalla Completa:** Widgets de inicio completamente rediseñados y nuevos controles de video en pantalla completa con estética minimalista.
-- **Creación y Edición Avanzada de Playlists & Controles Rápidos:** Nueva vista *Nueva lista* con selector de portada y sincronización con YouTube Music, opción *Editar playlist* (título y carátula), botones opcionales de Aleatorio y Repetir en la barra del reproductor e insignia circular de estado en el botón de Cola.
-- **Rediseño de Novedades, Actualizaciones OTA & Transiciones Fluidas:** Nuevo modal flotante inferior con tarjeta Hero, onda sonora animada y acordeones desplegables para *Actualización disponible* y *Novedades*, además de mejoras de fluidez, color de acento en tiempo real y respaldo en Google Drive listo para producción.
+- **New Radio Tab with Vibrant Gradients & *Liquid Glass* Menus:** Explore stations by genre and country with Apple Music-inspired artwork cards, scroll position preservation, custom radio stations with clean dividers, and floating context menus with haptic feedback on long press.
+- **Intelligent AutoMix & Gapless Album Playback:** Automatic mixing engine analyzing key and tempo with an animated mixing indicator (*Mixing*), gapless mode for seamless album listening without artificial fades, and restored manual crossfade when skipping tracks or picking songs from playlists.
+- **Redesigned iOS / Apple Music-Style Widgets & Fullscreen Video:** Brand new home screen widgets and refined minimalist fullscreen video controls.
+- **Advanced Playlist Creation, Editing & Quick Controls:** New *New Playlist* screen with custom cover selection and YouTube Music sync, *Edit playlist* dialog (title & cover), optional Shuffle and Repeat buttons on the mini-player bar, and circular status badge on the Queue button.
+- **Redesigned What's New, OTA Updates & Fluid Transitions:** New floating bottom sheet with Hero card, animated sound wave, and collapsible accordions for *Update Available* and *Release Notes*, alongside smoother animations, real-time accent color theming, and production-ready Google Drive backups.
 
 ---
 
 <div align="center">
 
-<h1><a id="architecture"></a>Arquitectura y Stack Tecnológico</h1>
+<h1><a id="architecture"></a>Architecture & Tech Stack</h1>
 
 </div>
 
-SoundChord está construido bajo una arquitectura **Kotlin Multiplatform / Android Modular** diseñada para mantener las funcionalidades propias desacopladas del núcleo de reproducción:
+SoundChord is built on a **Kotlin Multiplatform / Android Modular** architecture designed to keep custom features completely decoupled from the playback core:
 
-- **Lenguaje & UI:** Kotlin, Jetpack Compose, Material 3, Haze (Glassmorphism) y shaders AGSL nativos.
-- **Motor de Audio:** Media3 / ExoPlayer con soporte para procesamiento de audio de alta resolución, AutoMix, crossfade dinámico, reproducción *gapless* y sesiones remotas.
-- **Estructura Modular:**
-  - `:app` — Punto de entrada Android, navegación principal, widgets, copias de seguridad en Google Drive, actualizador OTA y vistas específicas de plataforma.
-  - `:shared` & `:sharedUi` — Lógica compartida, componentes de interfaz del reproductor, animaciones, recursos multiplataforma y modelos de dominio.
-  - `:soundchord:features` — Módulo dedicado para las extensiones exclusivas de SoundChord (*Radio Browser & Estaciones*, *Shazam & Historial*, diálogos *Liquid Glass* y selector de *Salida de audio*).
+- **Language & UI:** Kotlin, Jetpack Compose, Material 3, Haze (Glassmorphism), and native AGSL shaders.
+- **Audio Engine:** Media3 / ExoPlayer supporting high-resolution audio processing, AutoMix, dynamic crossfade, gapless playback, and remote playback sessions.
+- **Modular Structure:**
+  - `:app` — Android entry point, main navigation, widgets, Google Drive backup integration, OTA updater, and platform-specific implementations.
+  - `:shared` & `:sharedUi` — Shared business logic, player UI components, animations, multiplatform resources, and domain models.
+  - `:soundchord:features` — Dedicated feature module for SoundChord-exclusive functionality (*Radio Browser & Stations*, *Shazam & History*, *Liquid Glass* dialogs, and *Audio Output* switcher).
 
 ---
 
 <div align="center">
 
-<h1><a id="download"></a>Descargas (Versión 1.3.0)</h1>
+<h1><a id="download"></a>Download (Version 1.3.0)</h1>
 
-<a href="https://github.com/808andrex/SoundChord/releases/latest" target="_blank" rel="noopener noreferrer"><img src="https://cdn.jsdelivr.net/gh/JMcrafter26/badges@main/src/assets/supported/android/cozy.svg" alt="Descargar SoundChord para Android" height="55"/></a>
+<a href="https://github.com/808andrex/SoundChord/releases/latest" target="_blank" rel="noopener noreferrer"><img src="https://cdn.jsdelivr.net/gh/JMcrafter26/badges@main/src/assets/supported/android/cozy.svg" alt="Download SoundChord for Android" height="55"/></a>
 
-Obtén el APK oficial firmado desde la sección de [Releases de GitHub](https://github.com/808andrex/SoundChord/releases/latest) (elige **`arm64-v8a`** para la mayoría de teléfonos Android modernos, o **`universal`** si desconoces tu arquitectura).
+Get the official signed APK from the [GitHub Releases](https://github.com/808andrex/SoundChord/releases/latest) page (choose **`arm64-v8a`** for modern Android devices, or **`universal`** if you are unsure of your device architecture).
 
-### ⚠️ Nota sobre la instalación (Play Protect)
+### ⚠️ Installation Note (Play Protect)
 
-Al instalar el APK por primera vez fuera de Google Play, Android puede mostrar la ventana *"Se recomienda analizar la app"* debido a que cada versión compilada genera una firma digital única:
+When installing the APK for the first time outside of Google Play, Android may display an *"Unrecognized app / Play Protect recommends scanning"* prompt because each release generates a unique digital signature:
 
-1. Pulsa **Analizar app** para completar la verificación automática de seguridad de Google (recomendado).
-2. Si prefieres omitir el análisis, toca en **Más detalles** y selecciona **Instalar de todos modos**.
+1. Tap **Scan app** to complete Google's automatic security verification (recommended).
+2. If you prefer to bypass scanning, tap **More details** and select **Install anyway**.
 
-*SoundChord es 100% seguro, de código abierto y sin rastreadores comerciales.*
-
-</div>
-
----
-
-<div align="center">
-
-<h1><a id="contributing"></a>Créditos y Origen</h1>
-
-SoundChord es un fork modular desarrollado por [808andrex](https://github.com/808andrex), basado originalmente en el proyecto de código abierto **BitChord** de [kushagrasinghx](https://github.com/kushagrasinghx).
-
-Gracias a la comunidad de desarrolladores y proyectos open-source que hicieron posible este reproductor.
+*SoundChord is 100% safe, open-source, and contains zero commercial trackers.*
 
 </div>
 
@@ -128,11 +120,11 @@ Gracias a la comunidad de desarrolladores y proyectos open-source que hicieron p
 
 <div align="center">
 
-<h1><a id="privacy"></a>Privacidad</h1>
+<h1><a id="credits"></a>Credits & Origin</h1>
 
-SoundChord almacena tu historial *Replay*, descargas y preferencias de forma local en tu dispositivo. Las copias de seguridad opcionales en Google Drive utilizan únicamente el permiso limitado `drive.file` para gestionar los archivos generados por la propia aplicación.
+SoundChord is a modular fork developed by [808andrex](https://github.com/808andrex), originally based on the open-source project **BitChord** by [kushagrasinghx](https://github.com/kushagrasinghx).
 
-Consulta la [Política de Privacidad completa (`PRIVACY.md`)](https://github.com/808andrex/SoundChord/blob/main/PRIVACY.md) para más detalles.
+Special thanks to the open-source developer community and projects that make this player possible.
 
 </div>
 
@@ -140,11 +132,23 @@ Consulta la [Política de Privacidad completa (`PRIVACY.md`)](https://github.com
 
 <div align="center">
 
-<h1><a id="disclaimer"></a>Aviso Legal</h1>
+<h1><a id="privacy"></a>Privacy</h1>
 
-SoundChord es un cliente de audio de código abierto desarrollado estrictamente con fines educativos y de investigación personal.
+SoundChord stores your *Replay* history, downloads, and preferences locally on your device. Optional Google Drive backups strictly use the restricted `drive.file` scope to manage only the files created by the application itself.
 
-- **Sin Alojamiento de Archivos:** SoundChord no aloja ni distribuye archivos de audio con derechos de autor. Funciona exclusivamente como un cliente para indexar la biblioteca local del teléfono o reproducir contenido mediante fuentes y APIs públicas.
-- **Licencia Copyleft:** Publicado bajo la licencia **GNU General Public License v3.0 (GPLv3)**.
+For more details, read the full [Privacy Policy (`PRIVACY.md`)](https://github.com/808andrex/SoundChord/blob/main/PRIVACY.md).
+
+</div>
+
+---
+
+<div align="center">
+
+<h1><a id="disclaimer"></a>Legal Disclaimer</h1>
+
+SoundChord is an open-source audio client developed strictly for educational and personal research purposes.
+
+- **No File Hosting:** SoundChord does not host or distribute copyrighted audio files. It operates exclusively as a client to index your local music library or stream content via public APIs and sources.
+- **Copyleft License:** Released under the **GNU General Public License v3.0 (GPLv3)**.
 
 </div>
