@@ -85,6 +85,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import androidx.lifecycle.viewmodel.compose.viewModel as composeViewModel
 import androidx.core.content.ContextCompat
@@ -107,38 +108,38 @@ private data class GenreOption(val tag: String, val label: Int, val colors: List
 private data class CategoryOption(val label: Int, val colors: List<Color>)
 
 private val radioGenres = listOf(
-    GenreOption("pop", R.string.radio_genre_pop, listOf(Color(0xFFFF4D7D), Color(0xFFB90055))),
-    GenreOption("rock", R.string.radio_genre_rock, listOf(Color(0xFFFF6B35), Color(0xFF9E251E))),
-    GenreOption("jazz", R.string.radio_genre_jazz, listOf(Color(0xFF9B59FF), Color(0xFF4B2AA8))),
-    GenreOption("classical", R.string.radio_genre_classical, listOf(Color(0xFF418BFF), Color(0xFF263D9B))),
-    GenreOption("electronic", R.string.radio_genre_electronic, listOf(Color(0xFFEF3DDB), Color(0xFF7028D9))),
-    GenreOption("hip hop", R.string.radio_genre_hip_hop, listOf(Color(0xFFFFB52E), Color(0xFFC33A16))),
-    GenreOption("lofi", R.string.radio_genre_lofi, listOf(Color(0xFF26C6C8), Color(0xFF176B9A))),
-    GenreOption("news", R.string.radio_genre_news, listOf(Color(0xFF398BFF), Color(0xFF154A9B))),
-    GenreOption("talk", R.string.radio_genre_talk, listOf(Color(0xFFFF884D), Color(0xFFB83D51))),
-    GenreOption("ambient", R.string.radio_genre_ambient, listOf(Color(0xFF32D6B0), Color(0xFF197E86))),
-    GenreOption("country", R.string.radio_genre_country, listOf(Color(0xFF7FBD38), Color(0xFF286B37))),
-    GenreOption("bollywood", R.string.radio_genre_bollywood, listOf(Color(0xFFFF9F1C), Color(0xFFD62F6B))),
-    GenreOption("chillout", R.string.radio_genre_chillout, listOf(Color(0xFF36C7E8), Color(0xFF275FAE))),
-    GenreOption("dance", R.string.radio_genre_dance, listOf(Color(0xFFFF3C91), Color(0xFF762BCE))),
-    GenreOption("80s", R.string.radio_genre_80s, listOf(Color(0xFF19C5E8), Color(0xFFB535D1))),
-    GenreOption("90s", R.string.radio_genre_90s, listOf(Color(0xFF387BFF), Color(0xFF19A9B7))),
+    GenreOption("pop", R.string.radio_genre_pop, listOf(Color(0xFFEC487A), Color(0xFFD93668))),
+    GenreOption("rock", R.string.radio_genre_rock, listOf(Color(0xFFE05A2B), Color(0xFFC9461B))),
+    GenreOption("jazz", R.string.radio_genre_jazz, listOf(Color(0xFF1B82C4), Color(0xFF1267A3))),
+    GenreOption("classical", R.string.radio_genre_classical, listOf(Color(0xFF9B6CE2), Color(0xFF7F52C9))),
+    GenreOption("electronic", R.string.radio_genre_electronic, listOf(Color(0xFF12B370), Color(0xFF0B9159))),
+    GenreOption("hip hop", R.string.radio_genre_hip_hop, listOf(Color(0xFF4F46E5), Color(0xFF3730A3))),
+    GenreOption("lofi", R.string.radio_genre_lofi, listOf(Color(0xFF0284C7), Color(0xFF0369A1))),
+    GenreOption("news", R.string.radio_genre_news, listOf(Color(0xFF2563EB), Color(0xFF1D4ED8))),
+    GenreOption("talk", R.string.radio_genre_talk, listOf(Color(0xFFD9821E), Color(0xFFB86812))),
+    GenreOption("ambient", R.string.radio_genre_ambient, listOf(Color(0xFF0D9488), Color(0xFF0F766E))),
+    GenreOption("country", R.string.radio_genre_country, listOf(Color(0xFFD97706), Color(0xFFB45309))),
+    GenreOption("bollywood", R.string.radio_genre_bollywood, listOf(Color(0xFFE11D48), Color(0xFFBE123C))),
+    GenreOption("chillout", R.string.radio_genre_chillout, listOf(Color(0xFF0891B2), Color(0xFF0E7490))),
+    GenreOption("dance", R.string.radio_genre_dance, listOf(Color(0xFF22C57E), Color(0xFF16A364))),
+    GenreOption("80s", R.string.radio_genre_80s, listOf(Color(0xFFC026D3), Color(0xFF9333EA))),
+    GenreOption("90s", R.string.radio_genre_90s, listOf(Color(0xFF6366F1), Color(0xFF4338CA))),
 )
 
 private val radioCountries = listOf(
-    CountryOption("AR", R.string.radio_country_ar, listOf(Color(0xFF62C9FF), Color(0xFF2387D2))),
-    CountryOption("BR", R.string.radio_country_br, listOf(Color(0xFF18B957), Color(0xFF08763D))),
-    CountryOption("CO", R.string.radio_country_co, listOf(Color(0xFFFFD329), Color(0xFF2457C5))),
-    CountryOption("EC", R.string.radio_country_ec, listOf(Color(0xFFFFD329), Color(0xFF2457C5))),
-    CountryOption("FR", R.string.radio_country_fr, listOf(Color(0xFF2863D8), Color(0xFFD6384B))),
-    CountryOption("DE", R.string.radio_country_de, listOf(Color(0xFFD73535), Color(0xFFD9A323))),
-    CountryOption("IN", R.string.radio_country_in, listOf(Color(0xFFFF962E), Color(0xFF18864A))),
-    CountryOption("IT", R.string.radio_country_it, listOf(Color(0xFF1CA66A), Color(0xFFD94245))),
-    CountryOption("JP", R.string.radio_country_jp, listOf(Color(0xFFE98591), Color(0xFFC3263D))),
-    CountryOption("MX", R.string.radio_country_mx, listOf(Color(0xFF159A5B), Color(0xFFD83C45))),
-    CountryOption("ES", R.string.radio_country_es, listOf(Color(0xFFE34035), Color(0xFFE7B52D))),
-    CountryOption("GB", R.string.radio_country_gb, listOf(Color(0xFF2552A5), Color(0xFFD83D4B))),
-    CountryOption("US", R.string.radio_country_us, listOf(Color(0xFF2855A6), Color(0xFFD83B4A))),
+    CountryOption("AR", R.string.radio_country_ar, listOf(Color(0xFF38BDF8), Color(0xFF0284C7), Color(0xFF1E40AF))),
+    CountryOption("BR", R.string.radio_country_br, listOf(Color(0xFF16A34A), Color(0xFF0D9488), Color(0xFFEAB308))),
+    CountryOption("CO", R.string.radio_country_co, listOf(Color(0xFFF59E0B), Color(0xFF2563EB), Color(0xFFDC2626))),
+    CountryOption("EC", R.string.radio_country_ec, listOf(Color(0xFFFBBF24), Color(0xFF1D4ED8), Color(0xFFDC2626))),
+    CountryOption("FR", R.string.radio_country_fr, listOf(Color(0xFF2563EB), Color(0xFF4338CA), Color(0xFFDC2626))),
+    CountryOption("DE", R.string.radio_country_de, listOf(Color(0xFF334155), Color(0xFFDC2626), Color(0xFFF59E0B))),
+    CountryOption("IN", R.string.radio_country_in, listOf(Color(0xFFEA580C), Color(0xFFF97316), Color(0xFF16A34A))),
+    CountryOption("IT", R.string.radio_country_it, listOf(Color(0xFF16A34A), Color(0xFF059669), Color(0xFFDC2626))),
+    CountryOption("JP", R.string.radio_country_jp, listOf(Color(0xFFE11D48), Color(0xFFBE123C))),
+    CountryOption("MX", R.string.radio_country_mx, listOf(Color(0xFF15803D), Color(0xFF047857), Color(0xFFDC2626))),
+    CountryOption("ES", R.string.radio_country_es, listOf(Color(0xFFDC2626), Color(0xFFD97706))),
+    CountryOption("GB", R.string.radio_country_gb, listOf(Color(0xFF1E3A8A), Color(0xFF2563EB), Color(0xFFDC2626))),
+    CountryOption("US", R.string.radio_country_us, listOf(Color(0xFF1D4ED8), Color(0xFF2563EB), Color(0xFFDC2626))),
 )
 
 @Composable
@@ -644,17 +645,21 @@ private fun QuickMixCard(item: ShelfItem, glass: Boolean, modifier: Modifier, on
         modifier.aspectRatio(1f).clip(shape)
             .coverSharedElement(cardKey, shape, cardToken)
             .background(Brush.linearGradient(quickMixGradient(item)))
-            .then(if (glass) Modifier else Modifier)
             .combinedClickable(onClick = onCardClick)
     ) {
-        item.thumbnailUrl?.let { url ->
-            AsyncImage(
-                model = url.artworkAt(48), contentDescription = null, contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f }.blur(24.dp),
-            )
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
-        }
-        Box(Modifier.fillMaxSize().clip(shape).background(Color.White.copy(alpha = if (glass) .22f else .14f)))
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = if (glass) 0.16f else 0.08f),
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.22f),
+                        )
+                    )
+                )
+        )
         Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.weight(1f))
             Icon(
@@ -664,7 +669,14 @@ private fun QuickMixCard(item: ShelfItem, glass: Boolean, modifier: Modifier, on
                 modifier = Modifier.size(54.dp, 37.dp),
             )
             Spacer(Modifier.weight(1f))
-            Text(item.title, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                item.title,
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -772,18 +784,43 @@ private fun moodNameFromTitle(shownTitle: String, fallback: String): String {
 
 private fun quickMixGradient(item: ShelfItem): List<Color> {
     val palettes = listOf(
-        listOf(Color(0xFF77766F), Color(0xFF454550)),
-        listOf(Color(0xFF262589), Color(0xFF252D50)),
-        listOf(Color(0xFFB76E48), Color(0xFF713A55)),
-        listOf(Color(0xFF96717D), Color(0xFF604F59)),
-        listOf(Color(0xFF155545), Color(0xFF172F2A)),
-        listOf(Color(0xFFA56BCB), Color(0xFFC66EAA)),
+        // Mi supermix
+        listOf(Color(0xFF4F46E5), Color(0xFF9333EA), Color(0xFFEC4899)),
+        // Mix de descubrimiento
+        listOf(Color(0xFF1E3A8A), Color(0xFF2563EB), Color(0xFF06B6D4)),
+        // Mix de novedades
+        listOf(Color(0xFFBE123C), Color(0xFFF43F5E), Color(0xFFFB923C)),
+        // Mix de temas escuchados / Replay
+        listOf(Color(0xFF831843), Color(0xFFD946EF), Color(0xFFF97316)),
+        // Mix de archivo
+        listOf(Color(0xFF047857), Color(0xFF10B981), Color(0xFF06B6D4)),
+        // Música que me gusta
+        listOf(Color(0xFF6B21A8), Color(0xFFA855F7), Color(0xFFEC4899)),
     )
-    val index = QUICK_MIX_NAMES.indexOfFirst { name ->
+    val titleLower = item.title.trim().lowercase()
+    val browseId = item.browseId.orEmpty()
+    val directIndex = QUICK_MIX_NAMES.indexOfFirst { name ->
         item.title.equals(name.toQuickMixTitle(), ignoreCase = true) ||
-            (name == "liked music" && (item.browseId == "LM" || item.browseId == "VLLM"))
-    }.coerceAtLeast(0)
-    return palettes[index]
+            titleLower == name ||
+            (name == "liked music" && (browseId == "LM" || browseId == "VLLM" || browseId == com.music.bitchord.data.YtMusicRepository.LIKED_MUSIC))
+    }
+    if (directIndex >= 0) return palettes[directIndex]
+
+    val hintIndex = SIGNATURE_MIX_TITLE_HINTS.indexOfFirst { hints ->
+        hints.any { hint -> titleLower == hint || titleLower.contains(hint) }
+    }
+    if (hintIndex >= 0) return palettes[hintIndex]
+
+    val fallbackIndex = when {
+        "supermix" in titleLower -> 0
+        "discover" in titleLower || "descubr" in titleLower -> 1
+        "release" in titleLower || "novedad" in titleLower || "estreno" in titleLower -> 2
+        "replay" in titleLower || "escuchad" in titleLower || "repetici" in titleLower -> 3
+        "archive" in titleLower || "archivo" in titleLower -> 4
+        "liked" in titleLower || "gusta" in titleLower || browseId == "LM" || browseId == "VLLM" -> 5
+        else -> 0
+    }
+    return palettes[fallbackIndex]
 }
 
 @Composable
@@ -840,11 +877,34 @@ private fun CategoryGridRow(categories: List<CategoryOption>, onClick: (Int) -> 
                 colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             ) {
                 Column(
-                    Modifier.fillMaxSize().background(Brush.linearGradient(category.colors)).padding(16.dp),
+                    Modifier
+                        .fillMaxSize()
+                        .background(Brush.linearGradient(category.colors))
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(stringResource(R.string.radio_stations_for, title), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = .86f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            lineHeight = 24.sp,
+                        ),
+                        color = Color.White,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = stringResource(R.string.radio_stations_for, title),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 17.sp,
+                        ),
+                        color = Color.White.copy(alpha = 0.90f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
             if (categories.size == 1 && index == 0) Spacer(Modifier.weight(1f))
