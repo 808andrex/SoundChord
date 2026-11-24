@@ -1,19 +1,15 @@
 package com.soundchord.features.radio.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -38,18 +35,20 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -57,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.soundchord.features.R
@@ -65,6 +65,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -109,90 +110,179 @@ fun RadioHistoryScreen(
             }
             item(key = "radio-history:bottom-space") { Spacer(Modifier.height(12.dp)) }
         }
-        AnimatedVisibility(
-            visible = showClearDialog,
-            modifier = Modifier.fillMaxSize().zIndex(1f),
-            enter = fadeIn(tween(160, easing = FastOutSlowInEasing)) + scaleIn(
-                animationSpec = spring(
-                    dampingRatio = 0.76f,
-                    stiffness = 420f,
+        if (showClearDialog) {
+            RadioHistoryClearDialog(
+                onDismiss = onDismissClearDialog,
+                onConfirm = onConfirmClear,
+                dialogSurfaceModifier = dialogSurfaceModifier,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RadioHistoryClearDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    dialogSurfaceModifier: Modifier,
+) {
+    val scope = rememberCoroutineScope()
+    var closing by remember { mutableStateOf(false) }
+    val pop = remember { Animatable(0.90f) }
+    val fade = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        launch { fade.animateTo(1f, tween(160, easing = FastOutSlowInEasing)) }
+        launch { pop.animateTo(1f, spring(dampingRatio = 0.76f, stiffness = 420f)) }
+    }
+
+    val close: (after: (() -> Unit)?) -> Unit = { after ->
+        if (!closing) {
+            closing = true
+            scope.launch {
+                launch { fade.animateTo(0f, tween(140, easing = FastOutLinearInEasing)) }
+                pop.animateTo(0.90f, tween(140, easing = FastOutSlowInEasing))
+                after?.invoke()
+                onDismiss()
+            }
+        }
+    }
+
+    BackHandler(enabled = !closing) { close(null) }
+
+    val lightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val scrimColor = Color.Black.copy(alpha = if (lightTheme) 0.25f else 0.65f)
+    val dividerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f)
+    val shape = RoundedCornerShape(14.dp)
+    val surface = MaterialTheme.colorScheme.surface
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(10f)
+            .drawBehind {
+                drawRect(scrimColor.copy(alpha = scrimColor.alpha * fade.value.coerceIn(0f, 1f)))
+            }
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = { close(null) },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .width(270.dp)
+                .graphicsLayer {
+                    val s = pop.value.coerceAtLeast(0f)
+                    scaleX = s
+                    scaleY = s
+                    alpha = fade.value.coerceIn(0f, 1f)
+                }
+                .clip(shape)
+                .background(surface)
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = {},
                 ),
-                initialScale = 0.90f,
-            ),
-            exit = fadeOut(tween(140, easing = FastOutLinearInEasing)) + scaleOut(
-                animationSpec = tween(140),
-                targetScale = 0.90f,
-            ),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 19.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = stringResource(R.string.radio_history_clear_title),
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.W600,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = stringResource(R.string.radio_history_clear_message),
+                    modifier = Modifier.padding(top = 4.dp),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                )
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.fillMaxWidth(),
+                thickness = 0.5.dp,
+                color = dividerColor,
+            )
+
+            // Botón superior a ancho completo: Cancelar
+            val cancelInteractionSource = remember { MutableInteractionSource() }
+            val cancelPressed by cancelInteractionSource.collectIsPressedAsState()
             Box(
-                modifier = Modifier.fillMaxSize().zIndex(1f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .background(
+                        if (cancelPressed) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f) else Color.Transparent,
+                    )
+                    .clickable(
+                        indication = null,
+                        interactionSource = cancelInteractionSource,
+                        onClick = { close(null) },
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    modifier = Modifier.fillMaxSize()
-                        .background(scrimColor)
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                            onClick = onDismissClearDialog,
-                        ),
+                Text(
+                    text = stringResource(R.string.radio_history_cancel),
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Normal,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
                 )
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .widthIn(max = 300.dp)
-                        .padding(horizontal = 28.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .then(dialogSurfaceModifier)
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                            onClick = {},
-                        ),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.radio_history_clear_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center,
-                        )
-                        Text(
-                            text = stringResource(R.string.radio_history_clear_message),
-                            modifier = Modifier.padding(top = 8.dp, bottom = 14.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        )
-                        HorizontalDivider(color = dividerColor)
-                        TextButton(
-                            onClick = onDismissClearDialog,
-                            modifier = Modifier.fillMaxWidth().height(46.dp),
-                        ) {
-                            Text(
-                                stringResource(R.string.radio_history_cancel),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                        }
-                        HorizontalDivider(color = dividerColor)
-                        TextButton(
-                            onClick = onConfirmClear,
-                            modifier = Modifier.fillMaxWidth().height(46.dp),
-                        ) {
-                            Text(
-                                stringResource(R.string.radio_history_delete),
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                        }
-                    }
-                    }
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.fillMaxWidth(),
+                thickness = 0.5.dp,
+                color = dividerColor,
+            )
+
+            // Botón inferior a ancho completo: Eliminar (rojo destructivo acento)
+            val confirmInteractionSource = remember { MutableInteractionSource() }
+            val confirmPressed by confirmInteractionSource.collectIsPressedAsState()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .background(
+                        if (confirmPressed) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f) else Color.Transparent,
+                    )
+                    .clickable(
+                        indication = null,
+                        interactionSource = confirmInteractionSource,
+                        onClick = {
+                            close { onConfirm() }
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = stringResource(R.string.radio_history_delete),
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.W600,
+                    ),
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                )
             }
         }
     }

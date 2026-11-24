@@ -19,7 +19,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.basicMarquee
 import com.music.bitchord.ui.components.TrackTextSwitch
 import androidx.compose.animation.core.Animatable
 import kotlinx.coroutines.launch
@@ -55,6 +54,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -3999,7 +3999,7 @@ fun NowPlayingScreen(
                                         constraints.constrainHeight(placeable.height),
                                     ) { placeable.placeRelative(start, 0) }
                                 }
-                                .height(HEADER_HEIGHT)
+                                .heightIn(min = HEADER_HEIGHT)
                                 // Where the dismiss band ends — see its top on the
                                 // artwork above. Taken from the row rather than added up
                                 // from the sleeve so the gap between the two is inside
@@ -4051,11 +4051,12 @@ fun NowPlayingScreen(
                                 ) { currentSong ->
                                     val scrolling = scrolls()
                                     val artistColor = chromeWhite(0.55f)
-                                    Column {
+                                    Column(Modifier.fillMaxWidth()) {
                                         MarqueeText(
                                             text = currentSong.title,
                                             style = MaterialTheme.typography.titleLarge.copy(
                                                 fontSize = 20.sp,
+                                                fontWeight = FontWeight.Bold,
                                             ),
                                             color = Color.White,
                                             enabled = scrolling,
@@ -4069,9 +4070,7 @@ fun NowPlayingScreen(
                                             onOverflowChange = { titleOverflowing = it },
                                             // Only the tracks YouTube hands us a browse id for
                                             // lead anywhere; the rest stay plain text.
-                                            modifier = Modifier
-                                                .opensPage(currentSong.albumId, onOpenAlbum)
-                                                .basicMarquee(iterations = Int.MAX_VALUE),
+                                            modifier = Modifier.opensPage(currentSong.albumId, onOpenAlbum),
                                         )
                                         ArtistCreditsMarquee(
                                             text = radioTrackTitle ?: currentSong.artist,

@@ -22,14 +22,23 @@ Todo menú contextual desplegable (menús de ordenamiento, opciones de playlist/
 ---
 
 ## 2. Diálogos de Confirmación y Avisos Estilo iOS (`AccountAlerts.kt` / `GlobalSheetsHost.kt`)
-Cualquier alerta informativa o de confirmación (ej. *Portada guardada localmente*, confirmaciones de eliminación, *Borrar historial* o avisos de sesión) debe prescindir de los cuadros de diálogo genéricos de Material 3 y utilizar el patrón `AlertScaffold` (`InfoAlert` / `ConfirmationAlert`):
-- **Tarjeta Modal Centrada:** Tarjeta oscura flotante en el centro de la pantalla con fondo esmerilado/haze o superficie sólida oscura atenuada si el blur dinámico está reducido.
-- **Bordes y Dimensiones:** Ancho fijo estilizado (`ALERT_WIDTH = 270.dp`) con esquinas redondeadas continuas (`ALERT_CORNER = 14.dp` a `20.dp`).
-- **Jerarquía Tipográfica:**
-  - **Título:** Centrado, negrita de alto contraste (17sp, `FontWeight.W600`, `TextAlign.Center`).
-  - **Cuerpo:** Centrado, tamaño secundario legible (13sp, interlineado de 17sp, color atenuado).
-- **Líneas Divisoras Hairline:** Separador horizontal fino (`AlertRule()`, grosor `0.5.dp`, color translúcido) entre el texto descriptivo y los botones de acción.
-- **Botón de Acción Inferior a Ancho Completo:** Botón apilado a todo lo ancho (`AlertAction`), con tipografía centrada en rojo acento (`MaterialTheme.colorScheme.primary`) para acciones principales (*Aceptar*, *Eliminar*, *Guardar*), y botón secundario (*Cancelar*) debajo separado por otra línea hairline.
+Cualquier alerta informativa o de confirmación (ej. *Portada guardada localmente*, confirmaciones de eliminación, *Borrar historial* o avisos de sesión) debe prescindir de los cuadros de diálogo genéricos de Material 3 y utilizar el patrón `AlertScaffold` (`InfoAlert` / `ConfirmationAlert` / `CleanConfirmationAlert`). Queda estrictamente prohibido el uso de `AlertDialog` genéricos de Material 3 en toda la app.
+
+- **Diseño Exacto (Referencia "Portada guardada localmente"):**
+  - **Tarjeta Modal Centrada:** Tarjeta oscura flotante en el centro de la pantalla con esquinas redondeadas continuas estándar iOS (`ALERT_CORNER = 14.dp`), superficie limpia sin bordes perimetrales de 1dp (`MaterialTheme.colorScheme.surface`) y scrim suave (`Color.Black.copy(alpha = 0.65f)` en oscuro o `0.25f` en claro).
+  - **Dimensiones Exactas:** Ancho fijo nativo (`ALERT_WIDTH = 270.dp`).
+  - **Espaciado y Jerarquía Tipográfica:**
+    - Contenedor de texto: `padding(horizontal = 16.dp, vertical = 19.dp)`.
+    - **Título:** Centrado, peso seminegrita (17sp, `FontWeight.W600`, color `MaterialTheme.colorScheme.onSurface`, `TextAlign.Center`).
+    - **Cuerpo / Descripción:** Centrado debajo con `padding(top = 4.dp)`, tamaño secundario legible (13sp, interlineado de 17sp, color `MaterialTheme.colorScheme.onSurface`, `TextAlign.Center`).
+  - **Líneas Divisoras Hairline:** Separadores horizontales finos a ancho completo (`AlertRule()` o `HorizontalDivider`, grosor exacto `0.5.dp`, color `MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f)`) debajo de la descripción y entre botones.
+  - **Distribución de 2 Acciones Apiladas a Ancho Completo:**
+    Cuando un diálogo requiera 2 acciones (como `Cancelar` + `Eliminar` / `Elegir archivo`):
+    1. **Divisor horizontal fino a ancho completo** (`0.5.dp`) tras la descripción.
+    2. **Botón superior a ancho completo:** `Cancelar` (altura exacta `44.dp`, texto limpio centrado en `onSurface`, peso normal `FontWeight.Normal`, 17sp, sin recuadros ni bordes internos).
+    3. **Divisor horizontal fino a ancho completo** (`0.5.dp`) entre ambos botones.
+    4. **Botón inferior a ancho completo:** `Eliminar` / `Elegir archivo` (altura exacta `44.dp`, texto limpio centrado en color rojo acento de la app `MaterialTheme.colorScheme.primary`, peso seminegrita `FontWeight.W600`, 17sp, sin recuadros ni bordes internos; nunca usar el tono rosado pastel `colorScheme.error` de Material 3).
+  - **Física y Animación:** Escala elástica suave (`spring` `0.90f → 1f`, `dampingRatio = 0.76f`, `stiffness = 420f`) mediante `Modifier.graphicsLayer` acompañada de fundido (`tween(160)`), con contracción suave al cerrar antes de ejecutar el callback `onDismiss`.
 
 ---
 

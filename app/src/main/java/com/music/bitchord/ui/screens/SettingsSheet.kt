@@ -83,6 +83,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import com.music.bitchord.data.lyrics.translationLanguageName
+import com.music.bitchord.ui.components.CleanConfirmationAlert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -2781,25 +2782,16 @@ fun SettingsScreen(
     // thing being confirmed is that this device's own history is about to be
     // thrown away, and that is true whichever file gets picked.
     if (confirmImport) {
-        AlertDialog(
-            onDismissRequest = { confirmImport = false },
-            title = { Text(stringResource(R.string.import_backup_title)) },
-            text = {
-                Text(stringResource(R.string.import_backup_warning))
+        CleanConfirmationAlert(
+            title = stringResource(R.string.import_backup_title),
+            description = stringResource(R.string.import_backup_warning),
+            confirmLabel = stringResource(R.string.choose_file),
+            onConfirm = {
+                confirmImport = false
+                importPicker.launch(arrayOf("application/json", "text/plain", "*/*"))
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmImport = false
-                    importPicker.launch(arrayOf("application/json", "text/plain", "*/*"))
-                }) {
-                    Text(stringResource(R.string.choose_file))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmImport = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
+            onDismiss = { confirmImport = false },
+            destructive = true,
         )
     }
 

@@ -137,7 +137,7 @@ fun TrackTextSwitch(song: Song, modifier: Modifier = Modifier, content: @Composa
                     )
             }
         },
-        modifier = modifier.clipToBounds(),
+        modifier = modifier,
         label = "trackText",
     ) { shown -> content(shown) }
 }

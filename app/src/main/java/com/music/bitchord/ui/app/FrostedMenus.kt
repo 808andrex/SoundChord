@@ -359,24 +359,19 @@ internal fun FrostedMenuPanel(
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 internal fun historyDialogSurface(hazeState: HazeState, reduceDynamicBlur: Boolean): Modifier {
-    val lightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
-    val surface = if (lightTheme) {
-        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f)
-    } else {
-        Color(0xFF1C1C1E).copy(alpha = 0.92f)
-    }
-    val border = if (lightTheme) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.14f)
-    val shape = RoundedCornerShape(24.dp)
+    val shape = RoundedCornerShape(14.dp)
     return Modifier
         .clip(shape)
-        .background(surface)
         .then(
-            if (reduceDynamicBlur) Modifier else Modifier.hazeEffect(
-                state = hazeState,
-                style = HazeMaterials.regular(surface),
-            ),
+            if (reduceDynamicBlur) {
+                Modifier.background(MaterialTheme.colorScheme.surface)
+            } else {
+                Modifier.hazeEffect(
+                    state = hazeState,
+                    style = HazeMaterials.regular(MaterialTheme.colorScheme.surface),
+                )
+            },
         )
-        .border(1.dp, border, shape)
 }
 
 /** One option on a frosted menu: its label, and a tick or [icon] at the end. */

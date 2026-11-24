@@ -1,16 +1,6 @@
 package com.music.bitchord.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -26,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,7 +25,6 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -51,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
+import com.music.bitchord.ui.components.CleanConfirmationAlert
 import com.soundchord.features.recognition.data.RecognitionHistoryEntry
 import java.time.Instant
 import java.time.YearMonth
@@ -80,9 +68,6 @@ fun RecognitionHistoryScreen(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
-    val lightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
-    val scrimColor = Color.Black.copy(alpha = if (lightTheme) 0.25f else 0.65f)
-    val dividerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     BackHandler(enabled = showClearConfirmation, onBack = onDismissClearConfirmation)
     var wasClearConfirmationVisible by rememberSaveable { mutableStateOf(false) }
     androidx.compose.runtime.DisposableEffect(Unit) {
@@ -168,71 +153,15 @@ fun RecognitionHistoryScreen(
         item(key = "recognition-history:bottom-space") { Spacer(Modifier.height(12.dp)) }
       }
 
-      AnimatedVisibility(
-        visible = showClearConfirmation,
-        modifier = Modifier.fillMaxSize().zIndex(1f),
-        enter = fadeIn(tween(160, easing = FastOutSlowInEasing)) + scaleIn(
-            animationSpec = spring(dampingRatio = 0.76f, stiffness = 420f),
-            initialScale = 0.90f,
-        ),
-        exit = fadeOut(tween(140, easing = FastOutLinearInEasing)) + scaleOut(tween(140), targetScale = 0.90f),
-      ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Box(
-                Modifier.fillMaxSize()
-                    .background(scrimColor)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                        onClick = onDismissClearConfirmation,
-                    ),
-            )
-            Column(
-                modifier = Modifier.fillMaxWidth().widthIn(max = 300.dp)
-                    .padding(horizontal = 28.dp)
-                    .then(dialogSurfaceModifier)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                        onClick = {},
-                    ),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-              Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-              ) {
-                Text(
-                    text = stringResource(R.string.recognition_history_clear_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    text = stringResource(R.string.recognition_history_clear_message),
-                    modifier = Modifier.padding(top = 8.dp, bottom = 14.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-                HorizontalDivider(color = dividerColor)
-                androidx.compose.material3.TextButton(
-                    onClick = onDismissClearConfirmation,
-                    modifier = Modifier.fillMaxWidth().height(46.dp),
-                ) {
-                    Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge)
-                }
-                HorizontalDivider(color = dividerColor)
-                androidx.compose.material3.TextButton(
-                    onClick = { onClear(); onDismissClearConfirmation() },
-                    modifier = Modifier.fillMaxWidth().height(46.dp),
-                ) {
-                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge)
-                }
-              }
-            }
-        }
+      if (showClearConfirmation) {
+          CleanConfirmationAlert(
+              title = stringResource(R.string.recognition_history_clear_title),
+              description = stringResource(R.string.recognition_history_clear_message),
+              confirmLabel = stringResource(R.string.delete),
+              onConfirm = onClear,
+              onDismiss = onDismissClearConfirmation,
+              cancelLabel = stringResource(R.string.cancel),
+          )
       }
     }
 }

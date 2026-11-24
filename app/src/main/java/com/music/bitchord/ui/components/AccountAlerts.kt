@@ -12,6 +12,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -27,11 +28,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -52,6 +55,7 @@ import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -733,6 +737,190 @@ private fun ConfirmationAlertFrame(
         AlertAction(label = confirmLabel, emphasised = true, onClick = onConfirm)
         AlertRule()
         AlertAction(label = cancelLabel ?: stringResource(R.string.cancel), emphasised = false, onClick = onDismiss)
+    }
+}
+
+/**
+ * Clean iOS modal confirmation dialog with vertically stacked full-width actions
+ * (Cancel on top in onSurface, action on bottom in destructive red / accent)
+ * separated by full-width edge-to-edge [HorizontalDivider]s.
+ */
+@Composable
+fun CleanConfirmationAlert(
+    title: String,
+    description: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    cancelLabel: String = stringResource(R.string.cancel),
+    destructive: Boolean = true,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect { window?.setDimAmount(0f) }
+
+        val scope = rememberCoroutineScope()
+        var closing by remember { mutableStateOf(false) }
+        val pop = remember { Animatable(0.90f) }
+        val fade = remember { Animatable(0f) }
+
+        LaunchedEffect(Unit) {
+            launch { fade.animateTo(1f, tween(160, easing = FastOutSlowInEasing)) }
+            launch { pop.animateTo(1f, spring(dampingRatio = 0.76f, stiffness = 420f)) }
+        }
+
+        val close: (after: (() -> Unit)?) -> Unit = { after ->
+            if (!closing) {
+                closing = true
+                scope.launch {
+                    launch { fade.animateTo(0f, tween(140, easing = FastOutLinearInEasing)) }
+                    pop.animateTo(0.90f, tween(140, easing = FastOutSlowInEasing))
+                    after?.invoke()
+                    onDismiss()
+                }
+            }
+        }
+
+        BackHandler(enabled = !closing) { close(null) }
+
+        val lightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+        val scrimColor = Color.Black.copy(alpha = if (lightTheme) 0.25f else 0.65f)
+        val dividerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f)
+        val shape = RoundedCornerShape(ALERT_CORNER)
+        val surface = MaterialTheme.colorScheme.surface
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawBehind {
+                    drawRect(scrimColor.copy(alpha = scrimColor.alpha * fade.value.coerceIn(0f, 1f)))
+                }
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = { close(null) },
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(ALERT_WIDTH)
+                    .graphicsLayer {
+                        val s = pop.value.coerceAtLeast(0f)
+                        scaleX = s
+                        scaleY = s
+                        alpha = fade.value.coerceIn(0f, 1f)
+                    }
+                    .clip(shape)
+                    .background(surface)
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = {},
+                    ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 19.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.W600,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        text = description,
+                        modifier = Modifier.padding(top = 4.dp),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 13.sp,
+                            lineHeight = 17.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.fillMaxWidth(),
+                    thickness = 0.5.dp,
+                    color = dividerColor,
+                )
+
+                // Botón superior a ancho completo: Cancelar
+                val cancelInteractionSource = remember { MutableInteractionSource() }
+                val cancelPressed by cancelInteractionSource.collectIsPressedAsState()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(ACTION_HEIGHT)
+                        .background(
+                            if (cancelPressed) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f) else Color.Transparent,
+                        )
+                        .clickable(
+                            indication = null,
+                            interactionSource = cancelInteractionSource,
+                            onClick = { close(null) },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = cancelLabel,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Normal,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.fillMaxWidth(),
+                    thickness = 0.5.dp,
+                    color = dividerColor,
+                )
+
+                // Botón inferior a ancho completo: Acción
+                val confirmInteractionSource = remember { MutableInteractionSource() }
+                val confirmPressed by confirmInteractionSource.collectIsPressedAsState()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(ACTION_HEIGHT)
+                        .background(
+                            if (confirmPressed) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f) else Color.Transparent,
+                        )
+                        .clickable(
+                            indication = null,
+                            interactionSource = confirmInteractionSource,
+                            onClick = {
+                                close { onConfirm() }
+                            },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = confirmLabel,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.W600,
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        }
     }
 }
 
