@@ -158,6 +158,7 @@ fun RadioScreen(
     onSubpageBackHandlerChanged: ((() -> Unit)?) -> Unit = {},
     pullToRefreshState: androidx.compose.material3.pulltorefresh.PullToRefreshState? = null,
     listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() },
+    onSongLongPress: ((Song) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val vm = viewModel ?: composeViewModel(factory = remember(context) { RadioViewModel.Factory(context) })
@@ -218,8 +219,9 @@ fun RadioScreen(
     }
     val detailStateActive = detailTitle != null
     val subpageListState = rememberSaveable(detailTitle, saver = LazyListState.Saver) { LazyListState() }
-    val subpageBack = remember(detailStateActive, showAllNearby, vm) {
+    val subpageBack = remember(detailStateActive, showAllNearby, selectedStationSeed, vm) {
         when {
+            selectedStationSeed != null -> ({ selectedStationSeed = null })
             showAllNearby -> ({ showAllNearby = false })
             detailStateActive -> ({
                 vm.onGenreChanged(null)
@@ -248,6 +250,7 @@ fun RadioScreen(
             onPlay = { onStartStation(seed) },
             onPlayQueueSong = onPlayStation,
             onRetry = { stationsVm.loadStation(seed, force = true) },
+            onSongLongPress = onSongLongPress,
         )
         return
     }
@@ -401,6 +404,7 @@ fun RadioScreen(
                     },
                     onPlay = onStartStation,
                     onRetry = { stationsVm.loadRecentStations(force = true) },
+                    onSongLongPress = onSongLongPress,
                 )
             }
 

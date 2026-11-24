@@ -1431,6 +1431,7 @@ internal fun AppNavigationHost(
                     onPlayStation = onRadioPlayStation,
                     onStartStation = actions.onStartRadio,
                     onStationLongPress = onRadioStationLongPress,
+                    onSongLongPress = actions.onOpenSongMenu,
                 )
                 TAB_SEARCH -> SearchScreen(
                     query = states.query,
@@ -1575,6 +1576,7 @@ internal fun AppNavigationHost(
                                 onStationLongPress = { station, isFavorite, anchor, toggleFavorite ->
                                     actions.onStationActions(StationMenuTarget(station, isFavorite, anchor, toggleFavorite))
                                 },
+                                onSongLongPress = actions.onOpenSongMenu,
                             )
                         }
                     } else null,

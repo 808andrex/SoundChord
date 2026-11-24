@@ -971,6 +971,7 @@ internal fun PlayerActionRow(
     lyricsOpen: Boolean,
     queueOpen: Boolean,
     autoplayBadge: Boolean,
+    shuffleBadge: Boolean = false,
     onToggleLyrics: () -> Unit,
     onToggleQueue: () -> Unit,
     onOpenOutput: () -> Unit,
@@ -1034,6 +1035,7 @@ internal fun PlayerActionRow(
                     haptic = if (queueOpen) Haptic.Tap else Haptic.Expand,
                     vibrant = true,
                     autoplayBadge = autoplayBadge,
+                    shuffleBadge = shuffleBadge,
                 )
             }
         }
@@ -1724,6 +1726,7 @@ private fun BottomGlyph(
     /** Dodged rather than added, for the bottom row's glyphs — see [vibrantChrome]. */
     vibrant: Boolean = false,
     autoplayBadge: Boolean = false,
+    shuffleBadge: Boolean = false,
 ) {
     val haptics = rememberHaptics()
     // Read only from the click handler, never during composition, so writing it
@@ -1790,29 +1793,55 @@ private fun BottomGlyph(
             else -> chromeWhite(0.75f)
         }
         val glyphChrome = if (vibrant) Modifier.vibrantChrome(chrome) else Modifier.additiveChrome(chrome)
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size(iconSize).then(glyphChrome),
-            )
-        } else if (label != null) {
-            Text(
-                text = label,
-                color = tint,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = glyphChrome,
-            )
-        }
-        if (autoplayBadge) {
-            Icon(
-                imageVector = BitChordIcons.Infinity,
-                contentDescription = stringResource(Res.string.autoplay_on),
-                tint = Color.White.copy(alpha = 0.82f),
-                modifier = Modifier.align(Alignment.TopEnd).offset(x = 1.dp, y = (-2).dp).size(16.dp),
-            )
+        Box(
+            modifier = Modifier.size(iconSize),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier.size(iconSize).then(glyphChrome),
+                )
+            } else if (label != null) {
+                Text(
+                    text = label,
+                    color = tint,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = glyphChrome,
+                )
+            }
+            val badgeIcon = when {
+                shuffleBadge -> BitChordIcons.Shuffle
+                autoplayBadge -> BitChordIcons.Infinity
+                else -> null
+            }
+            val badgeDescription = when {
+                shuffleBadge -> stringResource(Res.string.shuffle_on)
+                autoplayBadge -> stringResource(Res.string.autoplay_on)
+                else -> null
+            }
+            if (badgeIcon != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 6.dp, y = (-5).dp)
+                        .size(18.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF6E6E73).copy(alpha = 0.78f))
+                        .background(Color.White.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = badgeIcon,
+                        contentDescription = badgeDescription,
+                        tint = Color.White,
+                        modifier = Modifier.size(11.dp),
+                    )
+                }
+            }
         }
     }
 }

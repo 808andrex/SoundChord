@@ -1838,11 +1838,17 @@ fun NowPlayingScreen(
     // layouts end on, and the only thing in the landscape player's left column
     // besides the sleeve.
     val playerActions: @Composable () -> Unit = {
+        val currentSongFromAutoplay = queue.getOrNull(queueIndex)?.fromAutoplay == true
+        val isInfiniteRadio = radioPlaying || song.playbackSourceId?.startsWith("radio:") == true
+        val isAutoplay = currentSongFromAutoplay || isInfiniteRadio
+        val isShuffle = shuffleEnabled && !isAutoplay
+
         PlayerActionRow(
             radioPlaying = radioPlaying,
             lyricsOpen = lyricsOpen,
             queueOpen = queueOpen,
-            autoplayBadge = queueIndex in queue.indices && queue.drop(queueIndex + 1).any { it.fromAutoplay },
+            autoplayBadge = isAutoplay,
+            shuffleBadge = isShuffle,
             onToggleLyrics = toggleLyrics,
             onToggleQueue = toggleQueue,
             onOpenOutput = openAudioOutput,

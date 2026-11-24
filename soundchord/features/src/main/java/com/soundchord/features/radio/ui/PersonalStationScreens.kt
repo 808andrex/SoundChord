@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,13 +36,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import com.music.bitchord.ui.components.coverSharedElement
+import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.components.rememberCoverTap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,6 +62,7 @@ internal fun PersonalStationsSection(
     onOpen: (Song) -> Unit,
     onPlay: (Song) -> Unit,
     onRetry: () -> Unit,
+    onSongLongPress: ((Song) -> Unit)? = null,
 ) {
     Column {
         Text(
@@ -86,7 +92,12 @@ internal fun PersonalStationsSection(
             } else {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     items(state.songs, key = { "personal_station_${it.videoId}" }) { seed ->
-                        PersonalStationCard(seed, onOpen = { onOpen(seed) }, onPlay = { onPlay(seed) })
+                        PersonalStationCard(
+                            seed = seed,
+                            onOpen = { onOpen(seed) },
+                            onPlay = { onPlay(seed) },
+                            onLongPress = onSongLongPress?.let { { it(seed) } },
+                        )
                     }
                 }
             }
@@ -95,9 +106,15 @@ internal fun PersonalStationsSection(
 }
 
 @Composable
-private fun PersonalStationCard(seed: Song, onOpen: () -> Unit, onPlay: () -> Unit) {
+private fun PersonalStationCard(
+    seed: Song,
+    onOpen: () -> Unit,
+    onPlay: () -> Unit,
+    onLongPress: (() -> Unit)? = null,
+) {
     val cardToken = remember { Any() }
     val openStation = rememberCoverTap("station:${seed.videoId}", cardToken, onOpen)
+    val haptics = LocalHapticFeedback.current
     Box(
         Modifier
             .width(300.dp)
@@ -105,7 +122,15 @@ private fun PersonalStationCard(seed: Song, onOpen: () -> Unit, onPlay: () -> Un
             .clip(RoundedCornerShape(28.dp))
             .coverSharedElement("station:${seed.videoId}", RoundedCornerShape(28.dp), cardToken)
             .background(Color(0xFF202124))
-            .clickable(onClick = openStation),
+            .longPressMenuClickable(
+                onClick = openStation,
+                onLongClick = onLongPress?.let {
+                    {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        it()
+                    }
+                },
+            ),
     ) {
         seed.thumbnailUrl.artworkAt(CARD_ART_PX)?.let { artwork ->
             AsyncImage(
@@ -177,6 +202,7 @@ internal fun PersonalStationDetailScreen(
     onPlay: () -> Unit,
     onPlayQueueSong: (Song) -> Unit,
     onRetry: () -> Unit,
+    onSongLongPress: ((Song) -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -194,7 +220,6 @@ internal fun PersonalStationDetailScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item(key = "station_detail_title") {
                 Text(
@@ -202,17 +227,23 @@ internal fun PersonalStationDetailScreen(
                     color = MaterialTheme.colorScheme.onBackground,
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 6.dp),
+                    modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
                 )
             }
-            item(key = "station_seed") { PersonalStationHero(seed, onPlay) }
+            item(key = "station_seed") {
+                PersonalStationHero(
+                    seed = seed,
+                    onPlay = onPlay,
+                    onLongPress = onSongLongPress?.let { { it(seed) } },
+                )
+            }
             item(key = "station_up_next_title") {
                 Text(
                     stringResource(R.string.station_recommended_songs),
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
                 )
             }
             when (queueState) {
@@ -234,10 +265,27 @@ internal fun PersonalStationDetailScreen(
                         Text(
                             stringResource(R.string.station_empty_suggestions),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 16.dp),
                         )
                     }
-                } else items(queueState.songs, key = { "station_queue_${seed.videoId}_${it.videoId}" }) { song ->
-                    StationQueueRow(song, onClick = { onPlayQueueSong(song) })
+                } else itemsIndexed(
+                    items = queueState.songs,
+                    key = { _, song -> "station_queue_${seed.videoId}_${song.videoId}" },
+                ) { index, song ->
+                    Column {
+                        StationQueueRow(
+                            song = song,
+                            onClick = { onPlayQueueSong(song) },
+                            onLongClick = onSongLongPress?.let { { it(song) } },
+                        )
+                        if (index < queueState.songs.lastIndex) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 84.dp),
+                                thickness = 0.5.dp,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -245,11 +293,25 @@ internal fun PersonalStationDetailScreen(
 }
 
 @Composable
-private fun PersonalStationHero(seed: Song, onPlay: () -> Unit) {
+private fun PersonalStationHero(
+    seed: Song,
+    onPlay: () -> Unit,
+    onLongPress: (() -> Unit)? = null,
+) {
+    val haptics = LocalHapticFeedback.current
     Row(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(26.dp))
             .background(Color(0xFF151618))
+            .longPressMenuClickable(
+                onClick = onPlay,
+                onLongClick = onLongPress?.let {
+                    {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        it()
+                    }
+                },
+            )
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -295,11 +357,24 @@ private fun PersonalStationHero(seed: Song, onPlay: () -> Unit) {
 }
 
 @Composable
-private fun StationQueueRow(song: Song, onClick: () -> Unit) {
+private fun StationQueueRow(
+    song: Song,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+) {
+    val haptics = LocalHapticFeedback.current
     Row(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
+            .longPressMenuClickable(
+                onClick = onClick,
+                onLongClick = onLongClick?.let {
+                    {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        it()
+                    }
+                },
+            )
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
