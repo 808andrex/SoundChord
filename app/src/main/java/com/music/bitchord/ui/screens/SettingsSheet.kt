@@ -442,7 +442,7 @@ fun SettingsScreen(
     val version = remember(context) {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        }.getOrNull()?.substringBefore('-')?.removeSuffix(".0") ?: "1.2"
+        }.getOrNull()?.substringBefore('-')?.removeSuffix(".0") ?: "1.3"
     }
 
     // Made fresh on every pass rather than remembered: it tallies the rows

@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Lyrics
+import androidx.compose.material.icons.rounded.NewReleases
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Sync
@@ -107,7 +108,6 @@ object WhatsNewManager {
     /**
      * Checks if What's New is due to be presented automatically.
      * If due, records the version in SharedPreferences so it only fires once.
-     * Fresh installations skip this dialog.
      */
     fun checkAndMarkDue(context: Context, currentVersion: String): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -121,20 +121,7 @@ object WhatsNewManager {
             .putString(KEY_SEEN, currentVersion)
             .apply()
 
-        val isFreshInstall = seen == null && !pending && runCatching {
-            val info = if (Build.VERSION.SDK_INT >= 33) {
-                context.packageManager.getPackageInfo(
-                    context.packageName,
-                    PackageManager.PackageInfoFlags.of(0),
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                context.packageManager.getPackageInfo(context.packageName, 0)
-            }
-            info.firstInstallTime == info.lastUpdateTime
-        }.getOrDefault(true)
-
-        return !isFreshInstall
+        return true
     }
 }
 
@@ -146,6 +133,7 @@ object WhatsNewCatalog {
 
     /** Returns structured local fallback notes for the current release. */
     fun getFallbackData(context: Context, version: String): WhatsNewData {
+        val fallbackVersion = version.ifBlank { "1.3.0" }
         val highlights = listOf(
             HighlightNote(
                 icon = Icons.Rounded.Radio,
@@ -168,9 +156,9 @@ object WhatsNewCatalog {
                 description = context.getString(R.string.whats_new_v13_highlight_glass_desc),
             ),
             HighlightNote(
-                icon = Icons.Rounded.Lyrics,
-                title = context.getString(R.string.whats_new_v13_highlight_lyrics_title),
-                description = context.getString(R.string.whats_new_v13_highlight_lyrics_desc),
+                icon = Icons.Rounded.NewReleases,
+                title = context.getString(R.string.whats_new_v13_highlight_modal_title),
+                description = context.getString(R.string.whats_new_v13_highlight_modal_desc),
             ),
         )
 
@@ -191,7 +179,7 @@ object WhatsNewCatalog {
         )
 
         return WhatsNewData(
-            version = version,
+            version = fallbackVersion,
             highlights = highlights,
             visualImprovements = visualImprovements,
             fixes = fixes,

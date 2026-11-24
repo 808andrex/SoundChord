@@ -99,22 +99,22 @@
     <string name="update_hero_status">Disponible en GitHub · lista para descargar</string>
 
     <!-- What's New v1.3 Catalog Fallback -->
-    <string name="whats_new_v13_highlight_radio_title">Radio en directo y mixes de SoundChord</string>
-    <string name="whats_new_v13_highlight_radio_desc">Explora miles de emisoras globales por género y país, con biblioteca de favoritas y mixes inteligentes.</string>
+    <string name="whats_new_v13_highlight_radio_title">Radio vibrante y menús Liquid Glass</string>
+    <string name="whats_new_v13_highlight_radio_desc">Degradados vivos estilo Apple Music en géneros y países, con menú contextual esmerilado para estaciones personales.</string>
     <string name="whats_new_v13_highlight_automix_title">AutoMix y crossfade inteligente</string>
     <string name="whats_new_v13_highlight_automix_desc">Transiciones fluidas emparejadas por tono y tempo, con modo sin pausas para álbumes completos.</string>
     <string name="whats_new_v13_highlight_widgets_title">Widgets 2x2 y 4x2 al estilo Apple Music</string>
     <string name="whats_new_v13_highlight_widgets_desc">Controles interactivos táctiles y paletas dinámicas translúcidas que se adaptan a la carátula.</string>
-    <string name="whats_new_v13_highlight_glass_title">Liquid Glass y animaciones a 120 FPS</string>
-    <string name="whats_new_v13_highlight_glass_desc">Menús contextuales esmerilados flotantes, alertas estilo iOS y físicas de resorte ultra suaves.</string>
-    <string name="whats_new_v13_highlight_lyrics_title">Historias animadas y letras sincronizadas</string>
-    <string name="whats_new_v13_highlight_lyrics_desc">Sincronización de letras palabra por palabra y exportación de fragmentos en video para tus historias.</string>
+    <string name="whats_new_v13_highlight_glass_title">Transiciones compartidas y alertas estilo iOS</string>
+    <string name="whats_new_v13_highlight_glass_desc">Físicas de resorte a 120 FPS, carátulas compartidas fluidas y modales de confirmación esmerilados.</string>
+    <string name="whats_new_v13_highlight_modal_title">Rediseño de Novedades y Actualizaciones</string>
+    <string name="whats_new_v13_highlight_modal_desc">Tarjetas flotantes esmeriladas, carátula Hero con ondas de audio y acordeones por categoría.</string>
 
     <string name="whats_new_v13_visual_1">Separadores sutiles estilo editorial en listas de álbumes, artistas y radio.</string>
     <string name="whats_new_v13_visual_2">Superposición de vídeo a pantalla completa con controles de cristal esmerilado.</string>
     <string name="whats_new_v13_visual_3">Paleta cromática de radio refinada con degradados suaves y mayor legibilidad.</string>
     <string name="whats_new_v13_visual_4">Barra de navegación flotante con actualización inmediata de color de acento.</string>
-    <string name="whats_new_v13_visual_5">Indicadores de reproducción aleatoria y reproducción automática en la cola.</string>
+    <string name="whats_new_v13_visual_5">Badge circular para reproducción aleatoria y reproducción automática en la cola.</string>
 
     <string name="whats_new_v13_fix_1">Restaurado el fundido cruzado manual para listas de reproducción y álbumes.</string>
     <string name="whats_new_v13_fix_2">Corregidas pantallas congeladas y superposiciones al regresar a la pestaña Inicio.</string>

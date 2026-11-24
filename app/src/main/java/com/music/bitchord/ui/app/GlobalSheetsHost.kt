@@ -2211,13 +2211,15 @@ internal fun GlobalSheetsHost(
     val currentVersion = BuildConfig.VERSION_NAME
     var autoShowWhatsNew by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        if (WhatsNewManager.checkAndMarkDue(context, currentVersion)) {
-            autoShowWhatsNew = true
+    LaunchedEffect(state.onboardingComplete) {
+        if (state.onboardingComplete) {
+            if (WhatsNewManager.checkAndMarkDue(context, currentVersion)) {
+                autoShowWhatsNew = true
+            }
         }
     }
 
-    val showWhatsNew = state.showAboutWhatsNew || autoShowWhatsNew
+    val showWhatsNew = (state.showAboutWhatsNew || autoShowWhatsNew) && (state.onboardingComplete || state.showAboutWhatsNew)
     val isFromSettings = state.showAboutWhatsNew && !autoShowWhatsNew
 
     if (showWhatsNew) {

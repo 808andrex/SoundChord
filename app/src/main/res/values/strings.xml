@@ -94,22 +94,22 @@
     <string name="update_hero_status">Available on GitHub · ready to download</string>
 
     <!-- What's New v1.3 Catalog Fallback -->
-    <string name="whats_new_v13_highlight_radio_title">Live radio &amp; smart mixes</string>
-    <string name="whats_new_v13_highlight_radio_desc">Explore thousands of live stations worldwide, with a favorites library and smart mixes.</string>
+    <string name="whats_new_v13_highlight_radio_title">Vibrant Radio &amp; Liquid Glass Menus</string>
+    <string name="whats_new_v13_highlight_radio_desc">Vibrant Apple Music gradients for genres and countries, with frosted contextual menus for personal stations.</string>
     <string name="whats_new_v13_highlight_automix_title">AutoMix &amp; smart crossfade</string>
     <string name="whats_new_v13_highlight_automix_desc">Seamless transitions matched in key and tempo, plus gapless playback for full albums.</string>
     <string name="whats_new_v13_highlight_widgets_title">2x2 &amp; 4x2 Apple Music style widgets</string>
     <string name="whats_new_v13_highlight_widgets_desc">Interactive glanceable controls with translucent dynamic palettes matching current cover art.</string>
-    <string name="whats_new_v13_highlight_glass_title">Liquid Glass &amp; fluid 120 FPS animations</string>
-    <string name="whats_new_v13_highlight_glass_desc">Frosted floating menus, iOS-style alert sheets, and ultra-smooth spring physics.</string>
-    <string name="whats_new_v13_highlight_lyrics_title">Animated stories &amp; synced lyrics</string>
-    <string name="whats_new_v13_highlight_lyrics_desc">Word-by-word synced lyrics and animated video cards ready to share on social stories.</string>
+    <string name="whats_new_v13_highlight_glass_title">Shared transitions &amp; iOS-style alerts</string>
+    <string name="whats_new_v13_highlight_glass_desc">120 FPS spring physics, fluid shared cover motion, and frosted confirmation dialogs.</string>
+    <string name="whats_new_v13_highlight_modal_title">Redesigned What’s New &amp; Updates</string>
+    <string name="whats_new_v13_highlight_modal_desc">Frosted floating cards, Hero artwork with vinyl waveforms, and category accordions.</string>
 
     <string name="whats_new_v13_visual_1">Subtle hairline editorial dividers across album, artist and radio tracklists.</string>
     <string name="whats_new_v13_visual_2">Fullscreen video overlay with frosted glass controls and Apple Music aesthetics.</string>
     <string name="whats_new_v13_visual_3">Harmonized radio palette with softer gradients and enhanced typography.</string>
     <string name="whats_new_v13_visual_4">Floating glass bottom bar with real-time accent color reactive updates.</string>
-    <string name="whats_new_v13_visual_5">Visual badges for smart shuffle and autoplay within the queue drawer.</string>
+    <string name="whats_new_v13_visual_5">Circular badge indicators for smart shuffle and autoplay within the queue.</string>
 
     <string name="whats_new_v13_fix_1">Restored manual crossfade for playlists and albums without volume dips.</string>
     <string name="whats_new_v13_fix_2">Fixed frozen views and overlapping layers when navigating back to Home.</string>

@@ -318,7 +318,7 @@ object AppSettings {
 
     val crossfadeSeconds = MutableStateFlow(0)
     /** Blend manually requested next/previous track changes, when possible. */
-    val crossfadeOnSkip = MutableStateFlow(true)
+    val crossfadeOnSkip = MutableStateFlow(false)
 
     /**
      * Lets Automix's analyzer decide the transition's timing and length
@@ -332,7 +332,7 @@ object AppSettings {
      */
     val smartFadeEnabled = MutableStateFlow(false)
     val albumGaplessPlayback = MutableStateFlow(true)
-    val sleepTimerFadeOut = MutableStateFlow(true)
+    val sleepTimerFadeOut = MutableStateFlow(false)
 
     /** The CPU budget used by Beat This! and vocal analysis for Automix. */
     val automixPerformanceMode = MutableStateFlow(AutomixPerformanceMode.BALANCED)
@@ -502,7 +502,7 @@ object AppSettings {
      * The "Best Part" button on the player's artwork, which skips to the part of
      * the song listeners replay most. On unless turned off.
      */
-    val showBestPart = MutableStateFlow(true)
+    val showBestPart = MutableStateFlow(false)
 
     /** Show the output / Listen Together pill under the player's transport. */
     val showListenTogetherButton = MutableStateFlow(false)
@@ -538,7 +538,7 @@ object AppSettings {
     val stopOnTaskRemoved = MutableStateFlow(true)
 
     /** Hides the volume slider on the main player, leaving the rest of the layout to reflow. */
-    val hideVolumeBar = MutableStateFlow(false)
+    val hideVolumeBar = MutableStateFlow(true)
 
     /** Hides the device status bar (clock, battery, notifications) while the main player is open. */
     val hideStatusBarInPlayer = MutableStateFlow(false)
@@ -1125,10 +1125,10 @@ object AppSettings {
         syncDownloadedPlaylists.value = prefs.getBoolean(KEY_SYNC_DOWNLOADED_PLAYLISTS, false)
         downloadLikedSongs.value = prefs.getBoolean(KEY_DOWNLOAD_LIKED_SONGS, false)
         crossfadeSeconds.value = prefs.getInt(KEY_CROSSFADE, 0)
-        crossfadeOnSkip.value = prefs.getBoolean(KEY_CROSSFADE_ON_SKIP, true)
+        crossfadeOnSkip.value = prefs.getBoolean(KEY_CROSSFADE_ON_SKIP, false)
         smartFadeEnabled.value = prefs.getBoolean(KEY_SMART_FADE, false)
         albumGaplessPlayback.value = prefs.getBoolean(KEY_ALBUM_GAPLESS_PLAYBACK, true)
-        sleepTimerFadeOut.value = prefs.getBoolean(KEY_SLEEP_TIMER_FADE_OUT, true)
+        sleepTimerFadeOut.value = prefs.getBoolean(KEY_SLEEP_TIMER_FADE_OUT, false)
         automixPerformanceMode.value = runCatching {
             AutomixPerformanceMode.valueOf(
                 prefs.getString(KEY_AUTOMIX_PERFORMANCE_MODE, null) ?: AutomixPerformanceMode.BALANCED.name,
@@ -1177,7 +1177,7 @@ object AppSettings {
         shuffleEnabled.value = prefs.getBoolean(KEY_SHUFFLE_ENABLED, false)
         repeatMode.value = prefs.getInt(KEY_REPEAT_MODE, Player.REPEAT_MODE_OFF)
         showNerdStats.value = prefs.getBoolean(KEY_NERD_STATS, false)
-        showBestPart.value = prefs.getBoolean(KEY_BEST_PART, true)
+        showBestPart.value = prefs.getBoolean(KEY_BEST_PART, false)
         showListenTogetherButton.value = prefs.getBoolean(KEY_LISTEN_TOGETHER_BUTTON, false)
         reduceAnimation.value = prefs.getBoolean(KEY_REDUCE_ANIMATION, false)
         coverSlideAnimation.value = prefs.getBoolean(KEY_COVER_SLIDE_ANIMATION, false)
@@ -1201,7 +1201,7 @@ object AppSettings {
             prefs.getInt(KEY_PERFORMANCE_REFRESH_RATE, DEFAULT_PERFORMANCE_REFRESH_RATE),
         )
         stopOnTaskRemoved.value = prefs.getBoolean(KEY_STOP_ON_TASK_REMOVED, true)
-        hideVolumeBar.value = prefs.getBoolean(KEY_HIDE_VOLUME_BAR, false)
+        hideVolumeBar.value = prefs.getBoolean(KEY_HIDE_VOLUME_BAR, true)
         hideStatusBarInPlayer.value = prefs.getBoolean(KEY_HIDE_STATUS_BAR_IN_PLAYER, false)
         hideSongStatus.value = prefs.getBoolean(KEY_HIDE_SONG_STATUS, false)
         hideLyricsPreview.value = prefs.getBoolean(KEY_HIDE_LYRICS_PREVIEW, false)
