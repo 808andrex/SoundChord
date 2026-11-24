@@ -28,6 +28,7 @@
 
             <!-- Esquina superior derecha: Solamente el logotipo de SoundChord -->
             <ImageView
+                android:id="@+id/widget_logo"
                 android:layout_width="20dp"
                 android:layout_height="18dp"
                 android:layout_alignParentEnd="true"
@@ -38,6 +39,7 @@
                 android:contentDescription="@string/app_name" />
 
             <LinearLayout
+                android:id="@+id/widget_transport"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_alignParentBottom="true"
@@ -76,6 +78,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:layout_below="@id/widget_logo"
+                android:layout_above="@id/widget_transport"
                 android:gravity="center"
                 android:orientation="vertical"
                 android:paddingStart="4dp"
