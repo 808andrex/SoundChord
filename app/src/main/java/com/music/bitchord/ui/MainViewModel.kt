@@ -122,6 +122,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 const val APPLE_MUSIC_PAGE_PREFIX = "apple:playlist:"
+const val APPLE_MUSIC_ALBUM_PREFIX = "apple:album:"
 
 /** What the Search tab searches: YouTube Music, or the Local Music folder on this device. */
 enum class SearchSource { YOUTUBE, LIBRARY, RADIO, ADDONS }
@@ -203,6 +204,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Increments once per first-page request so the UI can reset its list. */
     private val _searchScrollReset = MutableStateFlow(0)
     val searchScrollReset: StateFlow<Int> = _searchScrollReset.asStateFlow()
+
+    /** Persistent horizontal scroll states for ExploreScreen rows: sectionKey -> (firstVisibleItemIndex, firstVisibleItemScrollOffset) */
+    val exploreRowScrollStates = mutableMapOf<String, Pair<Int, Int>>()
+
+    fun getExploreRowScroll(key: String): Pair<Int, Int> = exploreRowScrollStates[key] ?: (0 to 0)
+
+    fun saveExploreRowScroll(key: String, index: Int, offset: Int) {
+        exploreRowScrollStates[key] = index to offset
+    }
 
     /** True while a committed search is in flight — gates suggestion/media callbacks. */
     private var searchSubmitted = false
@@ -3300,6 +3310,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             browseId.startsWith(OfflinePlaylists.PREFIX) -> BrowseType.PLAYLIST
             browseId.startsWith(SPOTIFY_PAGE_PREFIX) -> BrowseType.PLAYLIST
             browseId.startsWith(APPLE_MUSIC_PAGE_PREFIX) -> BrowseType.PLAYLIST
+            browseId.startsWith(APPLE_MUSIC_ALBUM_PREFIX) -> BrowseType.ALBUM
             browseId.startsWith("UC") -> BrowseType.ARTIST
             browseId.startsWith("MPREb") || browseId.startsWith("VLOLAK") || browseId.startsWith("OLAK") -> BrowseType.ALBUM
             browseId.startsWith("VL") || browseId.startsWith("PL") -> BrowseType.PLAYLIST
@@ -3367,6 +3378,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (browseId.startsWith(APPLE_MUSIC_PAGE_PREFIX)) {
             openAppleMusicPage(browseId, title, subtitle, thumbnailUrl)
+            return
+        }
+        if (browseId.startsWith(APPLE_MUSIC_ALBUM_PREFIX)) {
+            openAppleMusicAlbumPage(browseId, title, subtitle, thumbnailUrl)
             return
         }
         val resolved = browseTypeOf(browseId, type)
@@ -3657,6 +3672,43 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         albumName = album,
     )
 
+    private data class CachedApplePlaylist(
+        val songs: List<Song>,
+        val name: String,
+        val curator: String,
+        val coverUrl: String?,
+        val description: String?,
+        val motionVideoUrl: String?,
+        val timestamp: Long = System.currentTimeMillis(),
+    )
+
+    private val applePlaylistCache = ConcurrentHashMap<String, CachedApplePlaylist>()
+
+    private fun isStrictAlbumTitleMatch(appleTitle: String, candidateTitle: String): Boolean {
+        fun normalize(text: String): String {
+            val nfd = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD)
+            return nfd.replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+                .lowercase()
+                .replace(Regex("[^a-z0-9\\s]"), " ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+        }
+        val normApple = normalize(appleTitle)
+        val normCand = normalize(candidateTitle)
+        if (normApple.isEmpty() || normCand.isEmpty()) return false
+        if (normApple == normCand) return true
+        if (normApple.contains(normCand) && normCand.length >= 6) return true
+        if (normCand.contains(normApple) && normApple.length >= 6) return true
+
+        val appleWords = normApple.split(" ").filter { it.length > 2 }.toSet()
+        val candWords = normCand.split(" ").filter { it.length > 2 }.toSet()
+        if (appleWords.isEmpty() || candWords.isEmpty()) return false
+
+        val common = appleWords.intersect(candWords)
+        val ratio = common.size.toFloat() / appleWords.size
+        return (ratio >= 0.6f && common.size >= 2) || (appleWords.size == 1 && common.isNotEmpty())
+    }
+
     private fun openAppleMusicPage(
         browseId: String,
         title: String,
@@ -3664,6 +3716,43 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         thumbnailUrl: String?,
     ) {
         val resolved = BrowseType.PLAYLIST
+        val raw = browseId.removePrefix(APPLE_MUSIC_PAGE_PREFIX)
+        val storefront = if (raw.contains(":")) raw.substringBefore(":") else "us"
+        val playlistId = if (raw.contains(":")) raw.substringAfter(":") else raw
+
+        // Check 30-min in-memory cache for instant opening
+        val now = System.currentTimeMillis()
+        val cached = applePlaylistCache[browseId]
+        if (cached != null && now - cached.timestamp < 30 * 60 * 1000L && cached.songs.isNotEmpty()) {
+            PlaylistMotionStore.setEntry(
+                playlistIdOrBrowseId = browseId,
+                motionVideoUrl = cached.motionVideoUrl,
+                coverUrl = cached.coverUrl,
+                applePlaylistId = playlistId,
+                storefront = storefront,
+                description = cached.description,
+            )
+            val isSavedInLibrary = LocalPlaylistStore.playlists.value.any { it.applePlaylistId == playlistId } ||
+                _playlists.value.any {
+                    it.browseId == browseId ||
+                    PlaylistMotionStore.getApplePlaylistId(it.browseId) == playlistId ||
+                    PlaylistMotionStore.getApplePlaylistId(it.playlistId) == playlistId
+                }
+            _detailStack.value += DetailPage(
+                browseId = browseId,
+                title = cached.name,
+                subtitle = cached.curator.ifBlank { subtitle },
+                thumbnailUrl = cached.coverUrl ?: thumbnailUrl,
+                description = cached.description,
+                motionVideoUrl = cached.motionVideoUrl,
+                songs = UiState.Success(cached.songs),
+                type = resolved,
+                library = LibraryState(playlistId = playlistId, saved = isSavedInLibrary),
+            )
+            return
+        }
+
+        // Cache miss: Push placeholder loading page
         _detailStack.value += DetailPage(
             browseId = browseId,
             title = title,
@@ -3673,10 +3762,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             type = resolved,
         )
         viewModelScope.launch {
-            val raw = browseId.removePrefix(APPLE_MUSIC_PAGE_PREFIX)
-            val storefront = if (raw.contains(":")) raw.substringBefore(":") else "us"
-            val playlistId = if (raw.contains(":")) raw.substringAfter(":") else raw
-
             fun setPage(transform: (DetailPage) -> DetailPage) {
                 _detailStack.value = _detailStack.value.map {
                     if (it.browseId == browseId) transform(it) else it
@@ -3716,18 +3801,117 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     },
                     thumbnailUrl = applePlaylist.coverUrl ?: page.thumbnailUrl,
                     description = applePlaylist.description,
+                    motionVideoUrl = applePlaylist.motionVideoUrl,
                     library = LibraryState(playlistId = playlistId, saved = isSavedInLibrary),
                 )
             }
 
+            // Progressive resolution: initial batch of 20 shows in ~1-1.5s
             val (matchedSongs, _) = runCatching {
-                AppleMusicPlaylistRepository.resolveAndMatchTracks(applePlaylist.tracks) { _, _ -> }
+                AppleMusicPlaylistRepository.resolveAndMatchTracksProgressive(
+                    tracks = applePlaylist.tracks,
+                    initialBatchSize = 20,
+                    concurrency = 8,
+                    onInitialBatchReady = { batchSongs ->
+                        if (batchSongs.isNotEmpty()) {
+                            setPage { it.copy(songs = UiState.Success(batchSongs)) }
+                        }
+                    },
+                    onProgressiveUpdate = { currentSongs ->
+                        if (currentSongs.isNotEmpty()) {
+                            setPage { it.copy(songs = UiState.Success(currentSongs)) }
+                        }
+                    },
+                )
             }.getOrElse { Pair(emptyList(), emptyList()) }
 
             if (matchedSongs.isEmpty()) {
                 setPage { it.copy(songs = UiState.Error(text(R.string.no_tracks_here))) }
             } else {
                 setPage { it.copy(songs = UiState.Success(matchedSongs)) }
+                // Save in memory cache for instant future loads
+                applePlaylistCache[browseId] = CachedApplePlaylist(
+                    songs = matchedSongs,
+                    name = applePlaylist.name,
+                    curator = applePlaylist.curator,
+                    coverUrl = applePlaylist.coverUrl,
+                    description = applePlaylist.description,
+                    motionVideoUrl = applePlaylist.motionVideoUrl,
+                    timestamp = System.currentTimeMillis(),
+                )
+            }
+        }
+    }
+
+    private fun openAppleMusicAlbumPage(
+        browseId: String,
+        title: String,
+        subtitle: String,
+        thumbnailUrl: String?,
+    ) {
+        val resolved = BrowseType.ALBUM
+        _detailStack.value += DetailPage(
+            browseId = browseId,
+            title = title,
+            subtitle = subtitle,
+            thumbnailUrl = thumbnailUrl,
+            songs = UiState.Loading,
+            type = resolved,
+        )
+        viewModelScope.launch {
+            val isVariousArtists = listOf(
+                "various artists", "varios artistas", "various", "varios", "soundtrack", "bso", "ost"
+            ).any { subtitle.trim().lowercase().startsWith(it) }
+
+            val cleanTitle = title.trim()
+            val query = if (isVariousArtists || subtitle.isBlank()) {
+                cleanTitle
+            } else {
+                "$cleanTitle $subtitle".trim()
+            }
+
+            // 1. Search Albums on YouTube Music
+            val albumResults = YtMusicRepository.search(query, SearchFilter.ALBUMS).getOrNull()
+            val albumCandidates = albumResults?.filterIsInstance<SearchResult.Browse>()
+                ?.map { it.item }
+                ?.filter { it.type == BrowseType.ALBUM }
+                .orEmpty()
+
+            val bestAlbumMatch = albumCandidates.firstOrNull {
+                isStrictAlbumTitleMatch(cleanTitle, it.title)
+            }
+
+            // 2. If no strict album match, fallback to search playlists (e.g. soundtracks/compilations)
+            val bestMatch = bestAlbumMatch ?: run {
+                val playlistResults = YtMusicRepository.search(cleanTitle, SearchFilter.PLAYLISTS).getOrNull()
+                val playlistCandidates = playlistResults?.filterIsInstance<SearchResult.Browse>()
+                    ?.map { it.item }
+                    ?.filter { it.type == BrowseType.PLAYLIST }
+                    .orEmpty()
+                playlistCandidates.firstOrNull {
+                    isStrictAlbumTitleMatch(cleanTitle, it.title)
+                }
+            }
+
+            if (bestMatch != null) {
+                // Drop placeholder and open the matched YouTube Music album/playlist
+                _detailStack.value = _detailStack.value.filterNot { it.browseId == browseId }
+                openDetail(
+                    browseId = bestMatch.browseId,
+                    title = bestMatch.title,
+                    subtitle = bestMatch.subtitle.ifBlank { subtitle },
+                    thumbnailUrl = bestMatch.thumbnailUrl ?: thumbnailUrl,
+                )
+            } else {
+                // Remove placeholder and notify user clearly without opening wrong content
+                _detailStack.value = _detailStack.value.filterNot { it.browseId == browseId }
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        getApplication<Application>().getString(R.string.album_not_found_in_ytm),
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                }
             }
         }
     }
@@ -3768,7 +3952,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun reloadDetail(browseId: String) {
-        if (browseId.startsWith(SPOTIFY_PAGE_PREFIX) || browseId.startsWith(APPLE_MUSIC_PAGE_PREFIX)) return
+        if (browseId.startsWith(SPOTIFY_PAGE_PREFIX) || browseId.startsWith(APPLE_MUSIC_PAGE_PREFIX) || browseId.startsWith(APPLE_MUSIC_ALBUM_PREFIX)) return
         val localPlaylist = com.music.bitchord.data.spotify.LocalPlaylistStore.getPlaylist(browseId)
         if (localPlaylist != null || browseId.startsWith("local:") || remoteLibrary(browseId) != null) {
             reloadLocalDetail(browseId)

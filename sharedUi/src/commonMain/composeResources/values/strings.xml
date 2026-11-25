@@ -196,6 +196,12 @@
     <string name="shelf_new_releases">New releases</string>
     <string name="shelf_quick_picks">Quick picks</string>
     <string name="shelf_recents">Recents</string>
+    <string name="shelf_workout">Work Out</string>
+    <string name="shelf_chill">Chill</string>
+    <string name="shelf_essentials">Essentials</string>
+    <string name="shelf_focus">Focus</string>
+    <string name="shelf_party">Party</string>
+    <string name="shelf_feel_good">Feel Good</string>
     <string name="shelf_recommended_music_videos">Recommended music videos</string>
     <string name="shelf_shorts">Shorts</string>
     <string name="shelf_similar_to">Similar to %1$s</string>

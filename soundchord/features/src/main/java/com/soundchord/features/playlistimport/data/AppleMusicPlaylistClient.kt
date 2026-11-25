@@ -77,19 +77,40 @@ object AppleMusicPlaylistClient {
             var bearer = AppleMusicTokenProvider.token()
                 ?: error("Could not obtain Apple Music authorization token")
 
-            val initialUrl = "$API_BASE/$storefront/playlists/$playlistId?include=tracks&extend=editorialArtwork,editorialVideo"
-            var responseBody = executeGet(initialUrl, bearer)
+            val candidateStorefronts = listOf(storefront, "us", "mx", "es", "ec").distinct()
+            var responseBody: String? = null
+            var resolvedStorefront = storefront
 
-            // If 401 Unauthorized, invalidate token and retry once
+            for (sf in candidateStorefronts) {
+                val url = "$API_BASE/$sf/playlists/$playlistId?include=tracks&extend=editorialArtwork,editorialVideo"
+                val res = executeGet(url, bearer)
+                if (res != null) {
+                    responseBody = res
+                    resolvedStorefront = sf
+                    break
+                }
+            }
+
+            // If null, refresh token and try candidate storefronts again
             if (responseBody == null) {
                 AppleMusicTokenProvider.invalidateToken(bearer)
                 bearer = AppleMusicTokenProvider.token()
                     ?: error("Could not refresh Apple Music authorization token")
-                responseBody = executeGet(initialUrl, bearer)
-                    ?: error("Failed to load Apple Music playlist (HTTP error)")
+                for (sf in candidateStorefronts) {
+                    val url = "$API_BASE/$sf/playlists/$playlistId?include=tracks&extend=editorialArtwork,editorialVideo"
+                    val res = executeGet(url, bearer)
+                    if (res != null) {
+                        responseBody = res
+                        resolvedStorefront = sf
+                        break
+                    }
+                }
             }
 
-            val root = runCatching { json.parseToJsonElement(responseBody).jsonObject }.getOrNull()
+            val finalBody = responseBody
+                ?: error("Failed to load Apple Music playlist (HTTP error or 404 in all candidate storefronts)")
+
+            val root = runCatching { json.parseToJsonElement(finalBody).jsonObject }.getOrNull()
                 ?: error("Failed to parse Apple Music playlist response")
 
             val playlistObj = root["data"]?.jsonArray?.firstOrNull()?.jsonObject
@@ -99,7 +120,11 @@ object AppleMusicPlaylistClient {
             val name = attributes["name"]?.jsonPrimitive?.contentOrNull?.trim()
                 ?: "Imported Apple Music Playlist"
 
-            val description = attributes["description"]?.jsonObject?.let { desc ->
+            val editorialNotes = attributes["editorialNotes"]?.jsonObject
+            val description = editorialNotes?.let { notes ->
+                (notes["standard"]?.jsonPrimitive?.contentOrNull
+                    ?: notes["short"]?.jsonPrimitive?.contentOrNull).orEmpty()
+            } ?: attributes["description"]?.jsonObject?.let { desc ->
                 (desc["standard"]?.jsonPrimitive?.contentOrNull
                     ?: desc["short"]?.jsonPrimitive?.contentOrNull).orEmpty()
             } ?: attributes["description"]?.jsonPrimitive?.contentOrNull.orEmpty()
@@ -108,7 +133,7 @@ object AppleMusicPlaylistClient {
             val curator = attributes["curatorName"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
 
             val coverUrl = attributes["artwork"]?.jsonObject?.get("url")?.jsonPrimitive?.contentOrNull?.let { rawUrl ->
-                rawUrl.replace("{w}", "1000").replace("{h}", "1000")
+                rawUrl.replace("{w}", "1000").replace("{h}", "1000").replace("{f}", "jpg")
             }
 
             val editorialVideo = attributes["editorialVideo"]?.jsonObject
@@ -152,7 +177,7 @@ object AppleMusicPlaylistClient {
                 motionVideoUrl = motionVideoUrl,
                 motionPreviewUrl = motionPreviewUrl,
                 tracks = allTracks,
-                storefront = storefront,
+                storefront = resolvedStorefront,
             )
         }
 
@@ -165,7 +190,7 @@ object AppleMusicPlaylistClient {
         val durationMs = attributes["durationInMillis"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
         val isrc = attributes["isrc"]?.jsonPrimitive?.contentOrNull?.trim()
         val cover = attributes["artwork"]?.jsonObject?.get("url")?.jsonPrimitive?.contentOrNull?.let { rawUrl ->
-            rawUrl.replace("{w}", "600").replace("{h}", "600")
+            rawUrl.replace("{w}", "600").replace("{h}", "600").replace("{f}", "jpg")
         }
 
         return AppleMusicTrack(
@@ -216,7 +241,7 @@ object AppleMusicPlaylistClient {
 
         return runCatching {
             Http.client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) response.body?.string() else null
+                if (response.isSuccessful) response.body.string() else null
             }
         }.getOrNull()
     }

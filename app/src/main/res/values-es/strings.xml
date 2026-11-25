@@ -1091,7 +1091,7 @@
 
     <string name="shelf_feel_good">Buen rollo</string>
 
-    <string name="shelf_focus">Concentración</string>
+    <string name="shelf_focus">Para concentrarte</string>
 
     <string name="shelf_for_you">Para ti</string>
 
@@ -1111,7 +1111,7 @@
 
     <string name="shelf_new_releases">Novedades</string>
 
-    <string name="shelf_party">Fiesta</string>
+    <string name="shelf_party">De fiesta</string>
 
     <string name="shelf_quick_picks">Selección rápida</string>
 
@@ -1143,7 +1143,7 @@
 
     <string name="shelf_trending_community_playlists">Listas populares de la comunidad</string>
 
-    <string name="shelf_workout">Entrenamiento</string>
+    <string name="shelf_workout">Dale al gym</string>
 
     <string name="shelf_youtube_charts">Listas de YouTube</string>
 
@@ -1777,4 +1777,26 @@
     <string name="queue_removed_song">Se quitó %1$s</string>
     <string name="queue_playlist_added">Se añadieron %1$d de %2$d canciones</string>
     <string name="queue_playlist_partial">%1$s (%2$d incompatibles, %3$d ya estaban, %4$d fallaron)</string>
+    <string name="settings_home_editorial">Secciones editoriales</string>
+    <string name="settings_home_editorial_subtitle">Mostrar listas editoriales y Top 100 de Apple Music en Inicio</string>
+    <string name="editorial_section_updated_playlists">Playlists actualizadas</string>
+    <string name="editorial_section_new_songs">Canciones nuevas destacadas</string>
+    <string name="editorial_section_daily_top_100">Top 100 diario</string>
+    <string name="editorial_section_city_charts">Éxitos por ciudad</string>
+    <string name="editorial_section_dj_mixes">Últimos DJ Mixes</string>
+    <string name="editorial_section_coming_soon">Próximamente</string>
+    <string name="editorial_section_trending_songs">Canciones en tendencia</string>
+    <string name="editorial_section_moment_songs">Canciones del momento</string>
+    <string name="editorial_section_decade_hits">Éxitos por década</string>
+    <string name="editorial_section_road_trip">Para el camino</string>
+    <string name="explore_new_releases">Últimos lanzamientos</string>
+    <string name="explore_programs_for_you">Programas</string>
+    <string name="explore_programs">Programas</string>
+    <string name="shelf_chill">Para relajarte</string>
+    <string name="shelf_essentials">Imprescindibles</string>
+    <string name="editorial_hero_badge_new">NOVEDAD</string>
+    <string name="editorial_hero_badge_featured">DESTACADO</string>
+    <string name="editorial_hero_badge_soundtrack">BANDA SONORA</string>
+    <string name="editorial_hero_badge_exclusive">EXCLUSIVO</string>
+    <string name="album_not_found_in_ytm">Álbum no disponible en YouTube Music</string>
 </resources>

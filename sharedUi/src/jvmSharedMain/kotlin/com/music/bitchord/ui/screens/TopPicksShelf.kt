@@ -152,7 +152,7 @@ internal fun TopPicksShelf(
     onClick: (TopPick, String) -> Unit,
     onLongPress: ((TopPick) -> Unit)?,
 ) {
-    val rowState = rememberLazyListState()
+    val rowState = rememberHomePersistentRowState("home_top_picks")
     // Which cards turned out to have a clip, by index, and which one plays.
     val hasClip = remember(picks) { mutableStateMapOf<Int, Boolean>() }
     var owner by remember(picks) { mutableIntStateOf(-1) }
@@ -1551,7 +1551,7 @@ private fun spiral(path: Path, f: Frame) {
  */
 @Composable
 internal fun FindYourMoodShelf(onClick: (TopPickMood, String) -> Unit, onShowAll: () -> Unit) {
-    val rowState = rememberLazyListState()
+    val rowState = rememberHomePersistentRowState("home_find_your_mood")
     Column(Modifier.padding(bottom = 26.dp)) {
         SectionHeader(stringResource(Res.string.find_your_mood), onShowAll = onShowAll)
         ShelfRow(

@@ -78,6 +78,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -526,7 +527,14 @@ fun DetailScreen(
     // which case the tracks themselves know who it is.
     val credit = page.headerLines(songs.size).first.ifBlank { songs.firstOrNull()?.artist.orEmpty() }
     var canvas by remember(page.browseId) { mutableStateOf<CanvasArtwork?>(null) }
-    LaunchedEffect(page.browseId, page.title, credit, canvasEnabled, prioritizeSpotifyCanvas) {
+    DisposableEffect(page.browseId) {
+        onDispose {
+            canvas = null
+        }
+    }
+    val motionStoreMap by com.music.bitchord.data.canvas.PlaylistMotionStore.entryMap.collectAsStateWithLifecycle()
+    val entryFromStore = motionStoreMap[page.browseId]
+    LaunchedEffect(page.browseId, page.title, credit, canvasEnabled, prioritizeSpotifyCanvas, page.motionVideoUrl, entryFromStore) {
         // An artist's clip is set below, by the lookup that finds it.
         if (isArtist) return@LaunchedEffect
         if (!canvasEnabled || (page.type != BrowseType.ALBUM && page.type != BrowseType.PLAYLIST)) {
@@ -534,8 +542,9 @@ fun DetailScreen(
             return@LaunchedEffect
         }
         if (page.type == BrowseType.PLAYLIST) {
-            val entry = com.music.bitchord.data.canvas.PlaylistMotionStore.getEntry(page.browseId)
-            val motionUrl = entry?.motionVideoUrl
+            val entry = entryFromStore ?: com.music.bitchord.data.canvas.PlaylistMotionStore.getEntry(page.browseId)
+            val motionUrl = page.motionVideoUrl
+                ?: entry?.motionVideoUrl
                 ?: com.music.bitchord.data.spotify.LocalPlaylistStore.getPlaylist(page.browseId)?.motionVideoUrl
             val effectiveUrl = motionUrl ?: if (entry?.applePlaylistId != null) {
                 com.music.bitchord.data.canvas.PlaylistMotionStore.refreshMotionUrl(page.browseId)

@@ -1359,7 +1359,7 @@
 
     <string name="shelf_commute">Commute</string>
 
-    <string name="shelf_workout">Workout</string>
+    <string name="shelf_workout">Work Out</string>
 
     <string name="shelf_focus">Focus</string>
 
@@ -1654,4 +1654,26 @@
     <string name="queue_removed_song">Removed %1$s</string>
     <string name="queue_playlist_added">Added %1$d of %2$d songs</string>
     <string name="queue_playlist_partial">%1$s (%2$d incompatible, %3$d already present, %4$d failed)</string>
+    <string name="settings_home_editorial">Editorial sections</string>
+    <string name="settings_home_editorial_subtitle">Show Apple Music editorial playlists and Top 100 on Home</string>
+    <string name="editorial_section_updated_playlists">Updated Playlists</string>
+    <string name="editorial_section_new_songs">Top New Songs</string>
+    <string name="editorial_section_daily_top_100">Daily Top 100</string>
+    <string name="editorial_section_city_charts">City Charts</string>
+    <string name="editorial_section_dj_mixes">Latest DJ Mixes</string>
+    <string name="editorial_section_coming_soon">Coming Soon</string>
+    <string name="editorial_section_trending_songs">Trending Songs</string>
+    <string name="editorial_section_moment_songs">Hot Tracks</string>
+    <string name="editorial_section_decade_hits">Decade Hits</string>
+    <string name="editorial_section_road_trip">For a Long Haul</string>
+    <string name="explore_new_releases">New releases</string>
+    <string name="explore_programs_for_you">Shows</string>
+    <string name="explore_programs">Shows</string>
+    <string name="shelf_chill">Chill</string>
+    <string name="shelf_essentials">Essentials</string>
+    <string name="editorial_hero_badge_new">NEW</string>
+    <string name="editorial_hero_badge_featured">FEATURED</string>
+    <string name="editorial_hero_badge_soundtrack">SOUNDTRACK</string>
+    <string name="editorial_hero_badge_exclusive">EXCLUSIVE</string>
+    <string name="album_not_found_in_ytm">Album not found on YouTube Music</string>
 </resources>

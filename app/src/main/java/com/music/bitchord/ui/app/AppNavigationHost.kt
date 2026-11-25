@@ -37,11 +37,13 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -655,9 +657,16 @@ internal fun AppNavigationHost(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    com.soundchord.features.editorial.data.AppleMusicEditorialRepository.init(context)
     val scope = rememberCoroutineScope()
     val radioSort = AppSettings.librarySort.collectAsStateWithLifecycle().value
     val radioListState = lists.radioListState ?: rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val hideHomeEditorial = AppSettings.hideHomeEditorial.collectAsStateWithLifecycle().value
+    var homeEditorialShelves by remember { mutableStateOf<List<HomeShelf>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        com.soundchord.features.editorial.data.AppleMusicEditorialRepository.init(context)
+        homeEditorialShelves = com.soundchord.features.editorial.data.AppleMusicEditorialRepository.getHomeDiscoveryShelves()
+    }
 
     SharedTransitionLayout {
         CompositionLocalProvider(
@@ -1370,6 +1379,7 @@ internal fun AppNavigationHost(
                     onMoodsShowAll = { navigator.push(AppRoute.Moods) },
                     artworkMotion = states.artworkMotion && !states.showDiwali,
                     onTopPickLongPress = onHomeTopPickLongPress,
+                    editorialShelves = if (hideHomeEditorial) emptyList() else homeEditorialShelves,
                 )
                 TAB_EXPLORE -> states.selectedMoodGenre?.let { category ->
                     MoodGenrePlaylistsScreen(
@@ -1416,6 +1426,18 @@ internal fun AppNavigationHost(
                     onRefresh = { viewModel.refresh(MainViewModel.Feed.EXPLORE) },
                     pullState = lists.explorePull,
                     contentPadding = states.listPadding,
+                    onPlaySong = { song ->
+                        actions.onPlayRadio(
+                            song,
+                            QueueSource(
+                                if (java.util.Locale.getDefault().language == "es") "Canciones nuevas destacadas" else "Top New Songs",
+                                PlaybackSourceType.EXPLORE,
+                            ),
+                        )
+                    },
+                    onSongMenu = actions.onOpenSongMenu,
+                    getRowScrollPosition = viewModel::getExploreRowScroll,
+                    onSaveRowScrollPosition = viewModel::saveExploreRowScroll,
                 )
                 TAB_RADIO -> RadioScreen(
                     listState = radioListState,

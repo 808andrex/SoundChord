@@ -326,6 +326,7 @@ fun SettingsScreen(
     val hideHomeVideos by AppSettings.hideHomeVideos.collectAsStateWithLifecycle()
     val hideTopPicks by AppSettings.hideTopPicks.collectAsStateWithLifecycle()
     val hideHomeMoods by AppSettings.hideHomeMoods.collectAsStateWithLifecycle()
+    val hideHomeEditorial by AppSettings.hideHomeEditorial.collectAsStateWithLifecycle()
     val smartVersionAlignment by AppSettings.smartVersionAlignment.collectAsStateWithLifecycle()
     val filterNonMusicAudio by AppSettings.filterNonMusicAudio.collectAsStateWithLifecycle()
     val localMusicFolderUri by AppSettings.localMusicFolderUri.collectAsStateWithLifecycle()
@@ -1821,6 +1822,29 @@ fun SettingsScreen(
                         )
                     },
                     onClick = { AppSettings.setHideHomeMoods(!hideHomeMoods) },
+                )
+            }
+            val homeEditorialTitle = stringResource(R.string.settings_home_editorial)
+            val homeEditorialIsNew = AppSettings.isFeatureNew(AppSettings.FEATURE_HOME_EDITORIAL)
+            row(homeEditorialTitle, "apple music", "editorial", "top 100", "city charts", "playlists", "feed", "home") {
+                SettingsRow(
+                    icon = SfIcons.LibraryMusic,
+                    title = homeEditorialTitle,
+                    subtitle = stringResource(R.string.settings_home_editorial_subtitle),
+                    badge = stringResource(R.string.settings_badge_new).takeIf { homeEditorialIsNew },
+                    trailing = {
+                        IosSwitch(
+                            checked = !hideHomeEditorial,
+                            onCheckedChange = { checked ->
+                                AppSettings.markFeatureSeen(AppSettings.FEATURE_HOME_EDITORIAL)
+                                AppSettings.setHideHomeEditorial(!checked)
+                            },
+                        )
+                    },
+                    onClick = {
+                        AppSettings.markFeatureSeen(AppSettings.FEATURE_HOME_EDITORIAL)
+                        AppSettings.setHideHomeEditorial(!hideHomeEditorial)
+                    },
                 )
             }
         }

@@ -674,6 +674,10 @@ data class DetailPage(
      * fetched with a session; see [SubscriptionState].
      */
     val subscription: SubscriptionState? = null,
+    /**
+     * Optional HLS animated cover artwork video URL (e.g. from Apple Music or Spotify canvas).
+     */
+    val motionVideoUrl: String? = null,
 )
 
 /**

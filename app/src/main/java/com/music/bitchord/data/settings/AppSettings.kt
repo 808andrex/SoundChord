@@ -229,6 +229,7 @@ object AppSettings {
     const val FEATURE_DISABLE_SPOTIFY_CANVAS = "disable_spotify_canvas"
     const val FEATURE_PLAYER_SHUFFLE_REPEAT = "player_shuffle_repeat"
     const val FEATURE_ALBUM_GAPLESS_PLAYBACK = "album_gapless_playback"
+    const val FEATURE_HOME_EDITORIAL = "home_editorial"
 
     private lateinit var prefs: SharedPreferences
 
@@ -577,6 +578,9 @@ object AppSettings {
 
     /** Home's Find Your Mood shelf. Explore's moods are a page the listener opened, so they stay. */
     val hideHomeMoods = MutableStateFlow(false)
+
+    /** Apple Music editorial shelves on Home (Updated Playlists and Daily Top 100). */
+    val hideHomeEditorial = MutableStateFlow(false)
 
     /** Music videos are square wherever they show — see [com.music.bitchord.ui.components.VideoThumbnails]. */
     val squareVideoThumbnails = MutableStateFlow(false)
@@ -1215,6 +1219,7 @@ object AppSettings {
         hideHomeVideos.value = prefs.getBoolean(KEY_HIDE_HOME_VIDEOS, false)
         hideTopPicks.value = prefs.getBoolean(KEY_HIDE_TOP_PICKS, false)
         hideHomeMoods.value = prefs.getBoolean(KEY_HIDE_HOME_MOODS, false)
+        hideHomeEditorial.value = prefs.getBoolean(KEY_HIDE_HOME_EDITORIAL, false)
         squareVideoThumbnails.value = prefs.getBoolean(KEY_SQUARE_VIDEO_THUMBNAILS, false)
         VideoThumbnails.square = squareVideoThumbnails.value
         autoUpdateCheck.value = prefs.getBoolean(KEY_AUTO_UPDATE_CHECK, true)
@@ -1755,6 +1760,11 @@ object AppSettings {
     fun setHideHomeMoods(value: Boolean) {
         hideHomeMoods.value = value
         prefs.edit().putBoolean(KEY_HIDE_HOME_MOODS, value).apply()
+    }
+
+    fun setHideHomeEditorial(value: Boolean) {
+        hideHomeEditorial.value = value
+        prefs.edit().putBoolean(KEY_HIDE_HOME_EDITORIAL, value).apply()
     }
 
     fun setSquareVideoThumbnails(value: Boolean) {
@@ -2615,6 +2625,7 @@ object AppSettings {
     private const val KEY_HIDE_HOME_VIDEOS = "hide_home_videos"
     private const val KEY_HIDE_TOP_PICKS = "hide_top_picks"
     private const val KEY_HIDE_HOME_MOODS = "hide_home_moods"
+    private const val KEY_HIDE_HOME_EDITORIAL = "hide_home_editorial"
     private const val KEY_SQUARE_VIDEO_THUMBNAILS = "square_video_thumbnails"
     private const val KEY_AUTO_UPDATE_CHECK = "auto_update_check"
     private const val KEY_SMART_VERSION_ALIGNMENT = "smart_version_alignment"

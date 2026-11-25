@@ -45,11 +45,14 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -110,6 +113,59 @@ private fun List<ShelfItem>.playingItemMatcher(song: Song?): (ShelfItem) -> Bool
     return { it == byName }
 }
 
+/** In-memory singleton store for Home row scroll positions across compositions */
+object HomeScrollStateHolder {
+    val rowScrollStates = mutableMapOf<String, Pair<Int, Int>>()
+
+    fun getRowScroll(key: String): Pair<Int, Int> = rowScrollStates[key] ?: (0 to 0)
+
+    fun saveRowScroll(key: String, index: Int, offset: Int) {
+        rowScrollStates[key] = index to offset
+    }
+}
+
+class HomeRowScrollController(
+    val getScroll: (String) -> Pair<Int, Int> = { HomeScrollStateHolder.getRowScroll(it) },
+    val saveScroll: (String, Int, Int) -> Unit = { key, index, offset ->
+        HomeScrollStateHolder.saveRowScroll(key, index, offset)
+    },
+)
+
+val LocalHomeRowScrollController = staticCompositionLocalOf { HomeRowScrollController() }
+
+@Composable
+fun rememberHomePersistentRowState(sectionKey: String): LazyListState {
+    val controller = LocalHomeRowScrollController.current
+    val (initialIndex, initialOffset) = remember(sectionKey) {
+        controller.getScroll(sectionKey)
+    }
+    val rowState = rememberSaveable(sectionKey, saver = LazyListState.Saver) {
+        LazyListState(initialIndex, initialOffset)
+    }
+
+    DisposableEffect(sectionKey, rowState) {
+        onDispose {
+            controller.saveScroll(sectionKey, rowState.firstVisibleItemIndex, rowState.firstVisibleItemScrollOffset)
+        }
+    }
+
+    LaunchedEffect(sectionKey, rowState) {
+        snapshotFlow { rowState.firstVisibleItemIndex to rowState.firstVisibleItemScrollOffset }
+            .collect { (idx, off) ->
+                controller.saveScroll(sectionKey, idx, off)
+            }
+    }
+
+    return rowState
+}
+
+private fun HomeShelf.isHomeExcluded(): Boolean {
+    val label = title.trim().lowercase()
+    val isPrograms = listOf("programas para ti", "programas", "shows for you", "podcasts", "podcast", "episodios", "episodes").any(label::contains)
+    val isVideos = listOf("vídeos musicales", "videos musicales", "music videos", "vídeos", "videos").any(label::contains) || layout == ShelfLayout.VIDEO
+    return isPrograms || isVideos
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -161,9 +217,13 @@ fun HomeScreen(
     onMoodsShowAll: () -> Unit = {},
     /** Whether the Top Picks and mood artwork may animate — see [LocalArtworkMotion]. */
     artworkMotion: Boolean = true,
+    editorialShelves: List<HomeShelf> = emptyList(),
 ) {
     // Top Picks' pictures and motion wait for the feed — see LocalArtworkImages.
     val feedReady = state !is UiState.Loading
+    val visibleShelves = remember(state) {
+        (state as? UiState.Success)?.data?.filter { !it.isHomeExcluded() }.orEmpty()
+    }
     CompositionLocalProvider(
         LocalArtworkMotion provides (artworkMotion && feedReady),
         LocalArtworkImages provides feedReady,
@@ -193,10 +253,10 @@ fun HomeScreen(
             },
         ) {
             if (title != null) {
-                item { HomeTitle(title, festiveLogo = festiveLogo, onFestiveLogoClick = onFestiveLogoClick) }
+                item(key = "home-title") { HomeTitle(title, festiveLogo = festiveLogo, onFestiveLogoClick = onFestiveLogoClick) }
             }
             if (!signedIn && onSignIn != null) {
-                item {
+                item(key = "home-signin") {
                     // Read in this item, so a scroll starting or ending
                     // recomposes the banner alone.
                     SignInBanner(
@@ -226,7 +286,7 @@ fun HomeScreen(
                     }
                     feedSkeleton()
                 }
-                is UiState.Error -> item {
+                is UiState.Error -> item(key = "home-error") {
                     MessageState(state.message, actionLabel = stringResource(Res.string.retry), onAction = onRetry)
                 }
                 is UiState.Success -> {
@@ -234,7 +294,8 @@ fun HomeScreen(
                         recentlyPlayedSkeleton()
                     }
                     itemsIndexedShelves(
-                        shelves = state.data,
+                        shelves = visibleShelves,
+                        editorialShelves = editorialShelves,
                         onMoodClick = onMoodClick,
                         onMoodsShowAll = onMoodsShowAll,
                         onItemClick = onItemClick,
@@ -280,11 +341,28 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
     isPlaying: Boolean,
     onMoodClick: ((TopPickMood, String) -> Unit)? = null,
     onMoodsShowAll: () -> Unit = {},
+    editorialShelves: List<HomeShelf> = emptyList(),
 ) {
+    val placedEditorial = mutableSetOf<Int>()
+
     shelves.forEachIndexed { index, shelf ->
         // Find Your Mood follows the lead shelf, as on Apple Music's Home.
         if (index == 1 && onMoodClick != null) {
             item(key = "find-your-mood", contentType = "find_your_mood") { FindYourMoodShelf(onMoodClick, onMoodsShowAll) }
+        }
+        if (index in 1..editorialShelves.size) {
+            val edIdx = index - 1
+            val edShelf = editorialShelves[edIdx]
+            placedEditorial.add(edIdx)
+            item(key = "editorial-shelf-${edShelf.title}-$edIdx", contentType = "shelf_cards") {
+                Shelf(
+                    shelf = edShelf.copy(subtitle = ""),
+                    onItemClick = { item -> onItemClick(item, edShelf.title) },
+                    onItemLongPress = onItemLongPress,
+                    currentSong = currentSong,
+                    isPlaying = isPlaying,
+                )
+            }
         }
         item(key = shelf.title + index, contentType = "shelf_${shelf.layout.name}") {
             val openItem: (ShelfItem) -> Unit = { item -> onItemClick(item, shelf.title) }
@@ -311,6 +389,20 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
             }
         }
     }
+
+    editorialShelves.forEachIndexed { idx, edShelf ->
+        if (idx !in placedEditorial) {
+            item(key = "editorial-shelf-${edShelf.title}-$idx", contentType = "shelf_cards") {
+                Shelf(
+                    shelf = edShelf.copy(subtitle = ""),
+                    onItemClick = { item -> onItemClick(item, edShelf.title) },
+                    onItemLongPress = onItemLongPress,
+                    currentSong = currentSong,
+                    isPlaying = isPlaying,
+                )
+            }
+        }
+    }
 }
 
 /** The same four-rows-per-page treatment used by an artist's Top songs. */
@@ -328,7 +420,9 @@ private fun RecentShelf(
         val chunkedColumns = remember(shelf.items) { shelf.items.chunked(RECENT_TRACKS_PER_COLUMN) }
         BoxWithConstraints {
             val columnWidth = trackColumnWidth(maxWidth)
+            val rowState = rememberHomePersistentRowState("home_recent_${shelf.title}")
             ShelfRow(
+                state = rowState,
                 contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -572,6 +666,15 @@ internal fun SectionHeader(title: String, subtitle: String = "", onShowAll: (() 
 internal fun localizeShelfTitle(title: String): String {
     val trimmed = title.trim()
     return when {
+        trimmed.equals("Dale al gym", ignoreCase = true) ||
+            trimmed.equals("Work Out", ignoreCase = true) ->
+            stringResource(Res.string.shelf_workout)
+        trimmed.equals("Para relajarte", ignoreCase = true) ||
+            trimmed.equals("Chill", ignoreCase = true) ->
+            stringResource(Res.string.shelf_chill)
+        trimmed.equals("Imprescindibles", ignoreCase = true) ||
+            trimmed.equals("Essentials", ignoreCase = true) ->
+            stringResource(Res.string.shelf_essentials)
         trimmed.equals("Recents", ignoreCase = true) ||
             trimmed.equals("Recently played", ignoreCase = true) ||
             trimmed.equals("Gần đây", ignoreCase = true) ||
@@ -758,7 +861,9 @@ internal fun Shelf(
     Column(Modifier.padding(bottom = 26.dp)) {
         SectionHeader(shelf.title, shelf.subtitle)
         val isCurrentItem = remember(shelf.items, currentSong) { shelf.items.playingItemMatcher(currentSong) }
+        val rowState = rememberHomePersistentRowState("home_shelf_${shelf.title}")
         ShelfRow(
+            state = rowState,
             contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {

@@ -303,6 +303,8 @@ internal fun AndroidCanvasArtworkPlayer(
             // for the reason [Teardown.orphan] gives.
             teardown.disposed = true
             player.stop()
+            player.clearVideoTextureView(textureView)
+            textureView?.alpha = 0f
             mainHandler.postDelayed(
                 {
                     player.release()
@@ -607,6 +609,13 @@ internal fun AndroidCanvasArtworkPlayer(
             }
         },
         modifier = modifier.onSizeChanged { bounds = it },
+        onRelease = { frame ->
+            val view = frame.getChildAt(0) as? TextureView
+            view?.let {
+                player.clearVideoTextureView(it)
+                it.alpha = 0f
+            }
+        },
     )
 }
 
