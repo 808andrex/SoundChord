@@ -919,8 +919,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val description = PlaylistMotionStore.getDescription(browseId) ?: page.description
 
         if (target) {
-            val songs = (page.songs as? UiState.Success)?.data.orEmpty()
+            val cachedSongs = applePlaylistCache[browseId]?.songs.orEmpty()
+            val currentSongs = (page.songs as? UiState.Success)?.data.orEmpty()
+            val songs = if (cachedSongs.size > currentSongs.size) cachedSongs else currentSongs
             val videoIds = songs.map { it.videoId }
+
+            val curator = PlaylistMotionStore.getAuthor(browseId)
+                ?: PlaylistMotionStore.getAuthor(appleId)
+                ?: applePlaylistCache[browseId]?.curator?.takeIf(String::isNotBlank)
+                ?: page.subtitle.substringBeforeLast(" • ").takeIf(String::isNotBlank)
+                ?: page.subtitle.takeIf { !it.contains("song", ignoreCase = true) && !it.contains("cancion", ignoreCase = true) && !it.contains("pista", ignoreCase = true) }
+                ?: "Apple Music"
+
+            PlaylistMotionStore.setEntry(
+                playlistIdOrBrowseId = browseId,
+                motionVideoUrl = motionUrl,
+                coverUrl = coverUrl,
+                applePlaylistId = appleId,
+                storefront = storefront,
+                description = description,
+                author = curator,
+            )
+            PlaylistMotionStore.setEntry(
+                playlistIdOrBrowseId = appleId,
+                motionVideoUrl = motionUrl,
+                coverUrl = coverUrl,
+                applePlaylistId = appleId,
+                storefront = storefront,
+                description = description,
+                author = curator,
+            )
 
             setSavedOnPage(browseId, true)
 
@@ -934,7 +962,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 applePlaylistId = appleId,
                 storefront = storefront,
                 description = description,
-            ) { _, _, _ ->
+                author = curator,
+            ) { createdBrowseId, _, _ ->
+                createdBrowseId?.let { cId ->
+                    PlaylistMotionStore.setEntry(
+                        playlistIdOrBrowseId = cId,
+                        motionVideoUrl = motionUrl,
+                        coverUrl = coverUrl,
+                        applePlaylistId = appleId,
+                        storefront = storefront,
+                        description = description,
+                        author = curator,
+                    )
+                }
                 viewModelScope.launch(Dispatchers.Main) {
                     android.widget.Toast.makeText(getApplication(), R.string.playlist_added_to_library, android.widget.Toast.LENGTH_SHORT).show()
                 }
@@ -998,6 +1038,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         val target = !current.saved
         setSavedOnPage(browseId, target)
+        if (target) {
+            val originalAuthor = page?.subtitle?.substringBeforeLast(" • ")?.takeIf(String::isNotBlank)
+                ?: page?.subtitle?.takeIf { !it.contains("song", ignoreCase = true) && !it.contains("cancion", ignoreCase = true) && !it.contains("pista", ignoreCase = true) }
+            if (!originalAuthor.isNullOrBlank()) {
+                PlaylistMotionStore.setAuthor(browseId, originalAuthor)
+                PlaylistMotionStore.setAuthor(normalizedPlaylistId(browseId), originalAuthor)
+            }
+        }
         viewModelScope.launch {
             if (YtMusicRepository.setSaved(current.playlistId, target).isSuccess) {
                 // The Library tab's Albums/Playlists shelf is now out of date.
@@ -1065,15 +1113,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * have pushed or popped pages while the write was in flight.
      */
     private fun setSavedOnPage(browseId: String, saved: Boolean) {
+        val targetAppleId = PlaylistMotionStore.getApplePlaylistId(browseId)
+            ?: LocalPlaylistStore.getPlaylist(browseId)?.applePlaylistId
+            ?: browseId.takeIf { it.startsWith(APPLE_MUSIC_PAGE_PREFIX) }?.removePrefix(APPLE_MUSIC_PAGE_PREFIX)?.let {
+                if (it.contains(":")) it.substringAfter(":") else it
+            }
+        val targetNorm = normalizedPlaylistId(browseId)
         _detailStack.value = _detailStack.value.map { page ->
-            val library = page.library
-            if (page.browseId != browseId) {
+            val pageAppleId = PlaylistMotionStore.getApplePlaylistId(page.browseId)
+                ?: LocalPlaylistStore.getPlaylist(page.browseId)?.applePlaylistId
+                ?: page.browseId.takeIf { it.startsWith(APPLE_MUSIC_PAGE_PREFIX) }?.removePrefix(APPLE_MUSIC_PAGE_PREFIX)?.let {
+                    if (it.contains(":")) it.substringAfter(":") else it
+                }
+            val matches = page.browseId == browseId ||
+                (targetAppleId != null && pageAppleId == targetAppleId) ||
+                (targetNorm.isNotBlank() && normalizedPlaylistId(page.browseId) == targetNorm)
+            if (!matches) {
                 page
-            } else if (library == null) {
-                val pId = PlaylistMotionStore.getApplePlaylistId(browseId) ?: normalizedPlaylistId(browseId)
-                page.copy(library = LibraryState(playlistId = pId, saved = saved))
             } else {
-                page.copy(library = library.copy(saved = saved))
+                val pId = page.library?.playlistId ?: targetAppleId ?: targetNorm
+                page.copy(library = LibraryState(playlistId = pId, saved = saved))
             }
         }
     }
@@ -1176,7 +1235,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 thumbnailUrl = current.thumbnailUrl ?: motionCover ?: item.thumbnailUrl?.takeUnless { it.startsWith("file:") },
             )
             val count = id?.let { optimisticPlaylistCounts[normalizedPlaylistId(it)] }
-            val withCount = if (id == null || count == null) updated else {
+            val norm = id?.let(::normalizedPlaylistId)
+            val explicitAuthor = norm?.let { PlaylistMotionStore.getAuthor(it) }
+                ?: id?.let { PlaylistMotionStore.getAuthor(it) }
+                ?: norm?.let { LocalPlaylistStore.getPlaylist(it)?.author }
+                ?: (if (norm?.let { PlaylistMotionStore.getApplePlaylistId(it) } != null || norm?.let { LocalPlaylistStore.getPlaylist(it)?.applePlaylistId } != null) "Apple Music" else null)
+            val withCount = if (id == null || count == null) {
+                if (explicitAuthor != null && !updated.subtitle.startsWith(explicitAuthor)) {
+                    val countStr = updated.subtitle.substringAfterLast(" • ", updated.subtitle)
+                    updated.copy(subtitle = "$explicitAuthor • $countStr")
+                } else updated
+            } else {
                 val model = current ?: UserPlaylist(
                     playlistId = normalizedPlaylistId(id),
                     title = updated.title,
@@ -1330,9 +1399,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         Regex("\\d+").find(subtitle.substringAfterLast(" • "))?.value?.toIntOrNull()
 
     private fun playlistSubtitle(playlist: UserPlaylist, count: Int): String {
-        val owner = playlist.subtitle.substringBeforeLast(" • ", "")
+        val id = normalizedPlaylistId(playlist.playlistId)
+        val motionAuthor = PlaylistMotionStore.getAuthor(id)
+            ?: PlaylistMotionStore.getAuthor("VL$id")
+            ?: (if (PlaylistMotionStore.getApplePlaylistId(id) != null || PlaylistMotionStore.getApplePlaylistId("VL$id") != null) "Apple Music" else null)
+        val localAuthor = LocalPlaylistStore.getPlaylist(id)?.author
+            ?: (if (LocalPlaylistStore.getPlaylist(id)?.applePlaylistId != null) "Apple Music" else null)
+
+        val parsedOwner = playlist.subtitle.substringBeforeLast(" • ", "")
             .takeIf(String::isNotBlank)
-            ?: _selectedChannelName.value?.takeIf(String::isNotBlank)
+
+        val isOwned = _playlistOwned.value[playlist.browseId] == true || _playlistOwned.value["VL$id"] == true || _playlistOwned.value[id] == true
+
+        val owner = motionAuthor ?: localAuthor ?: parsedOwner ?: if (isOwned) {
+            _selectedChannelName.value?.takeIf(String::isNotBlank)
+        } else null
+
         val countLabel = getApplication<Application>().resources.getQuantityString(
             R.plurals.song_count_plural,
             count,
@@ -1552,11 +1634,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         applePlaylistId: String? = null,
         storefront: String? = null,
         description: String? = null,
+        author: String? = null,
         /** [savedLocally] is true when the playlist went to this device, not YouTube Music. */
         onResult: ((browseId: String?, title: String, savedLocally: Boolean) -> Unit)? = null,
     ) {
         val name = title.trim().ifBlank { text(R.string.new_playlist) }
         viewModelScope.launch {
+            val authorLabel = author?.takeIf(String::isNotBlank)
+                ?: (if (applePlaylistId != null) "Apple Music" else null)
+            val countText = getApplication<Application>().resources.getQuantityString(
+                R.plurals.song_count_plural,
+                videoIds.size,
+                videoIds.size,
+            )
+            val initialSubtitle = if (authorLabel != null) "$authorLabel • $countText" else countText
+            val isExternal = applePlaylistId != null || author != null
+
             if (authStore.isSignedIn) {
                 val initialBatch = videoIds.take(50)
                 YtMusicRepository.createPlaylist(
@@ -1571,9 +1664,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 YtMusicRepository.addToPlaylist(normalizedId, chunk)
                             }
                         }
-                        setPlaylistOwned("VL$normalizedId", true)
+                        if (isExternal) {
+                            setPlaylistOwned("VL$normalizedId", false)
+                            setPlaylistOwned(normalizedId, false)
+                        } else {
+                            setPlaylistOwned("VL$normalizedId", true)
+                        }
                         libraryStale = true
-                        if (motionVideoUrl != null || coverUrl != null || applePlaylistId != null || description != null) {
+                        if (motionVideoUrl != null || coverUrl != null || applePlaylistId != null || description != null || authorLabel != null) {
                             com.music.bitchord.data.canvas.PlaylistMotionStore.setEntry(
                                 playlistIdOrBrowseId = normalizedId,
                                 motionVideoUrl = motionVideoUrl,
@@ -1581,6 +1679,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 applePlaylistId = applePlaylistId,
                                 storefront = storefront,
                                 description = description,
+                                author = authorLabel,
                             )
                         }
                         val localCoverUrl = coverUri?.let {
@@ -1590,7 +1689,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         val created = UserPlaylist(
                             playlistId = normalizedId,
                             title = name,
-                            subtitle = "${videoIds.size} songs",
+                            subtitle = initialSubtitle,
                             thumbnailUrl = effectiveCover,
                         )
                         optimisticPlaylistCounts[normalizedId] = videoIds.size
@@ -1630,6 +1729,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             applePlaylistId = applePlaylistId,
                             storefront = storefront,
                             description = description,
+                            author = authorLabel,
                         )
                         com.music.bitchord.data.backup.DriveBackup.syncSilently(getApplication())
                         onResult?.invoke(local.browseId, local.title, true)
@@ -1645,6 +1745,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     applePlaylistId = applePlaylistId,
                     storefront = storefront,
                     description = description,
+                    author = authorLabel,
                 )
                 com.music.bitchord.data.backup.DriveBackup.syncSilently(getApplication())
                 onResult?.invoke(local.browseId, local.title, true)
@@ -1976,8 +2077,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * wrong on a card until that page had been opened once, which is a menu that
      * changes its mind about what a playlist is depending on where it is held.
      */
+    fun isExternalPlaylist(browseId: String?): Boolean {
+        if (browseId == null) return false
+        if (browseId.startsWith(APPLE_MUSIC_PAGE_PREFIX) || browseId.startsWith(SPOTIFY_PAGE_PREFIX)) return true
+        if (PlaylistMotionStore.getApplePlaylistId(browseId) != null) return true
+        val norm = normalizedPlaylistId(browseId)
+        if (PlaylistMotionStore.getApplePlaylistId(norm) != null || PlaylistMotionStore.getApplePlaylistId("VL$norm") != null) return true
+        val local = LocalPlaylistStore.getPlaylist(browseId)
+        if (local?.applePlaylistId != null || !local?.author.isNullOrBlank()) return true
+        if (_playlistOwned.value[browseId] == false || _playlistOwned.value["VL$norm"] == false) return true
+        return false
+    }
+
     fun editablePlaylist(browseId: String?): UserPlaylist? {
-        if (browseId == null || _playlistOwned.value[browseId] != true) return null
+        if (browseId == null || isExternalPlaylist(browseId) || _playlistOwned.value[browseId] != true) return null
         return _playlists.value.firstOrNull { it.browseId == browseId }
     }
 
@@ -3443,10 +3556,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (localPlaylist != null) {
                 name = localPlaylist.title
-                credit = getApplication<Application>().getString(R.string.local_playlist_subtitle, localPlaylist.songs.size)
+                val author = localPlaylist.author ?: (if (localPlaylist.applePlaylistId != null) "Apple Music" else null)
+                val countStr = getApplication<Application>().resources.getQuantityString(
+                    R.plurals.song_count_plural,
+                    localPlaylist.songs.size,
+                    localPlaylist.songs.size,
+                )
+                credit = if (author != null) "$author • $countStr" else countStr
                 artwork = localPlaylist.customCoverUri
                     ?: com.music.bitchord.data.PlaylistCovers.getCoverUri(getApplication<Application>(), localPlaylist.id)?.toString()
                     ?: localPlaylist.songs.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }?.thumbnailUrl
+                val isExternal = localPlaylist.applePlaylistId != null || !localPlaylist.author.isNullOrBlank()
+                if (isExternal) {
+                    val pId = localPlaylist.applePlaylistId ?: localPlaylist.id
+                    library = LibraryState(playlistId = pId, saved = true)
+                }
             }
             // Named by the store rather than by whatever opened it, which
             // may be a "Playing from" label from before a rename.
@@ -3520,11 +3644,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 pendingPlaylistSongs.remove(browseId.removePrefix("VL"))
                                 more = page.continuation
                                 suggested = page.suggested.withArtwork(thumbnailUrl ?: artwork)
-                                library = page.library ?: if (resolved == BrowseType.PLAYLIST && !browseId.startsWith("local:")) {
-                                    val norm = normalizedPlaylistId(browseId)
-                                    val saved = _playlists.value.any { normalizedPlaylistId(it.playlistId) == norm }
-                                    LibraryState(playlistId = norm, saved = saved)
-                                } else null
+                                val appleId = PlaylistMotionStore.getApplePlaylistId(browseId)
+                                    ?: PlaylistMotionStore.getApplePlaylistId(normalizedPlaylistId(browseId))
+                                library = if (appleId != null) {
+                                    val isSaved = LocalPlaylistStore.playlists.value.any { it.applePlaylistId == appleId } ||
+                                        _playlists.value.any {
+                                            normalizedPlaylistId(it.playlistId) == normalizedPlaylistId(browseId) ||
+                                            PlaylistMotionStore.getApplePlaylistId(it.browseId) == appleId ||
+                                            PlaylistMotionStore.getApplePlaylistId(it.playlistId) == appleId
+                                        }
+                                    LibraryState(playlistId = appleId, saved = isSaved)
+                                } else {
+                                    page.library ?: if (resolved == BrowseType.PLAYLIST && !browseId.startsWith("local:")) {
+                                        val norm = normalizedPlaylistId(browseId)
+                                        val isOwned = _playlistOwned.value[browseId] == true || _playlistOwned.value["VL$norm"] == true
+                                        if (!isOwned) {
+                                            val saved = _playlists.value.any { normalizedPlaylistId(it.playlistId) == norm }
+                                            LibraryState(playlistId = norm, saved = saved)
+                                        } else null
+                                    } else null
+                                }
                                 UiState.Success(page.songs.withArtwork(thumbnailUrl ?: artwork))
                             }
                         },
@@ -3559,6 +3698,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (it.browseId == browseId &&
                     (it.songs is UiState.Loading || (onDevice.isNotEmpty() && state is UiState.Success))
                 ) {
+                    val norm = normalizedPlaylistId(browseId)
+                    val isOwned = _playlistOwned.value[browseId] == true || _playlistOwned.value["VL$norm"] == true
+                    val isEditable = !isExternalPlaylist(browseId) && (isOwned || (browseId == "VLLM" && _signedIn.value))
                     it.copy(
                         songs = stateWithPendingLikes,
                         sections = sections,
@@ -3574,6 +3716,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         subscriberCountText = subscriberCountText,
                         monthlyListenerCount = monthlyListenerCount,
                         subscription = subscription,
+                        isEditableUserPlaylist = isEditable,
                     )
                 } else {
                     it
@@ -3784,6 +3927,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 applePlaylistId = playlistId,
                 storefront = storefront,
                 description = applePlaylist.description,
+                author = applePlaylist.curator.takeIf(String::isNotBlank),
+            )
+            PlaylistMotionStore.setEntry(
+                playlistIdOrBrowseId = playlistId,
+                motionVideoUrl = applePlaylist.motionVideoUrl,
+                coverUrl = applePlaylist.coverUrl,
+                applePlaylistId = playlistId,
+                storefront = storefront,
+                description = applePlaylist.description,
+                author = applePlaylist.curator.takeIf(String::isNotBlank),
             )
 
             val isSavedInLibrary = LocalPlaylistStore.playlists.value.any { it.applePlaylistId == playlistId } ||
@@ -3803,6 +3956,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     description = applePlaylist.description,
                     motionVideoUrl = applePlaylist.motionVideoUrl,
                     library = LibraryState(playlistId = playlistId, saved = isSavedInLibrary),
+                    isEditableUserPlaylist = false,
                 )
             }
 
@@ -3820,6 +3974,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     onProgressiveUpdate = { currentSongs ->
                         if (currentSongs.isNotEmpty()) {
                             setPage { it.copy(songs = UiState.Success(currentSongs)) }
+                            syncSavedApplePlaylistTracks(playlistId, currentSongs)
                         }
                     },
                 )
@@ -3829,6 +3984,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 setPage { it.copy(songs = UiState.Error(text(R.string.no_tracks_here))) }
             } else {
                 setPage { it.copy(songs = UiState.Success(matchedSongs)) }
+                syncSavedApplePlaylistTracks(playlistId, matchedSongs)
                 // Save in memory cache for instant future loads
                 applePlaylistCache[browseId] = CachedApplePlaylist(
                     songs = matchedSongs,
@@ -3839,6 +3995,69 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     motionVideoUrl = applePlaylist.motionVideoUrl,
                     timestamp = System.currentTimeMillis(),
                 )
+            }
+        }
+    }
+
+    fun syncSavedApplePlaylistTracks(applePlaylistId: String, songs: List<Song>) {
+        if (songs.isEmpty()) return
+        // 1. Sync LocalPlaylistStore
+        val local = LocalPlaylistStore.playlists.value.firstOrNull { it.applePlaylistId == applePlaylistId }
+        if (local != null && local.songs.size < songs.size) {
+            LocalPlaylistStore.updatePlaylistFromAppleMusic(id = local.id, songs = songs)
+            DriveBackup.syncSilently(getApplication())
+        }
+        // 2. Sync Remote YouTube Music Playlist
+        val remote = _playlists.value.firstOrNull {
+            PlaylistMotionStore.getApplePlaylistId(it.browseId) == applePlaylistId ||
+            PlaylistMotionStore.getApplePlaylistId(it.playlistId) == applePlaylistId
+        }
+        if (remote != null) {
+            val remoteId = normalizedPlaylistId(remote.playlistId)
+            val existingSongs = pendingPlaylistSongs[remote.browseId]
+                ?: pendingPlaylistSongs[remoteId]
+                ?: pendingPlaylistSongs["VL$remoteId"]
+                ?: emptyList()
+            val existingVideoIds = existingSongs.map { it.videoId }.toSet()
+            val newSongs = if (existingVideoIds.isNotEmpty()) {
+                songs.filter { it.videoId !in existingVideoIds }
+            } else {
+                val currentCount = optimisticPlaylistCounts[remoteId] ?: existingSongs.size
+                if (songs.size > currentCount) songs.drop(currentCount) else emptyList()
+            }
+            val newVideoIds = newSongs.map { it.videoId }.filter { it.isNotBlank() }
+            if (newVideoIds.isNotEmpty()) {
+                viewModelScope.launch {
+                    newVideoIds.chunked(50).forEach { chunk ->
+                        YtMusicRepository.addToPlaylist(remoteId, chunk)
+                    }
+                    setPlaylistSongCount(remote, songs.size)
+                    pendingPlaylistSongs[remote.browseId] = songs
+                    pendingPlaylistSongs[remoteId] = songs
+                    pendingPlaylistSongs["VL$remoteId"] = songs
+                    DriveBackup.syncSilently(getApplication())
+                }
+            } else if (songs.size > (optimisticPlaylistCounts[remoteId] ?: 0)) {
+                setPlaylistSongCount(remote, songs.size)
+                pendingPlaylistSongs[remote.browseId] = songs
+                pendingPlaylistSongs[remoteId] = songs
+                pendingPlaylistSongs["VL$remoteId"] = songs
+            }
+        }
+        // 3. Update any open detail page with this applePlaylistId in the navigation stack
+        _detailStack.value = _detailStack.value.map { page ->
+            val pageAppleId = PlaylistMotionStore.getApplePlaylistId(page.browseId)
+                ?: LocalPlaylistStore.getPlaylist(page.browseId)?.applePlaylistId
+                ?: page.browseId.takeIf { it.startsWith(APPLE_MUSIC_PAGE_PREFIX) }?.removePrefix(APPLE_MUSIC_PAGE_PREFIX)?.let {
+                    if (it.contains(":")) it.substringAfter(":") else it
+                }
+            if (pageAppleId == applePlaylistId) {
+                val currentCount = (page.songs as? UiState.Success)?.data?.size ?: 0
+                if (songs.size > currentCount) {
+                    page.copy(songs = UiState.Success(songs))
+                } else page
+            } else {
+                page
             }
         }
     }

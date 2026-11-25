@@ -350,6 +350,8 @@ fun DetailScreen(
     onToggleLibrary: (() -> Unit)? = null,
     /** Opens the shared Liquid Glass picker for an editable playlist. */
     onAddSongs: (() -> Unit)? = null,
+    /** True strictly for playlists created by the user; false for external playlists saved in library. */
+    isEditableUserPlaylist: Boolean = false,
     /**
      * Subscribes to this artist's channel, or unsubscribes —
      * [DetailPage.subscription] says which way round. The artist page's answer
@@ -657,6 +659,7 @@ fun DetailScreen(
                         onToggleLibrary = onToggleLibrary,
                         releaseLibrary = releaseLibrary,
                         onAddSongs = onAddSongs,
+                        isEditableUserPlaylist = isEditableUserPlaylist,
                         onDownloadAll = folder?.onDownload?.let { download -> { download(songs) } },
                     )
                 }
@@ -1011,6 +1014,7 @@ private fun ReleaseHeader(
     onToggleLibrary: (() -> Unit)?,
     releaseLibrary: Map<String, LibraryState> = emptyMap(),
     onAddSongs: (() -> Unit)?,
+    isEditableUserPlaylist: Boolean = false,
     /** The Cached songs folder's: saves every track on it to Downloads. Null hides it. */
     onDownloadAll: (() -> Unit)? = null,
 ) {
@@ -1108,7 +1112,8 @@ private fun ReleaseHeader(
             if (songs.isNotEmpty()) {
                 val library = (releaseLibrary[page.browseId] ?: page.library)?.takeIf { onToggleLibrary != null }
                 val isSaved = library?.saved == true
-                val canAddSongs = onAddSongs != null
+                val isEditable = (isEditableUserPlaylist || page.isEditableUserPlaylist) || (onAddSongs != null && library == null)
+                val showAddSongs = isEditable && onAddSongs != null
                 Spacer(Modifier.height(18.dp))
                 Row(
                     modifier = Modifier
@@ -1139,7 +1144,7 @@ private fun ReleaseHeader(
                     )
 
                     // Right: Translucent circular action button (+ / ✓ / Download)
-                    if (canAddSongs) {
+                    if (showAddSongs) {
                         CircleIconButton(
                             icon = BitChordIcons.Plus,
                             contentDescription = stringResource(R.string.add_songs_to_playlist),
@@ -1155,7 +1160,7 @@ private fun ReleaseHeader(
                             } else {
                                 stringResource(R.string.add_to_library)
                             },
-                            onClick = { onToggleLibrary?.invoke() },
+                            onClick = { onToggleLibrary.invoke() },
                             haptic = if (isSaved) Haptic.ToggleOff else Haptic.ToggleOn,
                             size = RELEASE_SIDE_BUTTON,
                         )
@@ -1169,7 +1174,8 @@ private fun ReleaseHeader(
                     }
                 }
             }
-            if (onAddSongs != null && songs.isEmpty()) {
+            val showEmptyAddSongs = ((isEditableUserPlaylist || page.isEditableUserPlaylist) || (onAddSongs != null && page.library == null)) && onAddSongs != null
+            if (showEmptyAddSongs && songs.isEmpty()) {
                 Spacer(Modifier.height(18.dp))
                 ActionPill(
                     icon = BitChordIcons.Plus,
@@ -2676,7 +2682,15 @@ private fun DetailPage.headerLines(trackCount: Int, playtime: String? = null): P
     val parts = subtitle.split("•", "·").map { it.trim() }.filter { it.isNotEmpty() }
     val year = parts.lastOrNull { it.length == 4 && it.all(Char::isDigit) }
     val kind = parts.firstOrNull { it.lowercase(Locale.ROOT) in KIND_WORDS }
-    val credit = parts.filter { it != year && it != kind }.joinToString(", ")
+    val parsedCredit = parts.filter { it != year && it != kind }.joinToString(", ")
+    val fallbackAuthor = com.music.bitchord.data.canvas.PlaylistMotionStore.getAuthor(browseId)
+        ?: (if (com.music.bitchord.data.canvas.PlaylistMotionStore.getApplePlaylistId(browseId) != null) "Apple Music" else null)
+        ?: com.music.bitchord.data.spotify.LocalPlaylistStore.getPlaylist(browseId)?.author
+    val credit = if (parsedCredit.isNotBlank() && !parsedCredit.contains("song", ignoreCase = true) && !parsedCredit.contains("cancion", ignoreCase = true) && !parsedCredit.contains("pista", ignoreCase = true)) {
+        parsedCredit
+    } else {
+        fallbackAuthor ?: parsedCredit
+    }
     // Title case, "Playlist · 2022 · 10 Tracks · 38 min" — except the
     // playtime, whose "min" and "1h 25m" are units, not words.
     // An artist grouped out of a device folder is a plain track list, not an

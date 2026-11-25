@@ -1280,6 +1280,7 @@ internal fun GlobalSheetsHost(
             hazeState = state.hazeState,
             signedIn = state.signedIn,
             onImported = { playlist, privacy, songs ->
+                val curatorName = playlist.curator.takeIf { it.isNotBlank() } ?: "Apple Music"
                 viewModel.createPlaylistWithVideoIds(
                     title = playlist.name,
                     privacy = privacy,
@@ -1290,6 +1291,7 @@ internal fun GlobalSheetsHost(
                     applePlaylistId = playlist.id,
                     storefront = playlist.storefront,
                     description = playlist.description,
+                    author = curatorName,
                 ) { browseId, pTitle, savedLocally ->
                     actions.onShowQueueNotice(
                         context.getString(
@@ -1299,7 +1301,8 @@ internal fun GlobalSheetsHost(
                         ),
                     )
                     browseId?.let { id ->
-                        viewModel.openDetail(id, pTitle, "${songs.size} songs", songs.firstOrNull()?.thumbnailUrl)
+                        val sub = "$curatorName • ${songs.size} songs"
+                        viewModel.openDetail(id, pTitle, sub, songs.firstOrNull()?.thumbnailUrl)
                     }
                     val driveSettings = DriveBackup.settings.value
                     val isDriveActive = driveSettings.account != null &&

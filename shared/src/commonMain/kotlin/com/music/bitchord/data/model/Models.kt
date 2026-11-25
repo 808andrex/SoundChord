@@ -678,6 +678,11 @@ data class DetailPage(
      * Optional HLS animated cover artwork video URL (e.g. from Apple Music or Spotify canvas).
      */
     val motionVideoUrl: String? = null,
+    /**
+     * True strictly for playlists created by the user (editable user playlists).
+     * False for external playlists saved in library (e.g. Apple Music, saved YouTube Music, or imported).
+     */
+    val isEditableUserPlaylist: Boolean = false,
 )
 
 /**

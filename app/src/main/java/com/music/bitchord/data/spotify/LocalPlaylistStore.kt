@@ -25,6 +25,7 @@ data class LocalPlaylist(
     val applePlaylistId: String? = null,
     val storefront: String? = null,
     val description: String? = null,
+    val author: String? = null,
 ) {
     val browseId: String get() = "local:playlist:$id"
 }
@@ -97,7 +98,8 @@ object LocalPlaylistStore {
                 val applePlaylistId = obj.optString("applePlaylistId", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
                 val storefront = obj.optString("storefront", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
                 val description = obj.optString("description", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
-                if (motionVideo != null || coverUrl != null || applePlaylistId != null || description != null) {
+                val author = obj.optString("author", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
+                if (motionVideo != null || coverUrl != null || applePlaylistId != null || description != null || author != null) {
                     com.music.bitchord.data.canvas.PlaylistMotionStore.setEntry(
                         playlistIdOrBrowseId = id,
                         motionVideoUrl = motionVideo,
@@ -105,9 +107,10 @@ object LocalPlaylistStore {
                         applePlaylistId = applePlaylistId,
                         storefront = storefront,
                         description = description,
+                        author = author,
                     )
                 }
-                list.add(LocalPlaylist(id, title, songs, cover, motionVideo, coverUrl, applePlaylistId, storefront, description))
+                list.add(LocalPlaylist(id, title, songs, cover, motionVideo, coverUrl, applePlaylistId, storefront, description, author))
             }
             _playlists.value = list
         }
@@ -122,6 +125,7 @@ object LocalPlaylistStore {
         applePlaylistId: String? = null,
         storefront: String? = null,
         description: String? = null,
+        author: String? = null,
     ): LocalPlaylist {
         val id = "sp_local_" + java.util.UUID.randomUUID().toString()
         val playlist = LocalPlaylist(
@@ -133,11 +137,12 @@ object LocalPlaylistStore {
             applePlaylistId = applePlaylistId,
             storefront = storefront,
             description = description,
+            author = author,
         )
         val updated = listOf(playlist) + _playlists.value.filterNot { it.id == id }
         _playlists.value = updated
         persist(updated)
-        if ((motionVideoUrl != null || coverUrl != null || applePlaylistId != null || description != null) && this::appContext.isInitialized) {
+        if ((motionVideoUrl != null || coverUrl != null || applePlaylistId != null || description != null || author != null) && this::appContext.isInitialized) {
             com.music.bitchord.data.canvas.PlaylistMotionStore.setEntry(
                 playlistIdOrBrowseId = id,
                 motionVideoUrl = motionVideoUrl,
@@ -145,6 +150,7 @@ object LocalPlaylistStore {
                 applePlaylistId = applePlaylistId,
                 storefront = storefront,
                 description = description,
+                author = author,
             )
         }
         if (coverUri != null && this::appContext.isInitialized) {
@@ -207,6 +213,7 @@ object LocalPlaylistStore {
         coverUrl: String? = null,
         motionVideoUrl: String? = null,
         description: String? = null,
+        author: String? = null,
     ) {
         val cleanId = id.removePrefix("local:playlist:").removePrefix("VL")
         val updated = _playlists.value.map { playlist ->
@@ -217,6 +224,7 @@ object LocalPlaylistStore {
                     coverUrl = coverUrl ?: playlist.coverUrl,
                     motionVideoUrl = motionVideoUrl ?: playlist.motionVideoUrl,
                     description = description ?: playlist.description,
+                    author = author ?: playlist.author,
                 )
             } else playlist
         }
@@ -274,7 +282,8 @@ object LocalPlaylistStore {
                 val applePlaylistId = obj.optString("applePlaylistId", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
                 val storefront = obj.optString("storefront", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
                 val description = obj.optString("description", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
-                if (motionVideo != null || coverUrl != null || applePlaylistId != null || description != null) {
+                val author = obj.optString("author", null)?.takeIf { !it.isNullOrBlank() && it != "null" }
+                if (motionVideo != null || coverUrl != null || applePlaylistId != null || description != null || author != null) {
                     com.music.bitchord.data.canvas.PlaylistMotionStore.setEntry(
                         playlistIdOrBrowseId = id,
                         motionVideoUrl = motionVideo,
@@ -282,9 +291,10 @@ object LocalPlaylistStore {
                         applePlaylistId = applePlaylistId,
                         storefront = storefront,
                         description = description,
+                        author = author,
                     )
                 }
-                incoming.add(LocalPlaylist(id, title, songs, cover, motionVideo, coverUrl, applePlaylistId, storefront, description))
+                incoming.add(LocalPlaylist(id, title, songs, cover, motionVideo, coverUrl, applePlaylistId, storefront, description, author))
             }
             val existingIds = _playlists.value.map { it.id }.toSet()
             val newPlaylists = incoming.filter { it.id !in existingIds }
@@ -317,6 +327,9 @@ object LocalPlaylistStore {
                 }
                 if (playlist.description != null) {
                     pObj.put("description", playlist.description)
+                }
+                if (playlist.author != null) {
+                    pObj.put("author", playlist.author)
                 }
                 val songsArray = JSONArray()
                 for (song in playlist.songs) {

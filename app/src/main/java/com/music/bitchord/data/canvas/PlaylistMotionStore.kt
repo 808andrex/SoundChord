@@ -24,6 +24,7 @@ data class PlaylistMotionEntry(
     val applePlaylistId: String? = null,
     val storefront: String? = null,
     val description: String? = null,
+    val author: String? = null,
 )
 
 /**
@@ -37,6 +38,7 @@ data class PlaylistMotionBackup(
     val coverUrl: String? = null,
     val motionVideoUrl: String? = null,
     val description: String? = null,
+    val author: String? = null,
 )
 
 /**
@@ -82,6 +84,7 @@ object PlaylistMotionStore {
                     applePlaylistId = obj.optString("applePlaylistId", null)?.takeIf { it.isNotBlank() && it != "null" },
                     storefront = obj.optString("storefront", null)?.takeIf { it.isNotBlank() && it != "null" },
                     description = obj.optString("description", null)?.takeIf { it.isNotBlank() && it != "null" },
+                    author = obj.optString("author", null)?.takeIf { it.isNotBlank() && it != "null" },
                 )
             }.getOrNull()
         } else {
@@ -97,6 +100,7 @@ object PlaylistMotionStore {
         entry.applePlaylistId?.let { obj.put("applePlaylistId", it) }
         entry.storefront?.let { obj.put("storefront", it) }
         entry.description?.let { obj.put("description", it) }
+        entry.author?.let { obj.put("author", it) }
         return obj.toString()
     }
 
@@ -166,6 +170,20 @@ object PlaylistMotionStore {
     }
 
     /**
+     * Returns the original author or curator name for a given playlist if one exists.
+     */
+    fun getAuthor(playlistIdOrBrowseId: String): String? {
+        return getEntry(playlistIdOrBrowseId)?.author
+    }
+
+    /**
+     * Associates an author/curator name with a playlist.
+     */
+    fun setAuthor(playlistIdOrBrowseId: String, author: String) {
+        setEntry(playlistIdOrBrowseId, author = author)
+    }
+
+    /**
      * Stores or updates a full entry for a playlist.
      */
     fun setEntry(
@@ -175,6 +193,7 @@ object PlaylistMotionStore {
         applePlaylistId: String? = null,
         storefront: String? = null,
         description: String? = null,
+        author: String? = null,
     ) {
         val key = normalizeId(playlistIdOrBrowseId)
         val existing = getEntry(key)
@@ -184,8 +203,9 @@ object PlaylistMotionStore {
             applePlaylistId = applePlaylistId ?: existing?.applePlaylistId,
             storefront = storefront ?: existing?.storefront,
             description = description ?: existing?.description,
+            author = author ?: existing?.author,
         )
-        if (entry.motionVideoUrl == null && entry.coverUrl == null && entry.applePlaylistId == null && entry.description == null) {
+        if (entry.motionVideoUrl == null && entry.coverUrl == null && entry.applePlaylistId == null && entry.description == null && entry.author == null) {
             removeMotionVideoUrl(key)
             return
         }
@@ -234,7 +254,7 @@ object PlaylistMotionStore {
     fun exportMotionList(): List<PlaylistMotionBackup> {
         val result = mutableListOf<PlaylistMotionBackup>()
         for ((key, entry) in _entryMap.value) {
-            if (entry.motionVideoUrl != null || entry.coverUrl != null || entry.applePlaylistId != null || entry.description != null) {
+            if (entry.motionVideoUrl != null || entry.coverUrl != null || entry.applePlaylistId != null || entry.description != null || entry.author != null) {
                 result.add(
                     PlaylistMotionBackup(
                         browseId = key,
@@ -243,6 +263,7 @@ object PlaylistMotionStore {
                         coverUrl = entry.coverUrl,
                         motionVideoUrl = entry.motionVideoUrl,
                         description = entry.description,
+                        author = entry.author,
                     )
                 )
             }
@@ -262,6 +283,7 @@ object PlaylistMotionStore {
                 applePlaylistId = backup.applePlaylistId,
                 storefront = backup.storefront,
                 description = backup.description,
+                author = backup.author,
             )
         }
     }

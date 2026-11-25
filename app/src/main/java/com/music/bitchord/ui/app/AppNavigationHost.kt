@@ -1238,11 +1238,13 @@ internal fun AppNavigationHost(
                 }
 
                 val reordering = states.reorderTarget?.takeIf { it.browseId == page.browseId }
-                val editablePlaylist = if (states.signedIn && page.type == BrowseType.PLAYLIST) {
+                val isExternal = viewModel.isExternalPlaylist(page.browseId)
+                val editablePlaylist = if (states.signedIn && page.type == BrowseType.PLAYLIST && !isExternal) {
                     viewModel.editablePlaylist(page.browseId)
                 } else {
                     null
                 }
+                val isEditableUserPlaylist = editablePlaylist != null || (page.browseId == "VLLM" && states.signedIn)
                 DetailScreen(
                     page = page,
                     currentSong = states.player.song,
@@ -1294,11 +1296,9 @@ internal fun AppNavigationHost(
                     onAddSongs = when {
                         page.browseId == "VLLM" && states.signedIn -> ({ AddSongsRequest.showForLikedMusic() })
                         editablePlaylist != null -> ({ AddSongsRequest.showForPlaylist(editablePlaylist) })
-                        states.signedIn && page.type == BrowseType.PLAYLIST -> viewModel.editablePlaylist(page.browseId)?.let { own ->
-                            { AddSongsRequest.showForPlaylist(own) }
-                        }
                         else -> null
                     },
+                    isEditableUserPlaylist = isEditableUserPlaylist,
                     onToggleLibrary = { viewModel.toggleLibrary(page.browseId) },
                     onToggleSubscription = if (states.signedIn) {
                         { viewModel.toggleSubscription(page.browseId) }
