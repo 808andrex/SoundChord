@@ -1801,4 +1801,5 @@
     <string name="album_not_found_in_ytm">Álbum no disponible en YouTube Music</string>
     <string name="apple_music_playlists">Playlists de Apple Music</string>
     <string name="filter_apple_music">Apple Music</string>
+    <string name="you_might_also_like">También te puede gustar</string>
 </resources>

@@ -48,6 +48,7 @@ import com.music.bitchord.data.lyrics.LyricsSource
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.ui.navigation.AppNavigator
 import com.music.bitchord.data.innertube.Innertube
+import com.music.bitchord.data.innertube.InnertubeParser
 import com.music.bitchord.data.innertube.PlaybackTracker
 import com.music.bitchord.data.innertube.StreamResolver
 import com.music.bitchord.auth.CapturedSession
@@ -3479,7 +3480,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             browseId.startsWith(APPLE_MUSIC_ALBUM_PREFIX) -> BrowseType.ALBUM
             browseId.startsWith("UC") -> BrowseType.ARTIST
             browseId.startsWith("MPREb") || browseId.startsWith("VLOLAK") || browseId.startsWith("OLAK") -> BrowseType.ALBUM
-            browseId.startsWith("VL") || browseId.startsWith("PL") -> BrowseType.PLAYLIST
+            browseId.startsWith("VL") || browseId.startsWith("PL") || browseId.startsWith("RD") -> BrowseType.PLAYLIST
             else -> fallback
         }
     }
@@ -3781,6 +3782,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }?.let { ownedPlaylist ->
                     setPlaylistSongCount(ownedPlaylist, stateWithPendingLikes.data.size)
                 }
+                if (resolved == BrowseType.PLAYLIST && stateWithPendingLikes.data.isNotEmpty()) {
+                    loadPlaylistRecommendations(browseId, name ?: title, stateWithPendingLikes.data, curatorName = credit ?: subtitle)
+                }
             }
             // Only once the first page is on screen: [fillIn] appends to it,
             // and has nothing to append to before this.
@@ -3833,6 +3837,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 setSongs(UiState.Error(text(R.string.spotify_empty_tracks)))
                 return@launch
             }
+            loadPlaylistRecommendations(browseId, title, tracks.map { it.asPendingSong() }, curatorName = subtitle)
             val gate = Semaphore(SPOTIFY_MATCH_PARALLELISM)
             coroutineScope {
                 tracks.forEachIndexed { index, track ->
@@ -3945,6 +3950,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 type = resolved,
                 library = LibraryState(playlistId = playlistId, saved = isSavedInLibrary),
             )
+            loadPlaylistRecommendations(browseId, cached.name, cached.songs, curatorName = cached.curator)
             return
         }
 
@@ -4038,6 +4044,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } else {
                 setPage { it.copy(songs = UiState.Success(matchedSongs)) }
                 syncSavedApplePlaylistTracks(playlistId, matchedSongs)
+                loadPlaylistRecommendations(browseId, applePlaylist.name, matchedSongs, curatorName = applePlaylist.curator)
                 // Save in memory cache for instant future loads
                 applePlaylistCache[browseId] = CachedApplePlaylist(
                     songs = matchedSongs,
@@ -4050,6 +4057,634 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
         }
+    }
+
+    private val playlistRecommendationsCache = ConcurrentHashMap<String, List<ShelfItem>>()
+    private val inFlightRecommendations = ConcurrentHashMap<String, Job>()
+
+    fun loadPlaylistRecommendations(
+        browseId: String,
+        title: String,
+        songs: List<Song>,
+        curatorName: String? = null,
+    ) {
+        if (browseId.isBlank() || songs.isEmpty()) return
+
+        val cached = playlistRecommendationsCache[browseId]
+        if (!cached.isNullOrEmpty()) {
+            _detailStack.value = _detailStack.value.map { page ->
+                if (page.browseId == browseId && page.relatedPlaylists.isEmpty()) {
+                    page.copy(relatedPlaylists = cached)
+                } else page
+            }
+            return
+        }
+
+        if (inFlightRecommendations[browseId]?.isActive == true) return
+
+        inFlightRecommendations[browseId] = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // 1. Extract top 3-4 distinct artists from playlist songs
+                val artistCounts = LinkedHashMap<String, Int>()
+                songs.forEach { song ->
+                    if (song.artists.isNotEmpty()) {
+                        song.artists.forEach { ref ->
+                            val name = ref.name.trim()
+                            if (name.isNotBlank()) {
+                                artistCounts[name] = (artistCounts[name] ?: 0) + 1
+                            }
+                        }
+                    } else {
+                        val rawArtist = song.artist.trim()
+                        if (rawArtist.isNotBlank()) {
+                            val parts = rawArtist.split(Regex("[,&/]|\\bfeat\\.?\\b|\\bft\\.?\\b", RegexOption.IGNORE_CASE))
+                            parts.forEach { p ->
+                                val name = p.trim()
+                                if (name.length > 1) {
+                                    artistCounts[name] = (artistCounts[name] ?: 0) + 1
+                                }
+                            }
+                        }
+                    }
+                }
+                val topArtists = artistCounts.entries
+                    .sortedByDescending { it.value }
+                    .map { it.key }
+                    .filter { it.isNotBlank() && it.length > 1 }
+                    .take(4) // 3-4 distinct artists for diverse representation
+
+                // 2. Detect dominant genre & storefront
+                val combinedCorpus = (topArtists.joinToString(" ") + " " + title + " " + (curatorName ?: "") + " " + songs.take(12).joinToString(" ") { it.title }).lowercase(Locale.ROOT)
+                val detectedGenre = detectPlaylistGenre(combinedCorpus, curatorName, title)
+                val targetStorefront = when (detectedGenre) {
+                    PlaylistGenre.ROCK_INDIE_ALT, PlaylistGenre.HIP_HOP_RNB -> "us"
+                    PlaylistGenre.VALLENATO -> "co"
+                    PlaylistGenre.REGIONAL_MEXICANO -> "mx"
+                    else -> AppleMusicEditorialRepository.defaultStorefront()
+                }
+
+                val normCurrent = normalizedPlaylistId(browseId)
+                fun isCurrentPlaylist(bid: String?, itemTitle: String): Boolean {
+                    bid ?: return false
+                    if (bid == browseId) return true
+                    if (normalizedPlaylistId(bid) == normCurrent) return true
+                    if (itemTitle.trim().equals(title.trim(), ignoreCase = true)) return true
+                    return false
+                }
+
+                // 3a. Source 1: Editorial multi-artist playlists by Genre/Vibe (Apple Music) ~5-6 cards
+                val genreAppleDeferred = async {
+                    val genreQueries = mutableListOf<String>()
+                    val rawCurator = curatorName?.trim().orEmpty()
+                    if (rawCurator.isNotBlank() && rawCurator.contains("Apple Music", ignoreCase = true)) {
+                        val descriptor = rawCurator.replace(Regex("(?i)Apple Music\\s*"), "").trim()
+                        if (descriptor.isNotBlank()) {
+                            genreQueries.add(descriptor)
+                        }
+                        genreQueries.add(rawCurator)
+                    }
+                    genreQueries.addAll(deduceGenreQueries(detectedGenre, title))
+
+                    val collected = mutableListOf<ShelfItem>()
+                    val seenIds = mutableSetOf<String>()
+                    val seenTitles = mutableSetOf<String>()
+                    val artistFreq = mutableMapOf<String, Int>()
+
+                    for (q in genreQueries.distinct().take(6)) {
+                        var results = runCatching {
+                            AppleMusicEditorialRepository.searchPlaylists(q, limit = 8, storefront = targetStorefront)
+                        }.getOrNull().orEmpty()
+
+                        if (results.size < 4 && targetStorefront != "us" && (detectedGenre == PlaylistGenre.ROCK_INDIE_ALT || detectedGenre == PlaylistGenre.HIP_HOP_RNB)) {
+                            val usResults = runCatching {
+                                AppleMusicEditorialRepository.searchPlaylists(q, limit = 8, storefront = "us")
+                            }.getOrNull().orEmpty()
+                            results = (results + usResults).distinctBy { it.id }
+                        }
+
+                        for (item in results) {
+                            val art = item.thumbnailUrl
+                            val itemTitle = item.title
+                            val itemCurator = item.subtitle
+                            val itemBid = "apple:playlist:${item.storefront}:${item.id}"
+                            val normTitle = itemTitle.trim().lowercase(Locale.ROOT)
+
+                            if (!AppleMusicEditorialRepository.isValidArtworkUrl(art)) continue
+                            if (isCurrentPlaylist(itemBid, itemTitle)) continue
+                            if (isNonMusicOrSpamPlaylist(itemTitle)) continue
+                            if (isGenericChart(itemTitle, detectedGenre)) continue
+                            if (!isCoherentWithGenre(itemTitle, itemCurator, detectedGenre)) continue
+
+                            // Strict artist diversity: max 1 per artist in genre playlists
+                            val detectedArtist = extractArtistFromTitle(itemTitle, topArtists)
+                            if (detectedArtist != null) {
+                                val currentCount = artistFreq[detectedArtist] ?: 0
+                                if (currentCount >= 1) continue
+                                artistFreq[detectedArtist] = currentCount + 1
+                            }
+
+                            if (!seenIds.add(itemBid) || !seenTitles.add(normTitle)) continue
+
+                            collected.add(
+                                ShelfItem(
+                                    title = itemTitle,
+                                    subtitle = itemCurator.ifBlank { "Apple Music" },
+                                    thumbnailUrl = art,
+                                    videoId = null,
+                                    browseId = itemBid,
+                                    isVideo = false,
+                                )
+                            )
+                            if (collected.size >= 8) break
+                        }
+                        if (collected.size >= 8) break
+                    }
+                    collected.sortedByDescending { it.subtitle.lowercase(Locale.ROOT).contains("apple") }.take(6)
+                }
+
+                // 3b. Source 2: Distinct artist playlists (strictly 1 playlist per distinct artist from Apple Music) ~3-4 cards
+                val artistAppleDeferred = async {
+                    val distinctArtistItems = mutableListOf<ShelfItem>()
+                    val seenArtistIds = mutableSetOf<String>()
+                    val seenArtistTitles = mutableSetOf<String>()
+
+                    for (artist in topArtists) {
+                        if (distinctArtistItems.size >= 4) break
+                        val queries = listOf("$artist Essentials", artist)
+                        var pickedForArtist: ShelfItem? = null
+
+                        for (q in queries) {
+                            val hits = runCatching {
+                                AppleMusicEditorialRepository.searchPlaylists(q, limit = 6, storefront = targetStorefront)
+                            }.getOrNull().orEmpty()
+
+                            for (item in hits) {
+                                val art = item.thumbnailUrl
+                                val itemTitle = item.title
+                                val itemCurator = item.subtitle
+                                val itemBid = "apple:playlist:${item.storefront}:${item.id}"
+                                val normTitle = itemTitle.trim().lowercase(Locale.ROOT)
+
+                                if (!AppleMusicEditorialRepository.isValidArtworkUrl(art)) continue
+                                if (isCurrentPlaylist(itemBid, itemTitle)) continue
+                                if (isNonMusicOrSpamPlaylist(itemTitle)) continue
+                                if (isGenericChart(itemTitle, detectedGenre)) continue
+                                if (!isCoherentWithGenre(itemTitle, itemCurator, detectedGenre)) continue
+                                if (seenArtistIds.contains(itemBid) || seenArtistTitles.contains(normTitle)) continue
+
+                                val lowerArtist = artist.lowercase(Locale.ROOT)
+                                val matchesArtist = normTitle.contains(lowerArtist) ||
+                                    itemCurator.lowercase(Locale.ROOT).contains(lowerArtist)
+
+                                if (matchesArtist) {
+                                    pickedForArtist = ShelfItem(
+                                        title = itemTitle,
+                                        subtitle = itemCurator.ifBlank { "Apple Music" },
+                                        thumbnailUrl = art,
+                                        videoId = null,
+                                        browseId = itemBid,
+                                        isVideo = false,
+                                    )
+                                    seenArtistIds.add(itemBid)
+                                    seenArtistTitles.add(normTitle)
+                                    break
+                                }
+                            }
+                            if (pickedForArtist != null) break
+                        }
+
+                        if (pickedForArtist != null) {
+                            distinctArtistItems.add(pickedForArtist)
+                        }
+                    }
+                    distinctArtistItems
+                }
+
+                // 3c. Source 3: YouTube Music / Community playlists (combining artists, filtering junk/single words) ~2 cards (~20%)
+                val ytDeferred = async {
+                    val rawYtItems = mutableListOf<ShelfItem>()
+
+                    val ytQueries = mutableListOf<String>()
+                    if (topArtists.size >= 2) {
+                        ytQueries.add("${topArtists[0]} ${topArtists[1]} playlist")
+                        ytQueries.add("${topArtists[0]} ${topArtists[1]} mix")
+                        if (topArtists.size >= 3) {
+                            ytQueries.add("${topArtists[0]} ${topArtists[2]} mix")
+                        }
+                    } else if (topArtists.isNotEmpty()) {
+                        ytQueries.add("${topArtists[0]} mix")
+                        ytQueries.add("${topArtists[0]} playlist")
+                    }
+
+                    if (browseId.startsWith("VL") || browseId.startsWith("PL") || browseId.startsWith("RDAMPL")) {
+                        val relatedFromBrowse = runCatching {
+                            val res = Innertube.browse(if (browseId.startsWith("VL")) browseId else "VL$browseId")
+                            val shelves = InnertubeParser.parseHomeContinuation(res)
+                            shelves.flatMap { it.items }.filter { item ->
+                                val bid = item.browseId
+                                bid != null && (bid.startsWith("VL") || bid.startsWith("PL") || bid.startsWith("RDAMPL")) &&
+                                    !item.thumbnailUrl.isNullOrBlank() &&
+                                    !isCurrentPlaylist(bid, item.title)
+                            }
+                        }.getOrNull().orEmpty()
+                        rawYtItems.addAll(relatedFromBrowse)
+                    }
+
+                    for (q in ytQueries.distinct()) {
+                        if (rawYtItems.size >= 12) break
+                        val searchHit = runCatching {
+                            YtMusicRepository.search(q, SearchFilter.PLAYLISTS).getOrNull().orEmpty()
+                        }.getOrNull().orEmpty()
+                        val parsedPlaylists = searchHit.filterIsInstance<SearchResult.Browse>()
+                            .map { it.item }
+                            .filter {
+                                it.type == BrowseType.PLAYLIST &&
+                                    !it.thumbnailUrl.isNullOrBlank() &&
+                                    !isCurrentPlaylist(it.browseId, it.title)
+                            }
+                            .map {
+                                ShelfItem(
+                                    title = it.title,
+                                    subtitle = it.subtitle.ifBlank { "YouTube Music" },
+                                    thumbnailUrl = it.thumbnailUrl,
+                                    videoId = null,
+                                    browseId = it.browseId,
+                                    isVideo = false,
+                                )
+                            }
+                        rawYtItems.addAll(parsedPlaylists)
+                    }
+
+                    val cleanYt = mutableListOf<ShelfItem>()
+                    val seenYtIds = mutableSetOf<String>()
+                    val seenYtTitles = mutableSetOf<String>()
+
+                    for (item in rawYtItems) {
+                        val bid = item.browseId ?: continue
+                        val normTitle = item.title.trim().lowercase(Locale.ROOT)
+                        val words = item.title.trim().split(Regex("\\s+"))
+                        if (words.size <= 1) continue
+                        if (isYtJunkPlaylist(item.title, item.subtitle)) continue
+                        if (isNonMusicOrSpamPlaylist(item.title)) continue
+                        if (isGenericChart(item.title, detectedGenre)) continue
+                        if (!isCoherentWithGenre(item.title, item.subtitle, detectedGenre)) continue
+                        if (!seenYtIds.add(bid) || !seenYtTitles.add(normTitle)) continue
+                        cleanYt.add(item)
+                        if (cleanYt.size >= 2) break
+                    }
+                    cleanYt
+                }
+
+                val genreAppleList = genreAppleDeferred.await()
+                val artistAppleList = artistAppleDeferred.await()
+                val ytList = ytDeferred.await()
+
+                // 4. Balanced mixture assembly: 80% Apple Music (Genre + Artists) / 20% YouTube Music (10-12 total)
+                val targetTotal = 12
+                val ytCount = minOf(2, ytList.size)
+                val selectedYt = ytList.take(ytCount)
+
+                val finalGenreList = mutableListOf<ShelfItem>()
+                val finalArtistList = mutableListOf<ShelfItem>()
+                val artistGlobalCount = mutableMapOf<String, Int>()
+
+                // First register distinct artist playlists (guarantees representation of 3-4 different artists)
+                for (item in artistAppleList) {
+                    val art = extractArtistFromTitle(item.title, topArtists)
+                    if (art != null) {
+                        artistGlobalCount[art] = (artistGlobalCount[art] ?: 0) + 1
+                    }
+                    finalArtistList.add(item)
+                }
+
+                // Add genre playlists, respecting the strict max 1 per artist limit
+                for (item in genreAppleList) {
+                    val art = extractArtistFromTitle(item.title, topArtists)
+                    if (art != null) {
+                        val count = artistGlobalCount[art] ?: 0
+                        if (count >= 1) continue
+                        artistGlobalCount[art] = count + 1
+                    }
+                    finalGenreList.add(item)
+                }
+
+                // Interleave smoothly: Genre AM, Artist AM, Genre AM, YT, Genre AM, Artist AM...
+                val interleaved = mutableListOf<ShelfItem>()
+                var gIdx = 0
+                var aIdx = 0
+                var yIdx = 0
+
+                while (interleaved.size < targetTotal && (gIdx < finalGenreList.size || aIdx < finalArtistList.size || yIdx < selectedYt.size)) {
+                    // Place YouTube Music at positions 3 and 7
+                    if ((interleaved.size == 3 || interleaved.size == 7) && yIdx < selectedYt.size) {
+                        interleaved.add(selectedYt[yIdx++])
+                        continue
+                    }
+
+                    if (gIdx < finalGenreList.size && (aIdx >= finalArtistList.size || interleaved.size % 2 == 0)) {
+                        interleaved.add(finalGenreList[gIdx++])
+                    } else if (aIdx < finalArtistList.size) {
+                        interleaved.add(finalArtistList[aIdx++])
+                    } else if (gIdx < finalGenreList.size) {
+                        interleaved.add(finalGenreList[gIdx++])
+                    } else if (yIdx < selectedYt.size) {
+                        interleaved.add(selectedYt[yIdx++])
+                    } else {
+                        break
+                    }
+                }
+
+                // 5. Ensure no two consecutive playlists feature the same artist
+                val finalPlaylists = ensureNoConsecutiveArtists(interleaved, topArtists).take(targetTotal)
+
+                if (finalPlaylists.isNotEmpty()) {
+                    playlistRecommendationsCache[browseId] = finalPlaylists
+                    _detailStack.value = _detailStack.value.map { page ->
+                        if (page.browseId == browseId) {
+                            page.copy(relatedPlaylists = finalPlaylists)
+                        } else page
+                    }
+                }
+            } catch (_: Exception) {
+                // Non-fatal recommendation failure
+            } finally {
+                inFlightRecommendations.remove(browseId)
+            }
+        }
+    }
+
+    enum class PlaylistGenre {
+        URBANO_LATINO,
+        REGIONAL_MEXICANO,
+        VALLENATO,
+        SALSA_TROPICAL,
+        ROCK_INDIE_ALT,
+        HIP_HOP_RNB,
+        EDM_DANCE,
+        POP_LATINO,
+        POP,
+        CHILL,
+        GENERAL
+    }
+
+    private fun isGenericChart(title: String, genre: PlaylistGenre): Boolean {
+        if (genre == PlaylistGenre.GENERAL || genre == PlaylistGenre.POP) return false
+        val lower = title.lowercase(Locale.ROOT)
+        val genericHitsPattern = Regex(
+            "\\b(today'?s\\s*hits|éxitos\\s*de\\s*hoy|top\\s*100|top\\s*50|viral\\s*50|hit\\s*list|éxitos\\s*202[0-9]|hits\\s*202[0-9]|global\\s*hits|los\\s*100\\s*más|chart|tendencias)\\b",
+            RegexOption.IGNORE_CASE
+        )
+        return genericHitsPattern.containsMatchIn(lower)
+    }
+
+    private fun isCoherentWithGenre(itemTitle: String, itemCurator: String, genre: PlaylistGenre): Boolean {
+        val text = "$itemTitle $itemCurator".lowercase(Locale.ROOT)
+        return when (genre) {
+            PlaylistGenre.URBANO_LATINO -> {
+                !text.contains("música mexicana") &&
+                !text.contains("mariachi") &&
+                !text.contains("banda") &&
+                !text.contains("norteño") &&
+                !text.contains("corridos") &&
+                !text.contains("vallenato") &&
+                !text.contains("salsa") &&
+                !text.contains("k-pop")
+            }
+            PlaylistGenre.VALLENATO -> {
+                !text.contains("mariachi") &&
+                !text.contains("banda") &&
+                !text.contains("norteño") &&
+                !text.contains("corridos") &&
+                !text.contains("música mexicana") &&
+                !text.contains("urbano latino") &&
+                !text.contains("reggaetón") &&
+                !text.contains("reggaeton") &&
+                !text.contains("perreo") &&
+                !text.contains("trap") &&
+                !text.contains("heavy metal")
+            }
+            PlaylistGenre.SALSA_TROPICAL -> {
+                !text.contains("música mexicana") &&
+                !text.contains("mariachi") &&
+                !text.contains("banda") &&
+                !text.contains("norteño") &&
+                !text.contains("corridos") &&
+                !text.contains("urbano latino") &&
+                !text.contains("perreo") &&
+                !text.contains("trap kingz") &&
+                !text.contains("heavy metal")
+            }
+            PlaylistGenre.REGIONAL_MEXICANO -> {
+                !text.contains("vallenato") &&
+                !text.contains("salsa") &&
+                !text.contains("k-pop") &&
+                !text.contains("urbano latino") &&
+                !text.contains("perreo")
+            }
+            PlaylistGenre.ROCK_INDIE_ALT, PlaylistGenre.HIP_HOP_RNB -> {
+                !text.contains("urbano latino") &&
+                !text.contains("reggaetón") &&
+                !text.contains("reggaeton") &&
+                !text.contains("perreo") &&
+                !text.contains("música mexicana") &&
+                !text.contains("mariachi") &&
+                !text.contains("banda") &&
+                !text.contains("norteño") &&
+                !text.contains("corridos") &&
+                !text.contains("vallenato") &&
+                !text.contains("salsa") &&
+                !text.contains("bachata")
+            }
+            else -> true
+        }
+    }
+
+    private fun isYtJunkPlaylist(title: String, subtitle: String): Boolean {
+        val combined = "$title $subtitle"
+        val junkPattern = Regex(
+            "\\b(karaoke|sing\\s*king|instrumental|8d\\s*audio|sped\\s*up|slowed|lyrics?|letra|nightcore|bass\\s*boosted|tribute)\\b",
+            RegexOption.IGNORE_CASE
+        )
+        return junkPattern.containsMatchIn(combined)
+    }
+
+    private fun isNonMusicOrSpamPlaylist(title: String): Boolean {
+        val lower = title.lowercase(Locale.ROOT)
+        return lower.contains("track by track") ||
+            lower.contains("video essentials") ||
+            lower.contains("audio commentary") ||
+            lower.contains("comentario de audio") ||
+            lower.contains("videoclips") ||
+            lower.contains("music videos")
+    }
+
+    private fun extractArtistFromTitle(title: String, topArtists: List<String>): String? {
+        val lowerTitle = title.lowercase(Locale.ROOT)
+        for (artist in topArtists) {
+            val lowerArtist = artist.lowercase(Locale.ROOT)
+            if (lowerArtist.length > 2 && lowerTitle.contains(lowerArtist)) {
+                return lowerArtist
+            }
+        }
+        val essentialsPattern = Regex(
+            "^(.+?)(:?\\s+(essentials|imprescindibles|setlist|lo mejor de|lo más nuevo|joyas ocultas|deep cuts|next steps|influences|en vivo))",
+            RegexOption.IGNORE_CASE
+        )
+        val match = essentialsPattern.find(title)
+        if (match != null) {
+            val candidate = match.groupValues[1].trim().lowercase(Locale.ROOT)
+            if (candidate.length > 2) return candidate
+        }
+        return null
+    }
+
+    private fun ensureNoConsecutiveArtists(items: List<ShelfItem>, topArtists: List<String>): List<ShelfItem> {
+        if (items.size <= 2) return items
+        val result = mutableListOf<ShelfItem>()
+        val remaining = items.toMutableList()
+
+        while (remaining.isNotEmpty()) {
+            val lastArtist = result.lastOrNull()?.let { extractArtistFromTitle(it.title, topArtists) }
+            val nextIndex = if (lastArtist != null) {
+                val nonMatching = remaining.indexOfFirst { item ->
+                    val art = extractArtistFromTitle(item.title, topArtists)
+                    art == null || art != lastArtist
+                }
+                if (nonMatching != -1) nonMatching else 0
+            } else {
+                0
+            }
+            result.add(remaining.removeAt(nextIndex))
+        }
+        return result
+    }
+
+    private fun detectPlaylistGenre(combinedCorpus: String, curator: String?, title: String): PlaylistGenre {
+        val cur = (curator ?: "").lowercase(Locale.ROOT)
+        val tit = title.lowercase(Locale.ROOT)
+
+        // Check curator and title directly (highest precision)
+        if (cur.contains("vallenato") || tit.contains("vallenato") || tit.contains("parranda")) return PlaylistGenre.VALLENATO
+        if (cur.contains("urbano") || cur.contains("reggaet") || cur.contains("perreo") || tit.contains("reggaet") || tit.contains("perreo")) return PlaylistGenre.URBANO_LATINO
+        if (cur.contains("mexican") || cur.contains("corrido") || cur.contains("banda") || cur.contains("norteñ") || tit.contains("corridos")) return PlaylistGenre.REGIONAL_MEXICANO
+        if (cur.contains("salsa") || cur.contains("tropical") || cur.contains("bachata") || cur.contains("merengue") || tit.contains("salsa") || tit.contains("bachata")) return PlaylistGenre.SALSA_TROPICAL
+        if (cur.contains("rock") || cur.contains("alternativ") || cur.contains("indie") || tit.contains("rock") || tit.contains("indie")) return PlaylistGenre.ROCK_INDIE_ALT
+        if (cur.contains("hip-hop") || cur.contains("hip hop") || cur.contains("r&b") || cur.contains("rap") || tit.contains("hip-hop") || tit.contains("r&b")) return PlaylistGenre.HIP_HOP_RNB
+        if (cur.contains("dance") || cur.contains("electronic") || cur.contains("club") || cur.contains("edm") || tit.contains("edm")) return PlaylistGenre.EDM_DANCE
+
+        // Check corpus for Vallenato artists / keywords
+        val isVallenato = listOf(
+            "binomio de oro", "chiches vallenatos", "diomedes", "silvestre dangond", "jorge celedón",
+            "celedon", "poncho zuleta", "los inquietos", "rafael orozco", "kaleth morales",
+            "peter manjarrés", "jean carlos centeno", "vallenato", "parranda", "acordeón"
+        ).any { combinedCorpus.contains(it) }
+        if (isVallenato) return PlaylistGenre.VALLENATO
+
+        // Check corpus for Latin Urban
+        val isLatinUrban = listOf(
+            "bad bunny", "anuel", "maluma", "karol g", "feid", "balvin", "rauw", "daddy yankee",
+            "ozuna", "myke towers", "quevedo", "mora", "eladio", "bizarrap", "duki", "trueno",
+            "nicky jam", "farruko", "don omar", "wisin", "yandel", "arcangel", "sech", "blessd",
+            "ryan castro", "young miko", "cris mj", "floyymenor", "chencho", "alvaro diaz",
+            "reggaeton", "trap", "perreo", "urbano", "dembow", "bellakeo", "reggaetón"
+        ).any { combinedCorpus.contains(it) }
+        if (isLatinUrban) return PlaylistGenre.URBANO_LATINO
+
+        // Check corpus for Regional Mexican
+        val isRegionalMex = listOf(
+            "peso pluma", "natanael cano", "junior h", "fuerza regida", "grupo frontera",
+            "carin leon", "carín león", "christian nodal", "banda ms", "grupo firme",
+            "eslabon armado", "dos carnales", "corridos", "regional mexicano", "banda", "belico", "norteño"
+        ).any { combinedCorpus.contains(it) }
+        if (isRegionalMex) return PlaylistGenre.REGIONAL_MEXICANO
+
+        // Check corpus for Salsa / Tropical
+        val isSalsaTropical = listOf(
+            "romeo santos", "aventura", "marc anthony", "prince royce", "juan luis guerra",
+            "hector lavoe", "héctor lavoe", "celia cruz", "gilberto santa rosa", "salsa",
+            "bachata", "merengue", "tropical"
+        ).any { combinedCorpus.contains(it) }
+        if (isSalsaTropical) return PlaylistGenre.SALSA_TROPICAL
+
+        // Check corpus for Rock / Indie / Alternative
+        val isRockAlt = listOf(
+            "tame impala", "dominic fike", "gorillaz", "arctic monkeys", "queen", "beatles",
+            "coldplay", "imagine dragons", "linkin park", "nirvana", "green day", "strokes",
+            "radiohead", "oasis", "metallica", "ac/dc", "indie", "alternative", "rock"
+        ).any { combinedCorpus.contains(it) }
+        if (isRockAlt) return PlaylistGenre.ROCK_INDIE_ALT
+
+        // Check corpus for Hip-Hop / R&B
+        val isHipHop = listOf(
+            "drake", "kendrick", "travis scott", "kanye", "eminem", "21 savage", "metro boomin",
+            "future", "j. cole", "post malone", "lil baby", "gunna", "playboi carti",
+            "tyler", "jmsn", "frank ocean", "sza", "the weeknd", "hip hop", "hip-hop", "rap", "r&b"
+        ).any { combinedCorpus.contains(it) }
+        if (isHipHop) return PlaylistGenre.HIP_HOP_RNB
+
+        // Check corpus for EDM
+        val isEDM = listOf(
+            "guetta", "calvin harris", "tiësto", "tiesto", "martin garrix", "avicii",
+            "skrillex", "marshmello", "alok", "fred again", "electronic", "dance", "edm", "house", "techno"
+        ).any { combinedCorpus.contains(it) }
+        if (isEDM) return PlaylistGenre.EDM_DANCE
+
+        // Check corpus for Latin Pop
+        val isLatinPop = listOf(
+            "camilo", "yatra", "morat", "aitana", "shakira", "chayanne", "luis miguel",
+            "ricky martin", "juanes", "reik", "sin bandera", "jesse & joy", "carlos vives",
+            "manuel turizo", "pop latino", "balada"
+        ).any { combinedCorpus.contains(it) }
+        if (isLatinPop) return PlaylistGenre.POP_LATINO
+
+        // Check corpus for Chill
+        val isChill = listOf(
+            "chill", "relax", "dormir", "sleep", "study", "estudio", "lofi", "acoustic", "acústico", "calm"
+        ).any { combinedCorpus.contains(it) }
+        if (isChill) return PlaylistGenre.CHILL
+
+        return PlaylistGenre.GENERAL
+    }
+
+    private fun deduceGenreQueries(genre: PlaylistGenre, playlistTitle: String): List<String> {
+        val queries = mutableListOf<String>()
+        when (genre) {
+            PlaylistGenre.VALLENATO -> {
+                queries.addAll(listOf("Vallenato", "Parranda Vallenata", "Clásicos del Vallenato", "Música colombiana"))
+            }
+            PlaylistGenre.URBANO_LATINO -> {
+                queries.addAll(listOf("Dale Reggaetón", "¡Dale Play!", "Trap Kingz", "Perreo Intenso", "La Fórmula", "Éxitos Urbano Latino", "Puro Perreo"))
+            }
+            PlaylistGenre.REGIONAL_MEXICANO -> {
+                queries.addAll(listOf("La Clave", "Corridos Bravos", "Puras Cornetas", "Música mexicana", "Banda y Corridos"))
+            }
+            PlaylistGenre.SALSA_TROPICAL -> {
+                queries.addAll(listOf("Salsa Fiesta", "Bachata Kings", "Vibra Tropical", "Tropical", "Puro Tropical"))
+            }
+            PlaylistGenre.ROCK_INDIE_ALT -> {
+                queries.addAll(listOf("Indie Anthems", "Alternative Hits", "The New Rock", "Rock Classics", "Indie Rock"))
+            }
+            PlaylistGenre.HIP_HOP_RNB -> {
+                queries.addAll(listOf("Rap Life", "The A-List: Hip-Hop", "R&B Now", "It's Lit", "Hip-Hop Hits"))
+            }
+            PlaylistGenre.EDM_DANCE -> {
+                queries.addAll(listOf("danceXL", "Groove", "Club Workouts", "Electronic"))
+            }
+            PlaylistGenre.POP_LATINO -> {
+                queries.addAll(listOf("Puro Pop", "Éxitos Pop Latino", "Amor y Desamor"))
+            }
+            PlaylistGenre.CHILL -> {
+                queries.addAll(listOf("Bedtime Beats", "Chill House", "Acoustic Chill"))
+            }
+            PlaylistGenre.POP, PlaylistGenre.GENERAL -> {
+                val cleanTitle = playlistTitle.trim()
+                if (cleanTitle.isNotBlank() && cleanTitle.length > 3) {
+                    queries.add(cleanTitle)
+                }
+                queries.addAll(listOf("Pure Pop", "Dale Play"))
+            }
+        }
+        return queries
     }
 
     fun syncSavedApplePlaylistTracks(applePlaylistId: String, songs: List<Song>) {

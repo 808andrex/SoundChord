@@ -684,6 +684,10 @@ data class DetailPage(
      * False for external playlists saved in library (e.g. Apple Music, saved YouTube Music, or imported).
      */
     val isEditableUserPlaylist: Boolean = false,
+    /**
+     * Recommended related playlists for this playlist (Apple Music & YouTube Music combined).
+     */
+    val relatedPlaylists: List<ShelfItem> = emptyList(),
 )
 
 /**

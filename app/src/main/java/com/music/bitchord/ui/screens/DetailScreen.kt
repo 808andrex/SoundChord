@@ -386,6 +386,8 @@ fun DetailScreen(
     reorder: (@Composable (ArtworkPalette) -> Unit)? = null,
     /** Triggers a fresh reload of this detail page if initial loading failed or was empty. */
     onRetry: (() -> Unit)? = null,
+    /** Loads related playlists recommendations for a playlist page. */
+    onLoadRelatedPlaylists: ((DetailPage) -> Unit)? = null,
 ) {
     val rawSongs = (page.songs as? UiState.Success)?.data.orEmpty()
     // A folder keeps its own sort — the one its top bar menu sets — rather
@@ -458,6 +460,14 @@ fun DetailScreen(
             delay(1000)
             autoRetryAttempted = true
             onRetry?.invoke()
+        }
+    }
+    LaunchedEffect(page.browseId, (page.songs as? UiState.Success)?.data?.size) {
+        if (page.type == BrowseType.PLAYLIST && page.relatedPlaylists.isEmpty()) {
+            val loadedSongs = (page.songs as? UiState.Success)?.data
+            if (!loadedSongs.isNullOrEmpty()) {
+                onLoadRelatedPlaylists?.invoke(page)
+            }
         }
     }
     val playlistCover = remember(page.browseId) {
@@ -957,6 +967,42 @@ fun DetailScreen(
                 }
             }
             if (isArtist) aboutItem()
+
+            // Recommended related playlists ("You might also like" / "También te puede gustar")
+            if (page.type == BrowseType.PLAYLIST && page.relatedPlaylists.isNotEmpty()) {
+                item(key = "related-playlists") {
+                    Column(
+                        modifier = Modifier
+                            .secondaryExitFade(100)
+                            .padding(top = 28.dp, bottom = 44.dp),
+                    ) {
+                        SectionHeading(
+                            title = stringResource(R.string.you_might_also_like),
+                            palette = palette,
+                            horizontalPadding = PAGE_GUTTER,
+                        )
+                        val carouselState = rememberLazyListState()
+                        LazyRow(
+                            state = carouselState,
+                            contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            flingBehavior = rememberSnapFlingBehavior(lazyListState = carouselState),
+                        ) {
+                            items(
+                                items = page.relatedPlaylists,
+                                key = { it.browseId ?: it.title },
+                            ) { item ->
+                                RelatedPlaylistCard(
+                                    item = item,
+                                    palette = palette,
+                                    onClick = { onSectionItemClick(item) },
+                                    onLongPress = onSectionItemLongPress?.let { { it(item) } },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
 
                 if (folder != null && folderState != null && folderState.selecting) {
@@ -2627,6 +2673,53 @@ private fun SectionCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+@Composable
+private fun RelatedPlaylistCard(
+    item: ShelfItem,
+    palette: ArtworkPalette,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier.width(SHELF_CARD_WIDTH),
+    onLongPress: (() -> Unit)? = null,
+) {
+    val cardToken = remember { Any() }
+    val openCard = rememberCoverTap(item.browseId, cardToken, onClick)
+    Column(
+        modifier = modifier
+            .longPressMenuClickable(onClick = openCard, onLongClick = onLongPress),
+    ) {
+        AsyncImage(
+            model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(12.dp))
+                .coverSharedElement(item.browseId, RoundedCornerShape(12.dp), cardToken)
+                .thumbnailBorder(RoundedCornerShape(12.dp))
+                .background(palette.elevated),
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = item.title,
+            style = MaterialTheme.typography.titleMedium,
+            color = palette.onBackground,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (item.subtitle.isNotBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = item.subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = palette.onBackgroundVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

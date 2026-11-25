@@ -1473,6 +1473,12 @@ object AppleMusicEditorialRepository {
             val attributes = obj["attributes"]?.jsonObject ?: continue
 
             val title = attributes["name"]?.jsonPrimitive?.contentOrNull?.trim() ?: continue
+            val lowerTitle = title.lowercase(Locale.ROOT)
+            if (lowerTitle.contains("video essentials") ||
+                lowerTitle.contains("track by track") ||
+                lowerTitle.contains("audio commentary") ||
+                lowerTitle.contains("comentario de audio")
+            ) continue
             val curator = attributes["curatorName"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
             val subtitle = curator.ifBlank { "Apple Music" }
 
@@ -1528,9 +1534,7 @@ object AppleMusicEditorialRepository {
                 val lowerTitle = item.title.lowercase(Locale.ROOT)
                 lowerTitle.contains("essentials") ||
                     lowerTitle.contains("imprescindibles") ||
-                    lowerTitle.contains("setlist") ||
-                    lowerTitle.contains("hits") ||
-                    lowerTitle.contains("éxitos")
+                    lowerTitle.contains("setlist")
             }
         )
     }

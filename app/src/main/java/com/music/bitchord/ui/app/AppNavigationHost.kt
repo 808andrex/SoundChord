@@ -107,6 +107,7 @@ import com.music.bitchord.ui.screens.LocalFolderState
 import com.music.bitchord.ui.screens.LocalFolderTab
 import com.music.bitchord.ui.screens.LocalFolder
 import com.music.bitchord.ui.components.LocalPlayingBarsMotion
+import com.music.bitchord.ui.APPLE_MUSIC_PAGE_PREFIX
 import com.music.bitchord.ui.MainViewModel
 import com.music.bitchord.ui.SearchSource
 import com.music.bitchord.ui.components.BrowseTarget
@@ -1276,12 +1277,19 @@ internal fun AppNavigationHost(
                             actions.onPlayRadio(video, QueueSource(page.title, PlaybackSourceType.BROWSE, page.browseId))
                         } else {
                             item.browseId?.let { id ->
+                                val targetType = if (id.startsWith(APPLE_MUSIC_PAGE_PREFIX) ||
+                                    id.startsWith("VL") || id.startsWith("PL") || id.startsWith("RD")
+                                ) {
+                                    BrowseType.PLAYLIST
+                                } else {
+                                    BrowseType.ALBUM
+                                }
                                 viewModel.openDetail(
                                     browseId = id,
                                     title = item.title,
                                     subtitle = item.subtitle,
                                     thumbnailUrl = item.thumbnailUrl,
-                                    type = BrowseType.ALBUM,
+                                    type = targetType,
                                 )
                             }
                         }
@@ -1345,6 +1353,14 @@ internal fun AppNavigationHost(
                         null
                     },
                     onRetry = { viewModel.reloadDetail(page.browseId) },
+                    onLoadRelatedPlaylists = { p ->
+                        viewModel.loadPlaylistRecommendations(
+                            browseId = p.browseId,
+                            title = p.title,
+                            songs = (p.songs as? UiState.Success)?.data.orEmpty(),
+                            curatorName = p.subtitle,
+                        )
+                    },
                 )
             } else if (states.recognitionOpen) {
                 RecognitionScreen(
