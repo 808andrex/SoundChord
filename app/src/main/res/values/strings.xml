@@ -1676,4 +1676,6 @@
     <string name="editorial_hero_badge_soundtrack">SOUNDTRACK</string>
     <string name="editorial_hero_badge_exclusive">EXCLUSIVE</string>
     <string name="album_not_found_in_ytm">Album not found on YouTube Music</string>
+    <string name="apple_music_playlists">Apple Music Playlists</string>
+    <string name="filter_apple_music">Apple Music</string>
 </resources>

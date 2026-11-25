@@ -462,6 +462,7 @@ enum class SearchFilter(
     ALBUMS("Albums", "EgWKAQIYAWoKEAkQChAFEAMQBA=="),
     ARTISTS("Artists", "EgWKAQIgAWoKEAkQChAFEAMQBA=="),
     PLAYLISTS("Playlists", "EgWKAQIoAWoKEAkQChAFEAMQBA=="),
+    APPLE_MUSIC("Apple Music", null),
     LIBRARY("Library", "agIYBA==", requiresAuth = true);
 }
 

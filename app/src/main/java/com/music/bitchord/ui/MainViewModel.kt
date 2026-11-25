@@ -31,6 +31,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import com.music.bitchord.data.model.SPOTIFY_MISSING_PREFIX
 import com.music.bitchord.data.model.SPOTIFY_PENDING_PREFIX
 import com.music.bitchord.data.spotify.SPOTIFY_PAGE_PREFIX
+import com.soundchord.features.editorial.data.AppleMusicEditorialRepository
 import com.soundchord.features.playlistimport.data.AppleMusicPlaylistClient
 import com.soundchord.features.playlistimport.data.AppleMusicPlaylistRepository
 import com.music.bitchord.data.canvas.PlaylistMotionStore
@@ -53,6 +54,7 @@ import com.music.bitchord.auth.CapturedSession
 import com.music.bitchord.auth.WebSessionMode
 import com.music.bitchord.data.model.Account
 import com.music.bitchord.data.model.AccountChannel
+import com.music.bitchord.data.model.BrowseItem
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.DetailPage
 import com.music.bitchord.data.model.HomeShelf
@@ -193,6 +195,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _results = MutableStateFlow<UiState<List<SearchResult>>?>(null)
     val results: StateFlow<UiState<List<SearchResult>>?> = _results.asStateFlow()
+
+    private val _appleMusicPlaylists = MutableStateFlow<List<BrowseItem>>(emptyList())
+    val appleMusicPlaylists: StateFlow<List<BrowseItem>> = _appleMusicPlaylists.asStateFlow()
+    private var appleMusicSearchJob: Job? = null
 
     /** The mixed YouTube Music result page is the fast, useful default. */
     private val _filter = MutableStateFlow(SearchFilter.ALL)
@@ -2858,6 +2864,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         searchSubmitted = true
         _suggestions.value = emptyList()
         _typeaheadResults.value = emptyList()
+        runAppleMusicSearch(term, debounceMs = 0L)
         // Picking a suggestion or history item is deliberate, but it must NOT
         // pollute the user's YTMusic server-side search history — only an
         // explicit keyboard submission should do that.  Use the anonymous
@@ -2878,6 +2885,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _results.value = null
             addonSearchJob?.cancel()
             _addonResults.value = null
+            appleMusicSearchJob?.cancel()
+            _appleMusicPlaylists.value = emptyList()
             // The list is about to switch from search results to recent
             // searches (or the empty state) — without this it can keep
             // whatever scroll offset the results list was left at, landing
@@ -2893,6 +2902,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // While typing, surface text completions — the pipeline already feeds
         // them through [suggestRequests] and publishes results via typeahead.
         suggestRequests.tryEmit(newValue)
+        runAppleMusicSearch(newValue, debounceMs = 350L)
     }
 
     /**
@@ -2909,6 +2919,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             runAddonSearch(q)
             return
         }
+        runAppleMusicSearch(q, debounceMs = 0L)
         runSearch(anonymous = false)
     }
 
@@ -2918,6 +2929,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         searchSubmitted = true
         _suggestions.value = emptyList()
         _typeaheadResults.value = emptyList()
+        runAppleMusicSearch(_query.value, debounceMs = 0L)
         runSearch(anonymous = true)
     }
 
@@ -2957,6 +2969,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private fun runAppleMusicSearch(query: String, debounceMs: Long = 350L) {
+        appleMusicSearchJob?.cancel()
+        val clean = query.trim()
+        if (clean.isEmpty() || _searchSource.value != SearchSource.YOUTUBE) {
+            _appleMusicPlaylists.value = emptyList()
+            return
+        }
+        appleMusicSearchJob = viewModelScope.launch(Dispatchers.IO) {
+            if (debounceMs > 0) {
+                delay(debounceMs)
+            }
+            val items = runCatching {
+                AppleMusicEditorialRepository.searchPlaylists(clean, limit = 15)
+            }.getOrDefault(emptyList())
+            val browseItems = items.map { item ->
+                BrowseItem(
+                    browseId = "apple:playlist:${item.storefront}:${item.id}",
+                    title = item.title,
+                    subtitle = item.subtitle.ifBlank { "Apple Music" },
+                    thumbnailUrl = item.thumbnailUrl,
+                    type = BrowseType.PLAYLIST,
+                )
+            }
+            _appleMusicPlaylists.value = browseItems
+        }
+    }
+
     /**
      * Points the Search tab at YouTube Music or at the Local Music folder.
      *
@@ -2970,6 +3009,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _suggestions.value = emptyList()
         _typeaheadResults.value = emptyList()
         _searchScrollReset.value += 1
+        if (source != SearchSource.YOUTUBE) {
+            appleMusicSearchJob?.cancel()
+            _appleMusicPlaylists.value = emptyList()
+        }
         when (source) {
             SearchSource.LIBRARY -> loadLibrarySongs()
             SearchSource.RADIO -> Unit // SearchScreen hands this query to RadioScreen/RadioRepository.
@@ -3004,6 +3047,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_filter.value == value) return
         _filter.value = value
         searchSubmitted = true
+        if (value == SearchFilter.APPLE_MUSIC) {
+            runAppleMusicSearch(_query.value, debounceMs = 0L)
+            _results.value = UiState.Success(emptyList())
+            return
+        }
         runSearch(anonymous = if (value.requiresAuth) false else !_signedIn.value)
     }
 
@@ -3088,6 +3136,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // records it in the account's history.
                 if (exact != null && request.anonymous) {
                     searchSession = SearchSession(key, request.requestId, request.filter, exact.continuation)
+                    return@collectLatest
+                }
+
+                if (request.filter == SearchFilter.APPLE_MUSIC) {
+                    _results.value = UiState.Success(emptyList())
                     return@collectLatest
                 }
 

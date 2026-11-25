@@ -308,4 +308,13 @@
     <string name="queue_download">Download</string>
     <string name="queue_selection_remove">Remove</string>
     <string name="queue_add_all_to_playlist">Add all to playlist</string>
+    <string name="apple_music_playlists">Apple Music Playlists</string>
+    <string name="filter_apple_music">Apple Music</string>
+    <string name="filter_all">All</string>
+    <string name="filter_songs">Songs</string>
+    <string name="filter_videos">Videos</string>
+    <string name="filter_albums">Albums</string>
+    <string name="filter_artists">Artists</string>
+    <string name="filter_playlists">Playlists</string>
+    <string name="filter_library">Library</string>
 </resources>

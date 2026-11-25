@@ -226,4 +226,13 @@
     <string name="queue_add_all_to_playlist">Añadir todas a la lista</string>
     <string name="mixes_yours">Tus mixes</string>
     <string name="mixes_none">Aún no hay mixes. Sigue escuchando y YouTube Music creará algunos para ti.</string>
+    <string name="apple_music_playlists">Playlists de Apple Music</string>
+    <string name="filter_apple_music">Apple Music</string>
+    <string name="filter_all">Todo</string>
+    <string name="filter_songs">Canciones</string>
+    <string name="filter_videos">Videos</string>
+    <string name="filter_albums">Álbumes</string>
+    <string name="filter_artists">Artistas</string>
+    <string name="filter_playlists">Playlists</string>
+    <string name="filter_library">Biblioteca</string>
 </resources>

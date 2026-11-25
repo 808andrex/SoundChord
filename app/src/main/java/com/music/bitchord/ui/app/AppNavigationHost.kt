@@ -1460,6 +1460,7 @@ internal fun AppNavigationHost(
                     isPlaying = states.player.isPlaying,
                     onFilterChange = viewModel::onFilterChange,
                     results = states.results,
+                    appleMusicPlaylists = viewModel.appleMusicPlaylists.collectAsStateWithLifecycle().value,
                     loadingMore = states.searchLoadingMore,
                     onLoadMore = viewModel::loadMoreSearchResults,
                     listState = lists.searchListState,

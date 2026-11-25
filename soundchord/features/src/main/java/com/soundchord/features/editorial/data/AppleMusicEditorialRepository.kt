@@ -22,6 +22,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Request
 import java.io.File
+import java.net.URLEncoder
 import java.util.Locale
 
 object AppleMusicEditorialRepository {
@@ -1410,5 +1411,127 @@ object AppleMusicEditorialRepository {
      */
     private fun getCuratedSeedFeed(storefront: String): AppleMusicEditorialFeed {
         return AppleMusicEditorialFeed()
+    }
+
+    /**
+     * Searches editorial playlists in Apple Music catalog.
+     * Prioritizes official Apple Music curated playlists (Essentials, Setlists, genre/mood/activity)
+     * over third-party playlists. Normalizes artwork to 600x600 and discards invalid artwork.
+     */
+    suspend fun searchPlaylists(
+        query: String,
+        limit: Int = 12,
+        storefront: String = defaultStorefront(),
+    ): List<AppleMusicEditorialItem> = withContext(Dispatchers.IO) {
+        val cleanQuery = query.trim()
+        if (cleanQuery.isEmpty()) return@withContext emptyList()
+
+        var bearer = AppleMusicTokenProvider.token() ?: return@withContext emptyList()
+        val encodedQuery = runCatching {
+            URLEncoder.encode(cleanQuery, "UTF-8")
+        }.getOrNull() ?: return@withContext emptyList()
+
+        val candidateStorefronts = listOf(storefront, "us", "mx", "es", "ec").distinct()
+        var matchedItems: List<AppleMusicEditorialItem> = emptyList()
+
+        for (sf in candidateStorefronts) {
+            val url = "$API_BASE/$sf/search?term=$encodedQuery&types=playlists&limit=$limit&extend=editorialArtwork,editorialVideo"
+            var responseBody = executeGet(url, bearer)
+
+            // If unauthorized or failed, attempt refreshing token once
+            if (responseBody == null) {
+                AppleMusicTokenProvider.invalidateToken(bearer)
+                bearer = AppleMusicTokenProvider.token() ?: break
+                responseBody = executeGet(url, bearer)
+            }
+
+            if (!responseBody.isNullOrBlank()) {
+                val parsed = parsePlaylistSearchResults(responseBody, sf)
+                if (parsed.isNotEmpty()) {
+                    matchedItems = parsed
+                    break
+                }
+            }
+        }
+
+        prioritizeEditorialPlaylists(matchedItems).take(limit)
+    }
+
+    private fun parsePlaylistSearchResults(
+        jsonStr: String,
+        storefront: String,
+    ): List<AppleMusicEditorialItem> {
+        val root = runCatching { json.parseToJsonElement(jsonStr).jsonObject }.getOrNull() ?: return emptyList()
+        val resultsObj = root["results"]?.jsonObject ?: return emptyList()
+        val playlistsObj = resultsObj["playlists"]?.jsonObject ?: return emptyList()
+        val dataArray = playlistsObj["data"]?.jsonArray ?: return emptyList()
+
+        val items = mutableListOf<AppleMusicEditorialItem>()
+        for (element in dataArray) {
+            val obj = element.jsonObject
+            val id = obj["id"]?.jsonPrimitive?.contentOrNull ?: continue
+            val attributes = obj["attributes"]?.jsonObject ?: continue
+
+            val title = attributes["name"]?.jsonPrimitive?.contentOrNull?.trim() ?: continue
+            val curator = attributes["curatorName"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+            val subtitle = curator.ifBlank { "Apple Music" }
+
+            val rawArtworkUrl = attributes["artwork"]?.jsonObject?.get("url")?.jsonPrimitive?.contentOrNull
+            val thumbnailUrl = formatAppleArtworkUrl(rawArtworkUrl, 600, 600, "jpg")
+            if (thumbnailUrl == null || !isValidArtworkUrl(thumbnailUrl)) continue
+
+            val editorialNotes = attributes["editorialNotes"]?.jsonObject
+            val rawDescription = editorialNotes?.let { notes ->
+                (notes["short"]?.jsonPrimitive?.contentOrNull
+                    ?: notes["standard"]?.jsonPrimitive?.contentOrNull).orEmpty()
+            } ?: attributes["description"]?.jsonObject?.let { desc ->
+                (desc["short"]?.jsonPrimitive?.contentOrNull
+                    ?: desc["standard"]?.jsonPrimitive?.contentOrNull).orEmpty()
+            } ?: attributes["description"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            val cleanDescription = rawDescription.replace(Regex("<[^>]+>"), "").trim()
+
+            val isExplicit = attributes["contentRating"]?.jsonPrimitive?.contentOrNull.equals("explicit", ignoreCase = true)
+
+            // Wide editorial artwork support
+            val editorialArtwork = attributes["editorialArtwork"]?.jsonObject
+            val wideBannerUrl = (editorialArtwork?.get("bannerUber")?.jsonObject
+                ?: editorialArtwork?.get("subscriptionHero")?.jsonObject
+                ?: editorialArtwork?.get("staticDetailUber")?.jsonObject
+                ?: editorialArtwork?.get("storefrontEditorialArtwork")?.jsonObject)
+                ?.get("url")?.jsonPrimitive?.contentOrNull
+            val wideImageUrl = formatAppleArtworkUrl(wideBannerUrl ?: rawArtworkUrl, 1200, 675, "jpg") ?: thumbnailUrl
+
+            items.add(
+                AppleMusicEditorialItem(
+                    id = id,
+                    title = title,
+                    subtitle = subtitle,
+                    description = cleanDescription,
+                    thumbnailUrl = thumbnailUrl,
+                    wideImageUrl = wideImageUrl,
+                    badge = null,
+                    kind = EditorialItemKind.PLAYLIST,
+                    isExplicit = isExplicit,
+                    storefront = storefront,
+                )
+            )
+        }
+        return items
+    }
+
+    private fun prioritizeEditorialPlaylists(items: List<AppleMusicEditorialItem>): List<AppleMusicEditorialItem> {
+        return items.sortedWith(
+            compareByDescending<AppleMusicEditorialItem> { item ->
+                val curator = item.subtitle.lowercase(Locale.ROOT)
+                curator.contains("apple music") || curator == "apple"
+            }.thenByDescending { item ->
+                val lowerTitle = item.title.lowercase(Locale.ROOT)
+                lowerTitle.contains("essentials") ||
+                    lowerTitle.contains("imprescindibles") ||
+                    lowerTitle.contains("setlist") ||
+                    lowerTitle.contains("hits") ||
+                    lowerTitle.contains("éxitos")
+            }
+        )
     }
 }

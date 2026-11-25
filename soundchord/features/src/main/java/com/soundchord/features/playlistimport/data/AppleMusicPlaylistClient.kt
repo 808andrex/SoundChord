@@ -2,6 +2,8 @@ package com.soundchord.features.playlistimport.data
 
 import com.music.bitchord.data.Http
 import com.music.bitchord.data.canvas.AppleMusicTokenProvider
+import com.soundchord.features.editorial.data.AppleMusicEditorialItem
+import com.soundchord.features.editorial.data.AppleMusicEditorialRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -244,5 +246,20 @@ object AppleMusicPlaylistClient {
                 if (response.isSuccessful) response.body.string() else null
             }
         }.getOrNull()
+    }
+
+    /**
+     * Searches editorial playlists in Apple Music catalog.
+     */
+    suspend fun searchPlaylists(
+        query: String,
+        limit: Int = 12,
+        storefront: String = "us",
+    ): List<AppleMusicEditorialItem> {
+        return AppleMusicEditorialRepository.searchPlaylists(
+            query = query,
+            limit = limit,
+            storefront = storefront,
+        )
     }
 }
