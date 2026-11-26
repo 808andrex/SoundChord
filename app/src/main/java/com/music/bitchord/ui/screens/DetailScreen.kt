@@ -12,6 +12,7 @@ import com.music.bitchord.ui.components.enterReveal
 import android.os.Build
 import com.music.bitchord.R
 
+import com.soundchord.features.editorial.data.AlbumRelatedRepository
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -388,6 +389,8 @@ fun DetailScreen(
     onRetry: (() -> Unit)? = null,
     /** Loads related playlists recommendations for a playlist page. */
     onLoadRelatedPlaylists: ((DetailPage) -> Unit)? = null,
+    /** Loads related editorial sections for an album page (videos, more by artist, appears on, you might like). */
+    onLoadAlbumRelated: ((DetailPage) -> Unit)? = null,
 ) {
     val rawSongs = (page.songs as? UiState.Success)?.data.orEmpty()
     // A folder keeps its own sort — the one its top bar menu sets — rather
@@ -463,11 +466,14 @@ fun DetailScreen(
         }
     }
     LaunchedEffect(page.browseId, (page.songs as? UiState.Success)?.data?.size) {
+        val loadedSongs = (page.songs as? UiState.Success)?.data
         if (page.type == BrowseType.PLAYLIST && page.relatedPlaylists.isEmpty()) {
-            val loadedSongs = (page.songs as? UiState.Success)?.data
             if (!loadedSongs.isNullOrEmpty()) {
                 onLoadRelatedPlaylists?.invoke(page)
             }
+        }
+        if (page.type == BrowseType.ALBUM && !page.albumRelated.isLoaded) {
+            onLoadAlbumRelated?.invoke(page)
         }
     }
     val playlistCover = remember(page.browseId) {
@@ -1000,6 +1006,176 @@ fun DetailScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            // Related sections for Albums (Apple Music style)
+            if (page.type == BrowseType.ALBUM) {
+                val related = page.albumRelated
+
+                // 1. Music Videos (16:9 widescreen)
+                if (related.musicVideos.isNotEmpty()) {
+                    item(key = "album-music-videos") {
+                        Column(
+                            modifier = Modifier
+                                .secondaryExitFade(100)
+                                .padding(top = 28.dp),
+                        ) {
+                            SectionHeading(
+                                title = stringResource(R.string.music_videos),
+                                palette = palette,
+                                horizontalPadding = PAGE_GUTTER,
+                            )
+                            val carouselState = rememberLazyListState()
+                            LazyRow(
+                                state = carouselState,
+                                contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                flingBehavior = rememberSnapFlingBehavior(lazyListState = carouselState),
+                            ) {
+                                items(
+                                    items = related.musicVideos,
+                                    key = { "album-video-${it.videoId ?: it.title}" },
+                                ) { item ->
+                                    SectionCard(
+                                        item = item,
+                                        palette = palette,
+                                        onClick = { onSectionItemClick(item) },
+                                        onLongPress = onSectionItemLongPress?.let { { it(item) } },
+                                        modifier = Modifier.width(VIDEO_CARD_WIDTH),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. More by <Artist>
+                if (related.moreByArtist.isNotEmpty()) {
+                    item(key = "album-more-by-artist") {
+                        Column(
+                            modifier = Modifier
+                                .secondaryExitFade(100)
+                                .padding(top = 28.dp),
+                        ) {
+                            val headingArtist = remember(credit, songs, page.subtitle) {
+                                val raw = songs.firstOrNull { it.artist.isNotBlank() }?.artist
+                                    ?: credit.ifBlank { page.subtitle }
+                                AlbumRelatedRepository.extractPrimaryArtist(raw)
+                            }
+                            val headingTitle = if (headingArtist.isNotBlank()) {
+                                stringResource(R.string.more_by_artist, headingArtist)
+                            } else {
+                                stringResource(R.string.more_by_artist_generic)
+                            }
+                            SectionHeading(
+                                title = headingTitle,
+                                palette = palette,
+                                horizontalPadding = PAGE_GUTTER,
+                            )
+                            val carouselState = rememberLazyListState()
+                            LazyRow(
+                                state = carouselState,
+                                contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                flingBehavior = rememberSnapFlingBehavior(lazyListState = carouselState),
+                            ) {
+                                items(
+                                    items = related.moreByArtist,
+                                    key = { "album-more-${it.browseId ?: it.title}" },
+                                ) { item ->
+                                    SectionCard(
+                                        item = item,
+                                        palette = palette,
+                                        onClick = { onSectionItemClick(item) },
+                                        onLongPress = onSectionItemLongPress?.let { { it(item) } },
+                                        modifier = Modifier.width(SHELF_CARD_WIDTH),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. Appears On
+                if (related.appearsOn.isNotEmpty()) {
+                    item(key = "album-appears-on") {
+                        Column(
+                            modifier = Modifier
+                                .secondaryExitFade(100)
+                                .padding(top = 28.dp),
+                        ) {
+                            SectionHeading(
+                                title = stringResource(R.string.appears_on),
+                                palette = palette,
+                                horizontalPadding = PAGE_GUTTER,
+                            )
+                            val carouselState = rememberLazyListState()
+                            LazyRow(
+                                state = carouselState,
+                                contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                flingBehavior = rememberSnapFlingBehavior(lazyListState = carouselState),
+                            ) {
+                                items(
+                                    items = related.appearsOn,
+                                    key = { "album-appears-${it.browseId ?: it.title}" },
+                                ) { item ->
+                                    RelatedPlaylistCard(
+                                        item = item,
+                                        palette = palette,
+                                        onClick = { onSectionItemClick(item) },
+                                        onLongPress = onSectionItemLongPress?.let { { it(item) } },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 4. You Might Also Like
+                if (related.youMightAlsoLike.isNotEmpty()) {
+                    item(key = "album-you-might-also-like") {
+                        Column(
+                            modifier = Modifier
+                                .secondaryExitFade(100)
+                                .padding(top = 28.dp),
+                        ) {
+                            SectionHeading(
+                                title = stringResource(R.string.album_you_might_also_like),
+                                palette = palette,
+                                horizontalPadding = PAGE_GUTTER,
+                            )
+                            val carouselState = rememberLazyListState()
+                            LazyRow(
+                                state = carouselState,
+                                contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                flingBehavior = rememberSnapFlingBehavior(lazyListState = carouselState),
+                            ) {
+                                items(
+                                    items = related.youMightAlsoLike,
+                                    key = { "album-like-${it.browseId ?: it.title}" },
+                                ) { item ->
+                                    SectionCard(
+                                        item = item,
+                                        palette = palette,
+                                        onClick = { onSectionItemClick(item) },
+                                        onLongPress = onSectionItemLongPress?.let { { it(item) } },
+                                        modifier = Modifier.width(SHELF_CARD_WIDTH),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (related.musicVideos.isNotEmpty() || related.moreByArtist.isNotEmpty() ||
+                    related.appearsOn.isNotEmpty() || related.youMightAlsoLike.isNotEmpty()
+                ) {
+                    item(key = "album-related-bottom-spacer") {
+                        Spacer(Modifier.height(44.dp))
                     }
                 }
             }
@@ -2641,6 +2817,8 @@ private fun SectionCard(
         )
         return
     }
+    var hasError by remember(item.thumbnailUrl) { mutableStateOf(item.thumbnailUrl.isNullOrBlank()) }
+    if (hasError) return
     val cardToken = remember { Any() }
     val openCard = rememberCoverTap(item.browseId, cardToken, onClick)
     Column(
@@ -2650,6 +2828,7 @@ private fun SectionCard(
         AsyncImage(
             model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
             contentDescription = null,
+            onError = { hasError = true },
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
@@ -2684,6 +2863,8 @@ private fun RelatedPlaylistCard(
     modifier: Modifier = Modifier.width(SHELF_CARD_WIDTH),
     onLongPress: (() -> Unit)? = null,
 ) {
+    var hasError by remember(item.thumbnailUrl) { mutableStateOf(item.thumbnailUrl.isNullOrBlank()) }
+    if (hasError) return
     val cardToken = remember { Any() }
     val openCard = rememberCoverTap(item.browseId, cardToken, onClick)
     Column(
@@ -2694,6 +2875,7 @@ private fun RelatedPlaylistCard(
             model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
             contentDescription = null,
             contentScale = ContentScale.Crop,
+            onError = { hasError = true },
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)

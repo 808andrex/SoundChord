@@ -32,6 +32,8 @@ import com.music.bitchord.data.model.SPOTIFY_MISSING_PREFIX
 import com.music.bitchord.data.model.SPOTIFY_PENDING_PREFIX
 import com.music.bitchord.data.spotify.SPOTIFY_PAGE_PREFIX
 import com.soundchord.features.editorial.data.AppleMusicEditorialRepository
+import com.soundchord.features.editorial.data.AlbumRelatedDatabaseCache
+import com.soundchord.features.editorial.data.AlbumRelatedRepository
 import com.soundchord.features.playlistimport.data.AppleMusicPlaylistClient
 import com.soundchord.features.playlistimport.data.AppleMusicPlaylistRepository
 import com.music.bitchord.data.canvas.PlaylistMotionStore
@@ -2178,6 +2180,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     init {
         val appContext = getApplication<Application>()
         com.music.bitchord.data.PlaylistCovers.init(appContext)
+        AlbumRelatedDatabaseCache.init(appContext)
         viewModelScope.launch {
             com.music.bitchord.data.PlaylistCovers.covers.collect { covers ->
                 _playlists.value = withPlaylistCoverModels(_playlists.value)
@@ -3562,6 +3565,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             songs = UiState.Loading,
             type = resolved,
         )
+        if (resolved == BrowseType.ALBUM) {
+            val primaryArtist = AlbumRelatedRepository.extractPrimaryArtist(subtitle)
+            loadAlbumRelatedSections(
+                browseId = browseId,
+                title = title,
+                artistName = primaryArtist,
+                songs = emptyList(),
+                artistBrowseId = null,
+            )
+        }
         viewModelScope.launch {
             var sections = emptyList<HomeShelf>()
             // Callers that open an artist from a track — the player, the
@@ -4685,6 +4698,117 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         return queries
+    }
+
+    private val inFlightAlbumRelated = ConcurrentHashMap<String, Job>()
+
+    fun loadAlbumRelatedSections(
+        browseId: String,
+        title: String,
+        artistName: String,
+        songs: List<Song>,
+        artistBrowseId: String? = null,
+    ) {
+        if (browseId.isBlank()) return
+
+        val primaryArtist = AlbumRelatedRepository.extractPrimaryArtist(artistName)
+        val cacheKey = if (primaryArtist.isNotBlank()) "$browseId:${primaryArtist.lowercase(Locale.ROOT)}" else browseId
+
+        // 1. In-memory cache check (must have videos if loaded)
+        val memCached = AlbumRelatedRepository.getCached(cacheKey)
+        if (memCached != null && memCached.isLoaded && memCached.musicVideos.isNotEmpty()) {
+            _detailStack.update { stack ->
+                stack.map { page ->
+                    if (page.browseId == browseId) {
+                        page.copy(albumRelated = memCached)
+                    } else page
+                }
+            }
+            return
+        }
+
+        // 2. Persistent SQLite DB cache check (instant across app restarts)
+        val dbCached = AlbumRelatedDatabaseCache.get(cacheKey)
+        if (dbCached != null && dbCached.isLoaded && dbCached.musicVideos.isNotEmpty()) {
+            AlbumRelatedRepository.putInMemoryCache(cacheKey, dbCached)
+            _detailStack.update { stack ->
+                stack.map { page ->
+                    if (page.browseId == browseId) {
+                        page.copy(albumRelated = dbCached)
+                    } else page
+                }
+            }
+            return
+        }
+
+        if (inFlightAlbumRelated[cacheKey]?.isActive == true) return
+
+        inFlightAlbumRelated[cacheKey] = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                AlbumRelatedRepository.getAlbumRelatedSections(
+                    browseId = browseId,
+                    albumTitle = title,
+                    artistName = primaryArtist,
+                    artistBrowseId = artistBrowseId,
+                    songs = songs,
+                    onVideosLoaded = { videos ->
+                        if (videos.isNotEmpty()) {
+                            _detailStack.update { stack ->
+                                stack.map { page ->
+                                    if (page.browseId == browseId) {
+                                        page.copy(albumRelated = page.albumRelated.copy(musicVideos = videos))
+                                    } else page
+                                }
+                            }
+                        }
+                    },
+                    onMoreByArtistLoaded = { more ->
+                        if (more.isNotEmpty()) {
+                            _detailStack.update { stack ->
+                                stack.map { page ->
+                                    if (page.browseId == browseId) {
+                                        page.copy(albumRelated = page.albumRelated.copy(moreByArtist = more))
+                                    } else page
+                                }
+                            }
+                        }
+                    },
+                    onAppearsOnLoaded = { appears ->
+                        if (appears.isNotEmpty()) {
+                            _detailStack.update { stack ->
+                                stack.map { page ->
+                                    if (page.browseId == browseId) {
+                                        page.copy(albumRelated = page.albumRelated.copy(appearsOn = appears))
+                                    } else page
+                                }
+                            }
+                        }
+                    },
+                    onYouMightLikeLoaded = { like ->
+                        if (like.isNotEmpty()) {
+                            _detailStack.update { stack ->
+                                stack.map { page ->
+                                    if (page.browseId == browseId) {
+                                        page.copy(albumRelated = page.albumRelated.copy(youMightAlsoLike = like))
+                                    } else page
+                                }
+                            }
+                        }
+                    },
+                )
+                _detailStack.update { stack ->
+                    stack.map { page ->
+                        if (page.browseId == browseId) {
+                            page.copy(albumRelated = page.albumRelated.copy(isLoaded = true))
+                        } else page
+                    }
+                }
+            } catch (_: Exception) {
+                // Non-fatal recommendation failure
+            } finally {
+                inFlightAlbumRelated.remove(cacheKey)
+            }
+        }
     }
 
     fun syncSavedApplePlaylistTracks(applePlaylistId: String, songs: List<Song>) {

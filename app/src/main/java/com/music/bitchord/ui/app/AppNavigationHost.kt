@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.History
+import com.soundchord.features.editorial.data.AlbumRelatedRepository
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.runtime.Composable
@@ -1359,6 +1360,19 @@ internal fun AppNavigationHost(
                             title = p.title,
                             songs = (p.songs as? UiState.Success)?.data.orEmpty(),
                             curatorName = p.subtitle,
+                        )
+                    },
+                    onLoadAlbumRelated = { p ->
+                        val songs = (p.songs as? UiState.Success)?.data.orEmpty()
+                        val rawArtist = songs.firstOrNull { it.artist.isNotBlank() }?.artist ?: p.subtitle
+                        val primaryArtist = AlbumRelatedRepository.extractPrimaryArtist(rawArtist)
+                        val artistId = songs.firstOrNull { !it.artistId.isNullOrBlank() }?.artistId
+                        viewModel.loadAlbumRelatedSections(
+                            browseId = p.browseId,
+                            title = p.title,
+                            artistName = primaryArtist,
+                            songs = songs,
+                            artistBrowseId = artistId,
                         )
                     },
                 )

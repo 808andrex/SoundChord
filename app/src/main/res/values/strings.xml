@@ -1679,4 +1679,9 @@
     <string name="apple_music_playlists">Apple Music Playlists</string>
     <string name="filter_apple_music">Apple Music</string>
     <string name="you_might_also_like">You might also like</string>
+    <string name="music_videos">Music Videos</string>
+    <string name="more_by_artist">More by %1$s</string>
+    <string name="more_by_artist_generic">More by Artist</string>
+    <string name="appears_on">Appears On</string>
+    <string name="album_you_might_also_like">You Might Also Like</string>
 </resources>

@@ -1663,8 +1663,11 @@ object InnertubeParser {
         val videoId = endpoint.o("watchEndpoint").s("videoId")
             ?: browseId?.takeIf { it.startsWith("MPED") }?.removePrefix("MPED")
         val resolvedBrowseId = browseId?.takeUnless { it.startsWith("MPED") }
-        val thumbnails = renderer.o("thumbnailRenderer").o("musicThumbnailRenderer")
-            .o("thumbnail").a("thumbnails")
+        val thumbnailRenderer = renderer.o("thumbnailRenderer")
+        val thumbnails = thumbnailRenderer.o("musicThumbnailRenderer").o("thumbnail").a("thumbnails")
+            ?: thumbnailRenderer.o("croppedSquareThumbnailRenderer").o("thumbnail").a("thumbnails")
+            ?: thumbnailRenderer.o("thumbnail").a("thumbnails")
+            ?: renderer.o("thumbnail").a("thumbnails")
         val subtitle = renderer.o("subtitle").runs()
         // A card with no browse target is a playable track, not an album,
         // playlist or artist; widescreen art on one of those means it's a

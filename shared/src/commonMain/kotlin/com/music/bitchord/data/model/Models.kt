@@ -688,6 +688,22 @@ data class DetailPage(
      * Recommended related playlists for this playlist (Apple Music & YouTube Music combined).
      */
     val relatedPlaylists: List<ShelfItem> = emptyList(),
+    /**
+     * Related editorial and catalogue sections for an Album detail page (Apple Music style).
+     */
+    val albumRelated: AlbumRelatedSections = AlbumRelatedSections(),
+)
+
+/**
+ * Related editorial and catalogue sections for an Album detail page (Apple Music style).
+ * Includes Music Videos (16:9), More by Artist, Appears On, and You Might Also Like.
+ */
+data class AlbumRelatedSections(
+    val musicVideos: List<ShelfItem> = emptyList(),
+    val moreByArtist: List<ShelfItem> = emptyList(),
+    val appearsOn: List<ShelfItem> = emptyList(),
+    val youMightAlsoLike: List<ShelfItem> = emptyList(),
+    val isLoaded: Boolean = false,
 )
 
 /**

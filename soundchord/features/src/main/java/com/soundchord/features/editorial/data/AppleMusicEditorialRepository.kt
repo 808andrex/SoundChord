@@ -56,6 +56,7 @@ object AppleMusicEditorialRepository {
         if (cacheDir == null) {
             cacheDir = context.applicationContext.cacheDir
         }
+        AlbumRelatedDatabaseCache.init(context)
     }
 
     fun defaultStorefront(): String {
@@ -1537,5 +1538,105 @@ object AppleMusicEditorialRepository {
                     lowerTitle.contains("setlist")
             }
         )
+    }
+
+    /**
+     * Searches official albums in Apple Music catalog for a given artist or query.
+     */
+    suspend fun searchAlbums(
+        query: String,
+        limit: Int = 12,
+        storefront: String = defaultStorefront(),
+    ): List<AppleMusicEditorialItem> = withContext(Dispatchers.IO) {
+        val cleanQuery = query.trim()
+        if (cleanQuery.isEmpty()) return@withContext emptyList()
+
+        var bearer = AppleMusicTokenProvider.token() ?: return@withContext emptyList()
+        val encodedQuery = runCatching {
+            URLEncoder.encode(cleanQuery, "UTF-8")
+        }.getOrNull() ?: return@withContext emptyList()
+
+        val candidateStorefronts = listOf(storefront, "us", "mx", "es", "ec").distinct()
+        var matchedItems: List<AppleMusicEditorialItem> = emptyList()
+
+        for (sf in candidateStorefronts) {
+            val url = "$API_BASE/$sf/search?term=$encodedQuery&types=albums&limit=$limit&extend=editorialArtwork,editorialVideo"
+            var responseBody = executeGet(url, bearer)
+
+            if (responseBody == null) {
+                AppleMusicTokenProvider.invalidateToken(bearer)
+                bearer = AppleMusicTokenProvider.token() ?: break
+                responseBody = executeGet(url, bearer)
+            }
+
+            if (!responseBody.isNullOrBlank()) {
+                val parsed = parseAlbumSearchResults(responseBody, sf)
+                if (parsed.isNotEmpty()) {
+                    matchedItems = parsed
+                    break
+                }
+            }
+        }
+
+        matchedItems.take(limit)
+    }
+
+    private fun parseAlbumSearchResults(
+        jsonStr: String,
+        storefront: String,
+    ): List<AppleMusicEditorialItem> {
+        val root = runCatching { json.parseToJsonElement(jsonStr).jsonObject }.getOrNull() ?: return emptyList()
+        val resultsObj = root["results"]?.jsonObject ?: return emptyList()
+        val albumsObj = resultsObj["albums"]?.jsonObject ?: return emptyList()
+        val dataArray = albumsObj["data"]?.jsonArray ?: return emptyList()
+
+        val items = mutableListOf<AppleMusicEditorialItem>()
+        for (element in dataArray) {
+            val obj = element.jsonObject
+            val id = obj["id"]?.jsonPrimitive?.contentOrNull ?: continue
+            val attributes = obj["attributes"]?.jsonObject ?: continue
+
+            val title = attributes["name"]?.jsonPrimitive?.contentOrNull?.trim() ?: continue
+            val artistName = attributes["artistName"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+            val releaseDate = attributes["releaseDate"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            val year = releaseDate.take(4).filter { it.isDigit() }
+            val subtitle = when {
+                artistName.isNotBlank() && year.isNotBlank() -> "$artistName • $year"
+                artistName.isNotBlank() -> artistName
+                else -> year
+            }
+
+            val rawArtworkUrl = attributes["artwork"]?.jsonObject?.get("url")?.jsonPrimitive?.contentOrNull
+            val thumbnailUrl = formatAppleArtworkUrl(rawArtworkUrl, 600, 600, "jpg")
+            if (thumbnailUrl == null || !isValidArtworkUrl(thumbnailUrl)) continue
+
+            val editorialNotes = attributes["editorialNotes"]?.jsonObject
+            val rawDescription = editorialNotes?.let { notes ->
+                (notes["short"]?.jsonPrimitive?.contentOrNull
+                    ?: notes["standard"]?.jsonPrimitive?.contentOrNull).orEmpty()
+            } ?: attributes["description"]?.jsonObject?.let { desc ->
+                (desc["short"]?.jsonPrimitive?.contentOrNull
+                    ?: desc["standard"]?.jsonPrimitive?.contentOrNull).orEmpty()
+            } ?: attributes["description"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            val cleanDescription = rawDescription.replace(Regex("<[^>]+>"), "").trim()
+
+            val isExplicit = attributes["contentRating"]?.jsonPrimitive?.contentOrNull.equals("explicit", ignoreCase = true)
+
+            items.add(
+                AppleMusicEditorialItem(
+                    id = id,
+                    title = title,
+                    subtitle = subtitle,
+                    description = cleanDescription,
+                    thumbnailUrl = thumbnailUrl,
+                    wideImageUrl = thumbnailUrl,
+                    badge = null,
+                    kind = EditorialItemKind.ALBUM,
+                    isExplicit = isExplicit,
+                    storefront = storefront,
+                )
+            )
+        }
+        return items
     }
 }
