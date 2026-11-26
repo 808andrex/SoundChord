@@ -16,11 +16,12 @@ import {
 } from '@/components/icons/NavIcons';
 import { hrefFor } from '@/components/music/links';
 import { config } from '@/config';
-import { LIBRARY_SECTIONS, type LibrarySection } from '@/data/music/library';
+import { LIBRARY_SECTION_KEYS, type LibrarySection } from '@/data/music/library';
 import { useLibraryPlaylists, useSignedIn } from '@/data/music/queries';
 import { useSpotifyPlaylists } from '@/data/spotify/queries';
 import { useExtensionUpdate } from '@/extension/useExtensionUpdate';
 import { useSpotifySignedIn } from '@/extension/useSpotifyAuth';
+import { useTranslation, type TranslationKey } from '@/i18n';
 import { useUi } from '@/state/ui';
 import { AccountButton } from './AccountButton';
 
@@ -30,10 +31,10 @@ interface NavItem {
   Icon: (props: NavIconProps) => React.ReactNode;
 }
 
-const PRIMARY: NavItem[] = [
-  { to: '/search', label: 'Search', Icon: SearchIcon },
-  { to: '/home', label: 'Home', Icon: HomeIcon },
-  { to: '/new', label: 'New', Icon: NewIcon },
+const PRIMARY_KEYS: { to: string; key: TranslationKey; Icon: NavItem['Icon'] }[] = [
+  { to: '/search', key: 'nav.search', Icon: SearchIcon },
+  { to: '/home', key: 'nav.home', Icon: HomeIcon },
+  { to: '/new', key: 'nav.new', Icon: NewIcon },
 ];
 
 const LIBRARY_ICONS: Record<Exclude<LibrarySection, 'playlists'>, NavItem['Icon']> = {
@@ -44,9 +45,11 @@ const LIBRARY_ICONS: Record<Exclude<LibrarySection, 'playlists'>, NavItem['Icon'
   'made-for-you': MadeForYouIcon,
 };
 
-const LIBRARY: NavItem[] = (Object.keys(LIBRARY_ICONS) as (keyof typeof LIBRARY_ICONS)[]).map((section) => ({
+const LIBRARY_KEYS: { to: string; key: TranslationKey; Icon: NavItem['Icon'] }[] = (
+  Object.keys(LIBRARY_ICONS) as (keyof typeof LIBRARY_ICONS)[]
+).map((section) => ({
   to: `/library/${section}`,
-  label: LIBRARY_SECTIONS[section].title,
+  key: LIBRARY_SECTION_KEYS[section],
   Icon: LIBRARY_ICONS[section],
 }));
 
@@ -77,29 +80,45 @@ function NavList({ items, onNavigate }: { items: NavItem[]; onNavigate: () => vo
 
 /** Library and Playlists (report §1), once YouTube requests are made as the user. */
 function LibraryNav({ onNavigate }: { onNavigate: () => void }) {
+  const { t } = useTranslation();
   const playlists = useLibraryPlaylists();
+  const libraryItems: NavItem[] = LIBRARY_KEYS.map((entry) => ({
+    to: entry.to,
+    label: t(entry.key),
+    Icon: entry.Icon,
+  }));
+
   return (
     <>
-      <h2 className={sectionHeader}>Library</h2>
-      <NavList items={LIBRARY} onNavigate={onNavigate} />
-      <h2 className={sectionHeader}>Playlists</h2>
+      <h2 className={sectionHeader}>{t('nav.library')}</h2>
+      <NavList items={libraryItems} onNavigate={onNavigate} />
+      <h2 className={sectionHeader}>{t('nav.playlists')}</h2>
       <ul className={list}>
         <li>
           <PrefetchNavLink to="/library/playlists" className={item} onClick={onNavigate}>
             <AllPlaylistsIcon size={24} className={icon} />
-            <span className={navLabel}>{LIBRARY_SECTIONS.playlists.title}</span>
+            <span className={navLabel}>{t('nav.allPlaylists')}</span>
           </PrefetchNavLink>
         </li>
-        {playlists.data?.map((playlist) => (
-          <li key={playlist.id}>
-            <PrefetchNavLink to={hrefFor(playlist) ?? '/library/playlists'} className={item} onClick={onNavigate}>
-              <span className={icon}>
-                <ListMusic size={17} strokeWidth={1.8} />
-              </span>
-              <span className={navLabel}>{playlist.title}</span>
-            </PrefetchNavLink>
-          </li>
-        ))}
+        {playlists.data?.map((playlist) => {
+          const isLikedMusic =
+            playlist.id === 'LM' ||
+            playlist.id === 'VLLM' ||
+            playlist.title.trim().toLowerCase() === 'liked music' ||
+            playlist.title.trim().toLowerCase() === 'canciones que me gustan';
+          return (
+            <li key={playlist.id}>
+              <PrefetchNavLink to={hrefFor(playlist) ?? '/library/playlists'} className={item} onClick={onNavigate}>
+                <span className={icon}>
+                  <ListMusic size={17} strokeWidth={1.8} />
+                </span>
+                <span className={navLabel}>
+                  {isLikedMusic ? t('nav.likedMusic') : playlist.title}
+                </span>
+              </PrefetchNavLink>
+            </li>
+          );
+        })}
       </ul>
     </>
   );
@@ -107,15 +126,16 @@ function LibraryNav({ onNavigate }: { onNavigate: () => void }) {
 
 /** Spotify's playlists, once the extension can read them as the user (prompt §7.1). */
 function SpotifyNav({ onNavigate }: { onNavigate: () => void }) {
+  const { t } = useTranslation();
   const playlists = useSpotifyPlaylists();
   return (
     <>
-      <h2 className={sectionHeader}>Spotify</h2>
+      <h2 className={sectionHeader}>{t('nav.spotify')}</h2>
       <ul className={list}>
         <li>
           <PrefetchNavLink to="/spotify" end className={item} onClick={onNavigate}>
             <AllPlaylistsIcon size={24} className={icon} />
-            <span className={navLabel}>All Spotify Playlists</span>
+            <span className={navLabel}>{t('nav.allSpotifyPlaylists')}</span>
           </PrefetchNavLink>
         </li>
         {playlists.data?.map((playlist) => (
@@ -135,12 +155,19 @@ function SpotifyNav({ onNavigate }: { onNavigate: () => void }) {
 
 /** The left glass sidebar (report §1). */
 export function Sidebar() {
+  const { t } = useTranslation();
   const drawerOpen = useUi((s) => s.drawerOpen);
   const setDrawerOpen = useUi((s) => s.setDrawerOpen);
   const update = useExtensionUpdate();
   const signedIn = useSignedIn();
   const spotifySignedIn = useSpotifySignedIn();
   const close = () => setDrawerOpen(false);
+
+  const primaryItems: NavItem[] = PRIMARY_KEYS.map((entry) => ({
+    to: entry.to,
+    label: t(entry.key),
+    Icon: entry.Icon,
+  }));
 
   return (
     <>
@@ -151,14 +178,14 @@ export function Sidebar() {
         aria-label="Main"
       >
         <div className="mt-2 ml-2 flex h-18 items-center px-5">
-          <PrefetchLink to="/home" className="inline-flex items-center gap-2 rounded-[6px]" aria-label="SoundChord, Home" onClick={close}>
+          <PrefetchLink to="/home" className="inline-flex items-center gap-2 rounded-[6px]" aria-label={`SoundChord, ${t('nav.home')}`} onClick={close}>
             {/* White on dark, as Apple's own wordmark; it follows the label colour so it stays visible in light. */}
             <LogoMark size={22} className="text-primary" />
             <span className="type-[700_19px/24px] tracking-[-0.01em]">SoundChord</span>
           </PrefetchLink>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto pr-3 pl-5 [scrollbar-width:none]">
-          <NavList items={PRIMARY} onNavigate={close} />
+          <NavList items={primaryItems} onNavigate={close} />
           {signedIn && <LibraryNav onNavigate={close} />}
           {spotifySignedIn && <SpotifyNav onNavigate={close} />}
         </div>
@@ -168,20 +195,23 @@ export function Sidebar() {
             <span className={icon}>
               <MdOutlineExtension size={18} />
             </span>
-            <span className={navLabel}>SoundChord Extension</span>
+            <span className={navLabel}>{t('nav.soundchordExtension')}</span>
             {update.state === 'available' && (
-              <span className="ml-auto rounded-[10px] bg-key px-[7px] py-0.5 type-subhead-emphasized text-white" title={`Version ${update.latest.version} is available`}>
-                Update
+              <span
+                className="ml-auto rounded-[10px] bg-key px-[7px] py-0.5 type-subhead-emphasized text-white"
+                title={t('nav.versionAvailable', { version: update.latest.version })}
+              >
+                {t('nav.update')}
               </span>
             )}
           </PrefetchNavLink>
           <AccountButton />
           <div className="flex items-center justify-between">
             <a className="inline-flex items-center gap-1 ps-1 type-callout text-primary hover:underline" href={config.androidAppUrl} target="_blank" rel="noreferrer">
-              <span>Get the Android app</span>
+              <span>{t('nav.getAndroidApp')}</span>
               <ArrowUpRight size={14} strokeWidth={2} />
             </a>
-            <PrefetchNavLink to="/settings" className="grid size-7 place-items-center rounded-nav text-secondary hover:bg-quinary hover:text-primary aria-[current=page]:bg-quinary aria-[current=page]:text-primary" aria-label="Settings" title="Settings" onClick={close}>
+            <PrefetchNavLink to="/settings" className="grid size-7 place-items-center rounded-nav text-secondary hover:bg-quinary hover:text-primary aria-[current=page]:bg-quinary aria-[current=page]:text-primary" aria-label={t('nav.settings')} title={t('nav.settings')} onClick={close}>
               <Settings size={17} strokeWidth={1.9} />
             </PrefetchNavLink>
           </div>

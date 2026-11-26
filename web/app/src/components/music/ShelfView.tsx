@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { shelfHeader, shelfKinds, shelfList, shelfSection, type ShelfKind } from '@/components/shelf';
 import type { MusicItem, Shelf, Track } from '@/data/music/types';
+import { translateShelfTitle, useTranslation } from '@/i18n';
 import type { QueueSource } from '@/playback/queue/timeline';
 import { browseHref } from './links';
 import { CircleLockup, SquareLockup, TrackLockup, VideoLockup } from './Lockups';
@@ -83,16 +84,18 @@ export function ShelfScroller({ kind, children }: { kind: ShelfKind; children: R
 
 /** A shelf's title, a link with a chevron when there's a page behind it. */
 function ShelfTitle({ title, to }: { title: string; to?: string | null }) {
+  const { language } = useTranslation();
+  const displayTitle = translateShelfTitle(title, language);
   return (
     <div className={shelfHeader}>
       <h2 className="type-title-2-emphasized">
         {to ? (
           <PrefetchLink to={to} className="group/title inline-flex items-center gap-0.5">
-            {title}
+            {displayTitle}
             <ChevronRight size={18} strokeWidth={2.6} className="text-secondary group-hover/title:text-primary" />
           </PrefetchLink>
         ) : (
-          title
+          displayTitle
         )}
       </h2>
     </div>
@@ -117,8 +120,10 @@ export const trackItem = (track: Track): MusicItem => ({
  * plays the whole shelf from there.
  */
 export function TrackShelf({ title, to, tracks, source }: { title: string; to?: string | null; tracks: Track[]; source: QueueSource }) {
+  const { language } = useTranslation();
+  const displayTitle = translateShelfTitle(title, language);
   return (
-    <section className={shelfSection} aria-label={title}>
+    <section className={shelfSection} aria-label={displayTitle}>
       <ShelfTitle title={title} to={to} />
       <ShelfScroller key={tracks.length} kind="tracks">
         {tracks.map((track, i) => (
@@ -133,8 +138,10 @@ export function TrackShelf({ title, to, tracks, source }: { title: string; to?: 
 
 /** A titled horizontal shelf (report §2): grid columns per breakpoint, scroll-snap, hover arrows. */
 export function ShelfView({ shelf }: { shelf: Shelf }) {
+  const { language } = useTranslation();
+  const displayTitle = translateShelfTitle(shelf.title, language);
   return (
-    <section className={shelfSection} aria-label={shelf.title}>
+    <section className={shelfSection} aria-label={displayTitle}>
       <ShelfTitle title={shelf.title} to={shelf.seeAll ? browseHref(shelf.seeAll) : null} />
       <ShelfScroller key={shelf.items.length} kind={shelf.layout}>
         {shelf.items.map((item, i) => (

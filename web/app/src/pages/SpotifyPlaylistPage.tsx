@@ -12,6 +12,7 @@ import type { HeaderInfo } from '@/data/music/types';
 import { useSpotifyPlaylistInfo, useSpotifyRows } from '@/data/spotify/queries';
 import { useExtension } from '@/extension/useExtension';
 import { useSpotifySignedIn } from '@/extension/useSpotifyAuth';
+import { useTranslation } from '@/i18n';
 import { useArtworkColor } from '@/lib/artworkColor';
 import { usePageTint } from '@/lib/usePageTint';
 import { PlaylistSkeleton } from '@/skeletons/PageSkeletons';
@@ -24,6 +25,7 @@ import { detailFooter } from './pageStyles';
  * (SpotifyImportAlert), with the songs that found nothing left out and named.
  */
 export default function SpotifyPlaylistPage() {
+  const { t } = useTranslation();
   const id = decodeURIComponent(useParams().id ?? '');
   const extension = useExtension();
   const signedIn = useSpotifySignedIn();
@@ -31,8 +33,8 @@ export default function SpotifyPlaylistPage() {
   const rows = useSpotifyRows(id);
   usePageTint(useArtworkColor(info.data?.imageUrl));
 
-  if (extension.state === 'missing') return <NeedsExtension what="your Spotify playlists" />;
-  if (!signedIn) return <EmptyState title="Sign in to Spotify" detail="Open Spotify in the sidebar to connect your account." />;
+  if (extension.state === 'missing') return <NeedsExtension what={t('spotify.yourSpotifyPlaylists')} />;
+  if (!signedIn) return <EmptyState title={t('spotify.signInTitle')} detail={t('spotify.openInSidebarToConnect')} />;
   if (rows.status === 'error' && !rows.rows.length) return <LoadError error={rows.error} onRetry={rows.retry} />;
   if (!info.data || (rows.status === 'loading' && !rows.rows.length)) return <PlaylistSkeleton />;
 
@@ -40,15 +42,19 @@ export default function SpotifyPlaylistPage() {
   const missing = rows.rows.filter((t) => t.unavailable === 'missing');
   const total = Math.max(rows.total, info.data.total);
   const meta = [
-    `${total} ${total === 1 ? 'song' : 'songs'}`,
-    rows.matching > 0 ? `finding on YouTube Music, ${rows.rows.length - rows.matching} of ${rows.rows.length}` : null,
-    rows.matching === 0 && missing.length > 0 ? `${missing.length} not on YouTube Music` : null,
+    `${total} ${total === 1 ? t('common.song') : t('common.songs')}`,
+    rows.matching > 0
+      ? t('spotify.findingOnYt', { current: rows.rows.length - rows.matching, total: rows.rows.length })
+      : null,
+    rows.matching === 0 && missing.length > 0
+      ? t('spotify.notOnYt', { count: missing.length })
+      : null,
   ]
     .filter(Boolean)
     .join(' • ');
   const headerInfo: HeaderInfo = {
     title: info.data.name,
-    subtitle: 'Spotify Playlist',
+    subtitle: t('common.spotifyPlaylist'),
     meta,
     description: null,
     thumbnail: info.data.imageUrl,
@@ -69,7 +75,7 @@ export default function SpotifyPlaylistPage() {
       />
       <TrackList tracks={rows.rows} variant="playlist" source={context.source} />
       <footer className={detailFooter}>
-        <p>From Spotify. Songs are matched to YouTube Music by title, artist and length.</p>
+        <p>{t('spotify.footer')}</p>
       </footer>
     </>
   );
@@ -77,6 +83,7 @@ export default function SpotifyPlaylistPage() {
 
 /** Keeps the matched songs as a private YouTube Music playlist; asks once before writing to the account. */
 function ImportButton({ title, videoIds, ready }: { title: string; videoIds: string[]; ready: boolean }) {
+  const { t } = useTranslation();
   const ytSignedIn = useSignedIn();
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
@@ -86,14 +93,14 @@ function ImportButton({ title, videoIds, ready }: { title: string; videoIds: str
   });
   if (!ytSignedIn) return null;
   const label = !ready
-    ? 'Import to YouTube Music (matching…)'
+    ? t('spotify.importMatching')
     : create.isPending
-      ? 'Importing…'
+      ? t('spotify.importing')
       : create.isError
-        ? 'Import failed. Try again'
+        ? t('spotify.importFailed')
         : confirming
-          ? `Make a private playlist of ${videoIds.length} songs?`
-          : 'Import to YouTube Music';
+          ? t('spotify.importConfirm', { count: videoIds.length })
+          : t('spotify.importToYouTubeMusic');
   return (
     <button
       className={confirming ? detailButton.pill : detailButton.circle}

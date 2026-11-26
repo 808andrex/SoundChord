@@ -1,6 +1,7 @@
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { PlayIcon } from '@/components/icons/Transport';
 import type { MusicItem } from '@/data/music/types';
+import { translateSubtitle, useTranslation } from '@/i18n';
 import { Artwork } from './Artwork';
 import { ExplicitBadge } from './ExplicitBadge';
 import { artistHref, hrefFor } from './links';
@@ -18,8 +19,11 @@ const overlayLink = 'absolute inset-0 z-1 rounded-[inherit]';
 
 /** Artist names as links where YouTube links them, else the given subtitle. */
 function Byline({ item }: { item: MusicItem }) {
+  const { language } = useTranslation();
   const linked = item.artists.some((a) => a.id);
-  if (!linked || item.kind === 'album' || item.kind === 'playlist') return <>{item.subtitle}</>;
+  if (!linked || item.kind === 'album' || item.kind === 'playlist') {
+    return <>{translateSubtitle(item.subtitle, language)}</>;
+  }
   return (
     <>
       {item.artists.map((artist, i) => {
@@ -110,6 +114,7 @@ export function SquareLockup({ item, width = 220 }: { item: MusicItem; width?: n
 
 /** 16:9 video lockup (report §2, type C). */
 export function VideoLockup({ item, width = 300 }: { item: MusicItem; width?: number }) {
+  const { language } = useTranslation();
   return (
     <div className={lockup}>
       <LockupArtwork item={item} width={width} aspect={16 / 9} />
@@ -118,7 +123,7 @@ export function VideoLockup({ item, width = 300 }: { item: MusicItem; width?: nu
           <span>{item.title}</span>
           {item.explicit && <ExplicitBadge />}
         </div>
-        <div className={subtitle}>{item.subtitle}</div>
+        <div className={subtitle}>{translateSubtitle(item.subtitle, language)}</div>
       </div>
     </div>
   );

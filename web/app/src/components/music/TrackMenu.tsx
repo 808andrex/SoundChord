@@ -9,31 +9,33 @@ import {
   useSignedIn,
 } from '@/data/music/queries';
 import type { Track } from '@/data/music/types';
+import { useTranslation } from '@/i18n';
 import { usePlayer } from '@/state/player';
 
 function PlaylistChoices({ videoId, onDone, onBack }: { videoId: string; onDone: () => void; onBack: () => void }) {
+  const { t } = useTranslation();
   const options = usePlaylistOptions(videoId, true);
   const add = useAddToPlaylist();
   return (
     <>
       <MenuItem icon={<ChevronLeft size={14} />} onSelect={onBack}>
-        Back
+        {t('common.back')}
       </MenuItem>
       <MenuSeparator />
-      <MenuHeader>Add to Playlist</MenuHeader>
+      <MenuHeader>{t('trackMenu.addToPlaylist')}</MenuHeader>
       {options.isPending && (
         <MenuItem disabled onSelect={() => {}}>
-          Loading…
+          {t('common.loading')}
         </MenuItem>
       )}
       {options.isError && (
         <MenuItem disabled onSelect={() => {}}>
-          Couldn’t load your playlists
+          {t('trackMenu.couldNotLoadPlaylists')}
         </MenuItem>
       )}
       {options.data?.length === 0 && (
         <MenuItem disabled onSelect={() => {}}>
-          No playlists yet
+          {t('trackMenu.noPlaylistsYet')}
         </MenuItem>
       )}
       {options.data?.map((option) => (
@@ -53,6 +55,7 @@ function PlaylistChoices({ videoId, onDone, onBack }: { videoId: string; onDone:
 
 /** Favorite and Add to Playlist: the account's actions, signed in only. */
 function AccountItems({ track, onClose, onPlaylists }: { track: Track; onClose: () => void; onPlaylists: () => void }) {
+  const { t } = useTranslation();
   const status = useLikeStatus(track.videoId);
   const setLiked = useSetLiked();
   const liked = status.data === 'LIKE';
@@ -67,16 +70,17 @@ function AccountItems({ track, onClose, onPlaylists }: { track: Track; onClose: 
           onClose();
         }}
       >
-        {liked ? 'Unfavorite' : 'Favorite'}
+        {t(liked ? 'trackMenu.unfavorite' : 'trackMenu.favorite')}
       </MenuItem>
       <MenuItem icon={<ListPlus size={15} />} trailing={<ChevronRight size={14} />} onSelect={onPlaylists}>
-        Add to Playlist
+        {t('trackMenu.addToPlaylist')}
       </MenuItem>
     </>
   );
 }
 
 function TrackMenuItems({ track, onClose }: { track: Track; onClose: () => void }) {
+  const { t } = useTranslation();
   const [view, setView] = useState<'main' | 'playlists'>('main');
   const signedIn = useSignedIn();
   if (view === 'playlists') {
@@ -86,10 +90,10 @@ function TrackMenuItems({ track, onClose }: { track: Track; onClose: () => void 
   return (
     <>
       <MenuItem icon={<ListStart size={15} />} onSelect={() => (onClose(), playNext([track]))}>
-        Play Next
+        {t('queue.playNext')}
       </MenuItem>
       <MenuItem icon={<ListEnd size={15} />} onSelect={() => (onClose(), addToQueue([track]))}>
-        Add to Queue
+        {t('queue.addToQueue')}
       </MenuItem>
       {signedIn && <AccountItems track={track} onClose={onClose} onPlaylists={() => setView('playlists')} />}
     </>
@@ -113,6 +117,7 @@ export function TrackMenu({
   /** Told when the menu opens and closes; most mounts don't need to know. */
   onOpenChange?: (open: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const close = useCallback(() => setAnchor(null), []);
   useEffect(() => {
@@ -122,7 +127,7 @@ export function TrackMenu({
     <>
       <button
         className={className}
-        aria-label={`More options for ${track.title}`}
+        aria-label={t('queue.moreOptionsFor', { title: track.title })}
         aria-haspopup="menu"
         aria-expanded={anchor !== null}
         data-open={anchor !== null || undefined}

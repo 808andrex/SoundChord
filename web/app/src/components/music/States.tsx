@@ -1,4 +1,5 @@
 import { PrefetchLink } from '@/components/PrefetchLink';
+import { useTranslation } from '@/i18n';
 
 /** A page-sized message, centred: also the Spotify page's sign-in invitation. */
 export const stateStyles = {
@@ -10,26 +11,26 @@ export const stateStyles = {
 
 /** In place of a YouTube page when the extension isn't installed (prompt §1): an invitation, not an error. */
 export function NeedsExtension({ what = 'YouTube Music' }: { what?: string }) {
+  const { t } = useTranslation();
   return (
     <div className={stateStyles.state}>
-      <p className={stateStyles.title}>Browse {what} with the SoundChord extension</p>
-      <p className={stateStyles.detail}>
-        The extension lets this page reach YouTube Music from your own browser. Addons and lyrics work without it.
-      </p>
+      <p className={stateStyles.title}>{t('common.needsExtensionBrowse', { what })}</p>
+      <p className={stateStyles.detail}>{t('common.needsExtensionDetail')}</p>
       <PrefetchLink to="/extension" className={stateStyles.button}>
-        Get the Extension
+        {t('common.getExtension')}
       </PrefetchLink>
     </div>
   );
 }
 
 export function LoadError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className={stateStyles.state}>
-      <p className={stateStyles.title}>Couldn’t load this page</p>
+      <p className={stateStyles.title}>{t('common.couldNotLoad')}</p>
       <p className={stateStyles.detail}>{error instanceof Error ? error.message : String(error)}</p>
       <button className={stateStyles.button} onClick={onRetry}>
-        Try Again
+        {t('common.tryAgain')}
       </button>
     </div>
   );
@@ -46,11 +47,12 @@ export function EmptyState({ title, detail }: { title: string; detail?: string }
 
 /** A later page of a long list failed: what's loaded stays, with a way to try again. */
 export function LoadMoreError({ onRetry }: { onRetry: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center justify-center gap-2.5 px-(--body-gutter) pt-6 pb-10 type-callout text-secondary">
-      <span>Couldn’t load more.</span>
+      <span>{t('common.couldNotLoadMore')}</span>
       <button className="type-callout-emphasized text-key" onClick={onRetry}>
-        Try Again
+        {t('common.tryAgain')}
       </button>
     </div>
   );

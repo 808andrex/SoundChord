@@ -6,6 +6,7 @@ import { ExplicitBadge } from '@/components/music/ExplicitBadge';
 import { VideoSurface } from '@/components/music/VideoSurface';
 import { albumHref, artistHref } from '@/components/music/links';
 import { PrefetchLink } from '@/components/PrefetchLink';
+import { useTranslation } from '@/i18n';
 import { artistCredits, creditSegments } from '@/lib/artistCredits';
 import { sizedArtwork } from '@/lib/artwork';
 import type { Track } from '@/data/music/types';
@@ -94,6 +95,7 @@ const titleClass = 'min-w-0 max-w-full self-start truncate type-body-emphasized'
 
 /** The now-playing tile inside the pill (report §1, "LCD"). */
 export function Lcd() {
+  const { t } = useTranslation();
   const nowPlaying = usePlayer((s) => s.nowPlaying);
   const status = usePlayer((s) => s.status);
   const error = usePlayer((s) => s.error);
@@ -123,7 +125,7 @@ export function Lcd() {
       <button
         // A music video plays here in small, at 16:9.
         className={`group/art relative block h-[34px] overflow-hidden rounded-[6px] bg-joe p-0 transition-[filter,opacity] ${video ? 'w-[60px] bg-black' : 'w-[34px]'}`}
-        aria-label="Open full screen player"
+        aria-label={t('player.openFullScreen')}
         onClick={() => openFullScreen(true)}
       >
         {nowPlaying.artworkUrl && (
@@ -163,13 +165,13 @@ export function Lcd() {
             {track?.explicit && <ExplicitBadge size={11} />}
           </div>
         ) : (
-          <span className={titleClass}>{status === 'loading' ? 'Loading…' : ''}</span>
+          <span className={titleClass}>{status === 'loading' ? t('common.loading') : ''}</span>
         )}
         {status === 'error' ? (
           <span className="truncate type-callout-medium text-key">{error}</span>
         ) : (
           <span className="truncate type-callout-medium text-secondary">
-            {artist ? <Credits videoId={videoId} line={artist} artists={track?.artists ?? []} /> : status === 'loading' ? 'Loading…' : ''}
+            {artist ? <Credits videoId={videoId} line={artist} artists={track?.artists ?? []} /> : status === 'loading' ? t('common.loading') : ''}
           </span>
         )}
       </div>

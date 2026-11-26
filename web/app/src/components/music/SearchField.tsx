@@ -3,6 +3,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useSuggestions } from '@/data/music/queries';
 import type { MusicItem } from '@/data/music/types';
+import { useTranslation } from '@/i18n';
 import { Artwork } from './Artwork';
 import { hrefFor } from './links';
 import { playTrack, toTrack } from './play';
@@ -16,6 +17,7 @@ type Option = { kind: 'query'; text: string; typed: string; rest: string } | { k
  * Arrow keys move through it; Enter picks; Escape closes.
  */
 export function SearchField({ initial, onSearch }: { initial: string; onSearch: (query: string) => void }) {
+  const { t } = useTranslation();
   const [value, setValue] = useState(initial);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -73,8 +75,8 @@ export function SearchField({ initial, onSearch }: { initial: string; onSearch: 
           className="h-[38px] w-full rounded-pill border border-search-border bg-page pt-1.5 pr-[30px] pb-[5px] pl-7 type-body text-primary placeholder:text-tertiary [&::-webkit-search-cancel-button]:hidden"
           type="search"
           value={value}
-          placeholder="Artists, Songs, Lyrics, and More"
-          aria-label="Search"
+          placeholder={t('search.placeholder')}
+          aria-label={t('nav.search')}
           role="combobox"
           aria-expanded={showList}
           aria-controls={listId}

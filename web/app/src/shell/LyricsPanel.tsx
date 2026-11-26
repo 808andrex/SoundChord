@@ -11,6 +11,7 @@ import type { SourceState } from '@/lyrics/repository';
 import { enabledSources } from '@/lyrics/settings';
 import { sourceById, type LyricsSourceId } from '@/lyrics/sources';
 import { useLyrics, useLyricsUi } from '@/lyrics/useLyrics';
+import { useTranslation } from '@/i18n';
 import { getAudio, getPlayhead, usePlayer } from '@/state/player';
 import { LyricsSettings } from './LyricsSettings';
 
@@ -238,6 +239,7 @@ const NO_STATES: Partial<Record<LyricsSourceId, SourceState>> = {};
 
 /** The provider picker: which provider these lyrics are from, and the others' answers for this track. */
 function ProviderPicker({ current, full }: { current: LyricsSourceId | null; full: boolean }) {
+  const { t } = useTranslation();
   const videoId = usePlayer((s) => s.nowPlaying?.videoId ?? '');
   const states = useLyricsUi((s) => s.states[videoId]) ?? NO_STATES;
   const picked = useLyricsUi((s) => s.picked[videoId]);
@@ -245,7 +247,7 @@ function ProviderPicker({ current, full }: { current: LyricsSourceId | null; ful
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [settings, setSettings] = useState(false);
   const close = useCallback(() => setAnchor(null), []);
-  const label = current ? sourceById(current)?.label : 'Lyrics';
+  const label = current ? sourceById(current)?.label : t('common.lyrics');
 
   return (
     // In full screen the picker sits quietly above the lines, shown on hover.
@@ -266,18 +268,18 @@ function ProviderPicker({ current, full }: { current: LyricsSourceId | null; ful
       </button>
       <button
         className="grid size-7 place-items-center rounded-[8px] text-secondary hover:bg-quinary"
-        aria-label="Lyric settings"
+        aria-label={t('lyrics.lyricSettingsTitle')}
         onClick={() => setSettings(true)}
       >
         <Settings2 size={16} />
       </button>
       {anchor && (
-        <Menu anchor={anchor} placement="below-end" onClose={close} label="Lyrics provider">
+        <Menu anchor={anchor} placement="below-end" onClose={close} label={t('lyrics.providers')}>
           <MenuItem checked={!picked} onSelect={() => (close(), pick(videoId, null))}>
-            Best available
+            {t('lyrics.bestAvailable')}
           </MenuItem>
           <MenuSeparator />
-          <MenuHeader>Providers</MenuHeader>
+          <MenuHeader>{t('lyrics.providers')}</MenuHeader>
           {enabledSources().map((id) => {
             const state = states[id];
             return (
@@ -300,7 +302,7 @@ function ProviderPicker({ current, full }: { current: LyricsSourceId | null; ful
             );
           })}
           <MenuSeparator />
-          <MenuItem onSelect={() => (close(), setSettings(true))}>Lyric Settings…</MenuItem>
+          <MenuItem onSelect={() => (close(), setSettings(true))}>{t('lyrics.lyricSettings')}</MenuItem>
         </Menu>
       )}
       {settings && <LyricsSettings onClose={() => setSettings(false)} />}
@@ -309,19 +311,19 @@ function ProviderPicker({ current, full }: { current: LyricsSourceId | null; ful
 }
 
 function PermissionNotice({ origins }: { origins: string[] }) {
+  const { t } = useTranslation();
   const names = origins.map((o) => new URL(o).host.replace(/^www\./, ''));
+  const namesStr =
+    names.slice(0, 2).join(', ') + (names.length > 2 ? ` ${t('lyrics.andMore', { count: names.length - 2 })}` : '');
   return (
     <div className="mx-4 my-1.5 flex items-center gap-2.5 rounded-[10px] bg-quinary px-2.5 py-2 type-callout text-secondary">
-      <span>
-        {names.slice(0, 2).join(', ')}
-        {names.length > 2 ? ` and ${names.length - 2} more` : ''} need the extension’s permission.
-      </span>
+      <span>{t('lyrics.permissionNotice', { names: namesStr })}</span>
       <button
         className="flex-none type-callout-emphasized text-key"
         // The notice stays until the extension confirms the grant (checked when this tab comes back).
         onClick={() => void getBridge()?.call('lyrics.requestPermissions', { origins })}
       >
-        Allow
+        {t('common.allow')}
       </button>
     </div>
   );
@@ -376,6 +378,7 @@ const fullSizes =
  * lines are larger and the player's mesh stands in for the Canvas.
  */
 export function LyricsPanel({ variant = 'panel' }: { variant?: 'panel' | 'full' }) {
+  const { t } = useTranslation();
   const lyrics = useLyrics();
   const hasTrack = usePlayer((s) => s.nowPlaying !== null);
   const videoId = usePlayer((s) => s.nowPlaying?.videoId ?? '');
@@ -400,8 +403,8 @@ export function LyricsPanel({ variant = 'panel' }: { variant?: 'panel' | 'full' 
       {ungranted.length > 0 && !result && !lyrics.isFetching && <PermissionNotice origins={ungranted} />}
       {!hasTrack ? (
         <div className={empty}>
-          <p className={emptyTitle}>No lyrics available</p>
-          <p>Play a song to see its lyrics here.</p>
+          <p className={emptyTitle}>{t('lyrics.noLyricsTitle')}</p>
+          <p>{t('lyrics.noLyricsDetail')}</p>
         </div>
       ) : (lyrics.isPending && lyrics.fetchStatus !== 'idle') || (result && !fontReady) ? (
         <div className={empty}>
@@ -411,13 +414,15 @@ export function LyricsPanel({ variant = 'panel' }: { variant?: 'panel' | 'full' 
         <LyricsView ttml={result.ttml} full={full} />
       ) : picked ? (
         <div className={empty}>
-          <p className={emptyTitle}>Not on {sourceById(picked)?.label ?? 'this provider'}</p>
-          <p>This provider hasn’t got this song. Pick another, or Best available, in the list above.</p>
+          <p className={emptyTitle}>
+            {t('lyrics.notOnProvider', { provider: sourceById(picked)?.label ?? 'this provider' })}
+          </p>
+          <p>{t('lyrics.notOnProviderDetail')}</p>
         </div>
       ) : (
         <div className={empty}>
-          <p className={emptyTitle}>No lyrics available</p>
-          <p>None of the lyric providers has this song. Try another in the list above.</p>
+          <p className={emptyTitle}>{t('lyrics.noLyricsTitle')}</p>
+          <p>{t('lyrics.noLyricsFound')}</p>
         </div>
       )}
     </div>

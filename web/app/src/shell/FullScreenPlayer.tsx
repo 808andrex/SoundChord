@@ -20,6 +20,7 @@ import { albumHref } from '@/components/music/links';
 import { MotionArtwork } from '@/components/music/MotionArtwork';
 import { VideoSurface } from '@/components/music/VideoSurface';
 import { useTrackMotion } from '@/data/apple/motionArt';
+import { useTranslation } from '@/i18n';
 import { sizedArtwork } from '@/lib/artwork';
 import { usePlayer } from '@/state/player';
 import { useUi } from '@/state/ui';
@@ -46,6 +47,7 @@ function useBrowserFullScreen(): boolean {
 
 /** The seek line under the track's names: thicker on hover, with the times beneath its ends. */
 function Scrubber() {
+  const { t } = useTranslation();
   const { bar, elapsed, remaining, mixLabel, dragging, handlers } = useScrubber();
   return (
     <div className="group/scrub mt-3.5" data-dragging={dragging || undefined}>
@@ -65,7 +67,7 @@ function Scrubber() {
       <div className="relative mt-0.5 flex justify-between type-[500_11px/14px] tabular-nums text-tertiary">
         <span ref={elapsed} />
         <span ref={mixLabel} className="pointer-events-none absolute inset-x-0 text-center text-secondary opacity-0" aria-hidden="true">
-          Mixing
+          {t('player.mixing')}
         </span>
         <span ref={remaining} />
       </div>
@@ -81,6 +83,7 @@ const skip = `${transportButton} size-12 text-primary`;
 
 /** Shuffle, previous, play/pause, next, repeat. No volume: the pill keeps that. */
 function Transport() {
+  const { t } = useTranslation();
   const hasTrack = usePlayer((s) => s.nowPlaying !== null);
   const playing = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
   const hasNext = usePlayer((s) => s.index + 1 < s.queue.length || s.repeat !== 'off' || (s.autoplay && s.index >= 0));
@@ -90,21 +93,21 @@ function Transport() {
 
   return (
     <div className="mx-auto mt-[clamp(8px,1.6vh,16px)] mb-0 flex h-13 w-[min(100%,315px)] items-center justify-between">
-      <button className={toggle} aria-label="Shuffle" aria-pressed={shuffle} onClick={toggleShuffle}>
+      <button className={toggle} aria-label={t('common.shuffle')} aria-pressed={shuffle} onClick={toggleShuffle}>
         <ShuffleIcon size={30} />
       </button>
-      <button className={skip} disabled={!hasTrack} aria-label="Previous" onClick={previous}>
+      <button className={skip} disabled={!hasTrack} aria-label={t('common.previous')} onClick={previous}>
         <BackwardIcon size={40} />
       </button>
-      <button className={`${transportButton} size-14 text-primary`} disabled={!hasTrack} aria-label={playing ? 'Pause' : 'Play'} onClick={togglePlay}>
+      <button className={`${transportButton} size-14 text-primary`} disabled={!hasTrack} aria-label={t(playing ? 'common.pause' : 'common.play')} onClick={togglePlay}>
         {playing ? <PauseIcon size={48} /> : <PlayIcon size={48} />}
       </button>
-      <button className={skip} disabled={!hasTrack || !hasNext} aria-label="Next" onClick={next}>
+      <button className={skip} disabled={!hasTrack || !hasNext} aria-label={t('common.next')} onClick={next}>
         <ForwardIcon size={40} />
       </button>
       <button
         className={toggle}
-        aria-label={repeat === 'one' ? 'Repeat one' : repeat === 'all' ? 'Repeat all' : 'Repeat'}
+        aria-label={t(repeat === 'one' ? 'common.repeatOne' : repeat === 'all' ? 'common.repeatAll' : 'common.repeat')}
         aria-pressed={repeat !== 'off'}
         onClick={cycleRepeat}
       >
@@ -135,6 +138,7 @@ const IDLE_MS = 3000;
  * beside the lyrics or Up Next, it takes the artwork's place at 16:9.
  */
 export function FullScreenPlayer() {
+  const { t } = useTranslation();
   const nowPlaying = usePlayer((s) => s.nowPlaying);
   // The queue's row for what's playing: it carries the album and each artist's channel.
   const track = usePlayer((s) => {
@@ -237,7 +241,7 @@ export function FullScreenPlayer() {
       className="fixed inset-0 z-[calc(var(--z-contextual-menus)-2)] isolate animate-enter overflow-hidden text-primary [--art:min(32vw,calc(100dvh-330px),720px)] motion-reduce:[animation-name:fade-in] max-md:[--art:min(84vw,calc(100dvh-330px),420px)]"
       role="dialog"
       aria-modal="true"
-      aria-label="Now Playing"
+      aria-label={t('player.nowPlaying')}
       data-full-screen
       data-paused={!playing || undefined}
       onPointerMove={wake}
@@ -252,7 +256,7 @@ export function FullScreenPlayer() {
         </div>
       )}
 
-      <button ref={close} className={`${corner} top-4 left-5`} aria-label="Close" onClick={() => setFullScreen(false)}>
+      <button ref={close} className={`${corner} top-4 left-5`} aria-label={t('common.close')} onClick={() => setFullScreen(false)}>
         <X size={20} />
       </button>
       {/* The music video's quality, just inside the full-screen button. */}
@@ -262,7 +266,7 @@ export function FullScreenPlayer() {
       {document.fullscreenEnabled && (
         <button
           className={`${corner} top-4 right-5`}
-          aria-label={browserFullScreen ? 'Exit full screen' : 'Enter full screen'}
+          aria-label={t(browserFullScreen ? 'player.exitFullScreen' : 'player.enterFullScreen')}
           onClick={toggleBrowserFullScreen}
         >
           {browserFullScreen ? <Minimize size={18} /> : <Maximize size={18} />}
@@ -384,7 +388,7 @@ export function FullScreenPlayer() {
           // Up Next in the right-hand column: the side panel's list, laid out as a column.
           <section
             className="flex min-h-0 animate-fade-in flex-col self-stretch [mask-image:linear-gradient(180deg,#000_calc(100%-80px),transparent)]"
-            aria-label="Up Next"
+            aria-label={t('common.upNext')}
           >
             <UpNext />
           </section>
@@ -393,7 +397,7 @@ export function FullScreenPlayer() {
 
       <button
         className={`${corner} bottom-5 left-5 aria-pressed:text-primary`}
-        aria-label="Lyrics"
+        aria-label={t('common.lyrics')}
         aria-pressed={showLyrics}
         onClick={() => togglePanel('lyrics')}
       >
@@ -410,7 +414,7 @@ export function FullScreenPlayer() {
       >
         <button
           className={`${chromeButton} ${fadeForVolume} aria-pressed:text-primary`}
-          aria-label="Up Next"
+          aria-label={t('common.upNext')}
           aria-pressed={showQueue}
           onClick={() => togglePanel('queue')}
         >

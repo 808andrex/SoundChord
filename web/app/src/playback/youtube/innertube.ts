@@ -11,12 +11,26 @@ import { trackLog } from '../trackLog';
  */
 let instance: Promise<Innertube> | null = null;
 
+function getActiveLanguage(): 'es' | 'en' {
+  try {
+    const pref = localStorage.getItem('soundchord.language');
+    if (pref === 'es' || pref === 'en') return pref;
+    const browserLang = (typeof navigator !== 'undefined' ? (navigator.languages?.[0] || navigator.language || '') : '').toLowerCase();
+    return browserLang.startsWith('es') ? 'es' : 'en';
+  } catch {
+    return 'en';
+  }
+}
+
 export function getInnertube(): Promise<Innertube> {
   instance ??= create().catch((error: unknown) => {
     instance = null;
     throw error;
   });
-  return instance;
+  return instance.then((yt) => {
+    yt.session.context.client.hl = getActiveLanguage();
+    return yt;
+  });
 }
 
 /**
@@ -41,7 +55,10 @@ export function getSignedInnertube(): Promise<Innertube> {
       throw error;
     },
   );
-  return signedInstance;
+  return signedInstance.then((yt) => {
+    yt.session.context.client.hl = getActiveLanguage();
+    return yt;
+  });
 }
 
 /** The instance browse requests should use: signed in when the user is, anonymous otherwise. */
@@ -81,6 +98,13 @@ async function simpleRequestFetch(input: RequestInfo | URL, init?: RequestInit):
     if (SAFELISTED.has(key.toLowerCase())) headers.set(key, value);
   });
 
+  const lang = getActiveLanguage();
+  headers.set('accept-language', lang === 'es' ? 'es-419,es;q=0.9,en;q=0.8' : 'en-US,en;q=0.9,es;q=0.8');
+
+  if (isInnertubeCall(url) && !url.searchParams.has('hl')) {
+    url.searchParams.set('hl', lang);
+  }
+
   let body: BodyInit | null | undefined = init?.body;
   if (body === undefined && request && method !== 'GET' && method !== 'HEAD') {
     body = await request.text();
@@ -116,6 +140,14 @@ async function signedFetch(input: RequestInfo | URL, init?: RequestInit): Promis
   const method = (init?.method ?? request?.method ?? 'GET').toUpperCase() as 'GET' | 'POST';
   const headers: Record<string, string> = {};
   new Headers(init?.headers ?? request?.headers).forEach((value, key) => (headers[key] = value));
+
+  const lang = getActiveLanguage();
+  headers['accept-language'] = lang === 'es' ? 'es-419,es;q=0.9,en;q=0.8' : 'en-US,en;q=0.9,es;q=0.8';
+
+  if (!url.searchParams.has('hl')) {
+    url.searchParams.set('hl', lang);
+  }
+
   let body = init?.body ?? undefined;
   if (body === undefined && request && method !== 'GET') body = await request.text();
   if (body != null && typeof body !== 'string') body = await new Response(body).text();
@@ -155,11 +187,13 @@ async function create(fetch: typeof globalThis.fetch = simpleRequestFetch): Prom
   };
 
   const firstRun = await isFirstRun();
+  const lang = getActiveLanguage();
   try {
     const yt = await Innertube.create({
       cache: new UniversalCache(true),
       fetch,
       retrieve_player: true,
+      lang,
     });
     const client = yt.session.context.client;
     trackLog.i(

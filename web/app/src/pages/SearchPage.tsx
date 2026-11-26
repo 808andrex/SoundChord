@@ -10,31 +10,43 @@ import { TrackMenu } from '@/components/music/TrackMenu';
 import { EmptyState, LoadError, NeedsExtension } from '@/components/music/States';
 import { useCategories, useSearch, useYouTubeReady } from '@/data/music/queries';
 import type { MusicItem, SearchResults, Shelf } from '@/data/music/types';
+import { useTranslation, type TranslationKey } from '@/i18n';
 import { SkeletonBlock, SkeletonLine } from '@/components/Skeleton';
 import { ShelfSkeleton } from '@/skeletons/ShelfSkeleton';
 
-const KIND_LABEL: Record<MusicItem['kind'], string> = {
-  song: 'Song',
-  video: 'Video',
-  album: 'Album',
-  playlist: 'Playlist',
-  'spotify-playlist': 'Spotify Playlist',
-  artist: 'Artist',
-  episode: 'Episode',
-  podcast: 'Podcast',
-  unknown: '',
-};
+function kindLabel(kind: MusicItem['kind'], t: (k: TranslationKey) => string): string {
+  switch (kind) {
+    case 'song':
+      return t('common.song');
+    case 'video':
+      return t('common.video');
+    case 'album':
+      return t('common.album');
+    case 'playlist':
+      return t('nav.playlists');
+    case 'spotify-playlist':
+      return t('common.spotifyPlaylist');
+    case 'artist':
+      return t('common.artist');
+    case 'episode':
+      return t('common.episode');
+    case 'podcast':
+      return t('common.podcast');
+    default:
+      return '';
+  }
+}
 
 /** Apple's result shelves, in its order, from results grouped by kind. */
-function shelvesFor(results: SearchResults): Shelf[] {
+function shelvesFor(results: SearchResults, t: (k: TranslationKey) => string): Shelf[] {
   const shelf = (title: string, items: MusicItem[], layout: Shelf['layout']): Shelf | null =>
     items.length ? { title, strapline: null, layout, items, seeAll: null } : null;
   return [
-    shelf('Artists', results.artists, 'circle'),
-    shelf('Albums', results.albums, 'square'),
-    shelf('Songs', results.songs, 'tracks'),
-    shelf('Playlists', results.playlists, 'square'),
-    shelf('Videos', results.videos, 'video'),
+    shelf(t('nav.artists'), results.artists, 'circle'),
+    shelf(t('nav.albums'), results.albums, 'square'),
+    shelf(t('nav.songs'), results.songs, 'tracks'),
+    shelf(t('nav.playlists'), results.playlists, 'square'),
+    shelf(t('common.videos'), results.videos, 'video'),
   ].filter((s): s is Shelf => !!s);
 }
 
@@ -53,6 +65,7 @@ const topMenu =
 const topText = 'flex min-w-0 flex-col gap-0.5';
 
 function TopResult({ item }: { item: MusicItem }) {
+  const { t } = useTranslation();
   const href = hrefFor(item);
   const playable = item.kind === 'song' || item.kind === 'video';
   const body = (
@@ -63,7 +76,7 @@ function TopResult({ item }: { item: MusicItem }) {
       <div className={playable ? `${topText} pr-9` : topText}>
         <span className="line-clamp-2 type-title-3">{item.title}</span>
         <span className="truncate type-callout text-secondary">
-          {[KIND_LABEL[item.kind], item.kind === 'artist' ? null : item.artists.map((a) => a.name).join(', ')].filter(Boolean).join(' · ')}
+          {[kindLabel(item.kind, t), item.kind === 'artist' ? null : item.artists.map((a) => a.name).join(', ')].filter(Boolean).join(' · ')}
         </span>
       </div>
     </>
@@ -108,19 +121,20 @@ function ResultsSkeleton() {
 }
 
 function Results({ query }: { query: string }) {
+  const { t } = useTranslation();
   const search = useSearch(query);
   if (search.isError) return <LoadError error={search.error} onRetry={() => void search.refetch()} />;
   if (!search.data) return <ResultsSkeleton />;
   const results = search.data;
-  const shelves = shelvesFor(results);
+  const shelves = shelvesFor(results, t);
   if (!results.top.length && !shelves.length) {
-    return <EmptyState title="No Results" detail={`Try a new search for something other than “${query}”.`} />;
+    return <EmptyState title={t('search.noResultsTitle')} detail={t('search.noResultsDetail', { query })} />;
   }
   return (
     <>
       {results.top.length > 0 && (
-        <section aria-label="Top Results">
-          <h2 className={sectionTitle}>Top Results</h2>
+        <section aria-label={t('search.topResults')}>
+          <h2 className={sectionTitle}>{t('search.topResults')}</h2>
           <div className={topGrid}>
             {results.top.map((item) => (
               <TopResult key={item.id} item={item} />
@@ -134,6 +148,7 @@ function Results({ query }: { query: string }) {
 }
 
 function Landing() {
+  const { t } = useTranslation();
   const categories = useCategories();
   if (categories.isError) return <LoadError error={categories.error} onRetry={() => void categories.refetch()} />;
   if (!categories.data) {
@@ -145,11 +160,12 @@ function Landing() {
       </div>
     );
   }
-  return <CategoryTiles groups={categories.data.map((g) => ({ ...g, title: g.title || 'Browse Categories' }))} />;
+  return <CategoryTiles groups={categories.data.map((g) => ({ ...g, title: g.title || t('search.browseCategories') }))} />;
 }
 
 /** Search (report §6): a sticky bar with the field, then categories or grouped results. */
 export default function SearchPage() {
+  const { t } = useTranslation();
   const { missing } = useYouTubeReady();
   const [params, setParams] = useSearchParams();
   const query = params.get('q') ?? '';
@@ -164,7 +180,7 @@ export default function SearchPage() {
       <div className="sticky top-0 z-[calc(var(--z-default)+5)] flex justify-center px-(--body-gutter) py-3 before:absolute before:inset-0 before:-z-1 before:bg-header-material before:[backdrop-filter:saturate(180%)_blur(20px)]">
         <SearchField initial={query} onSearch={(q) => setParams(q ? { q } : {})} />
       </div>
-      {missing ? <NeedsExtension what="and search YouTube Music" /> : query ? <Results query={query} /> : <Landing />}
+      {missing ? <NeedsExtension what={t('search.needsExtensionWhat')} /> : query ? <Results query={query} /> : <Landing />}
     </>
   );
 }

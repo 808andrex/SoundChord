@@ -5,6 +5,7 @@ import { PlayIcon } from '@/components/icons/Transport';
 import { useSetListSaved, useSignedIn } from '@/data/music/queries';
 import type { AppleMotion } from '@/data/apple/motionArt';
 import type { HeaderInfo } from '@/data/music/types';
+import { translateSubtitle, useTranslation } from '@/i18n';
 import { Artwork } from './Artwork';
 import { ExplicitBadge } from './ExplicitBadge';
 import { MotionArtwork } from './MotionArtwork';
@@ -33,6 +34,7 @@ export const detailButton = {
  * artist, metadata, a three-line description, then Shuffle · Play.
  */
 export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion }: DetailHeaderProps) {
+  const { t, language } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const signedIn = useSignedIn();
   const setSaved = useSetListSaved();
@@ -81,7 +83,9 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion }
             })}
           </div>
         )}
-        <div className="mt-1 type-callout-emphasized text-secondary">{[info.subtitle, info.meta].filter(Boolean).join(' · ')}</div>
+        <div className="mt-1 type-callout-emphasized text-secondary">
+          {[translateSubtitle(info.subtitle, language), translateSubtitle(info.meta, language)].filter(Boolean).join(' · ')}
+        </div>
       </div>
       {info.description && (
         <div className="mt-[38px] flex max-w-[440px] items-end type-body-tall text-secondary [grid-area:description] max-md:mt-5">
@@ -90,25 +94,25 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion }
           </p>
           {!expanded && info.description.length > 180 && (
             <button className="shrink-0 ps-[5px] type-subhead-emphasized text-primary" onClick={() => setExpanded(true)}>
-              MORE
+              {t('common.more')}
             </button>
           )}
         </div>
       )}
       <div className="mt-3.5 flex items-center gap-3.5 self-end [grid-area:actions]">
-        <button className={detailButton.circle} aria-label="Shuffle" onClick={onShuffle} disabled={!canPlay}>
+        <button className={detailButton.circle} aria-label={t('common.shuffle')} onClick={onShuffle} disabled={!canPlay}>
           <Shuffle size={18} strokeWidth={2.2} />
         </button>
         <button className={detailButton.pill} onClick={onPlay} disabled={!canPlay}>
           <PlayIcon size={18} />
-          <span>Play</span>
+          <span>{t('common.play')}</span>
         </button>
         {library && (
           <button
             className={detailButton.circle}
-            aria-label={library.saved ? 'Remove from Library' : 'Add to Library'}
+            aria-label={t(library.saved ? 'detail.removeFromLibrary' : 'detail.addToLibrary')}
             aria-pressed={library.saved}
-            title={library.saved ? 'In your library' : 'Add to Library'}
+            title={t(library.saved ? 'detail.inYourLibrary' : 'detail.addToLibrary')}
             disabled={setSaved.isPending}
             onClick={() => setSaved.mutate({ playlistId: library.playlistId, saved: !library.saved })}
           >

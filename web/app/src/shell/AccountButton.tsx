@@ -2,6 +2,7 @@ import { ArrowUpRight, ChevronsUpDown } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Menu, MenuHeader, MenuItem, MenuSeparator } from '@/components/Menu';
 import { useRefreshYtAuth, useSelectChannel, useSetConnected, useYtAuth } from '@/extension/useYtAuth';
+import { useTranslation } from '@/i18n';
 
 const SIGN_IN_URL = 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https://music.youtube.com/';
 
@@ -29,6 +30,7 @@ function Avatar({ src, name, size }: { src: string | null; name: string; size: n
  * own sign-in; the extension notices the new session and this updates itself.
  */
 export function AccountButton() {
+  const { t } = useTranslation();
   const status = useYtAuth();
   const select = useSelectChannel();
   const connect = useSetConnected();
@@ -42,14 +44,14 @@ export function AccountButton() {
   if (!auth.browserSignedIn) {
     return (
       <a className={pill} href={SIGN_IN_URL} target="_blank" rel="noreferrer">
-        Sign In
+        {t('account.signIn')}
       </a>
     );
   }
   if (!auth.connected) {
     return (
       <button className={pill} onClick={() => connect.mutate(true)} disabled={connect.isPending}>
-        Connect YouTube Music
+        {t('account.connectYouTubeMusic')}
       </button>
     );
   }
@@ -62,7 +64,7 @@ export function AccountButton() {
         onClick={() => refresh.mutate()}
         disabled={refresh.isPending}
       >
-        {refresh.isPending ? 'Reading account…' : 'Retry YouTube Sign-In'}
+        {refresh.isPending ? t('account.readingAccount') : t('account.retryYouTubeSignIn')}
       </button>
     );
   }
@@ -83,7 +85,7 @@ export function AccountButton() {
         {multiple && <ChevronsUpDown size={14} strokeWidth={2} className="flex-none text-secondary" />}
       </button>
       {anchor && (
-        <Menu anchor={anchor} placement="above-start" onClose={close} label="Account">
+        <Menu anchor={anchor} placement="above-start" onClose={close} label={t('account.account')}>
           {auth.accounts.map((account) => (
             <div key={account.authUser} role="group" aria-label={account.email ?? account.name}>
               <MenuHeader>{account.email ?? account.name}</MenuHeader>
@@ -111,7 +113,7 @@ export function AccountButton() {
             }}
             trailing={<ArrowUpRight size={13} />}
           >
-            Add Account
+            {t('account.addAccount')}
           </MenuItem>
           <MenuItem
             destructive
@@ -120,7 +122,7 @@ export function AccountButton() {
               connect.mutate(false);
             }}
           >
-            Disconnect from SoundChord
+            {t('account.disconnectFromSoundChord')}
           </MenuItem>
         </Menu>
       )}

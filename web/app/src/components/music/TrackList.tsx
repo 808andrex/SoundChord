@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { PauseIcon, PlayIcon } from '@/components/icons/Transport';
 import type { ArtistRef, Track } from '@/data/music/types';
+import { useTranslation } from '@/i18n';
 import { usePlayer } from '@/state/player';
 import { Artwork } from './Artwork';
 import { ExplicitBadge } from './ExplicitBadge';
@@ -197,12 +198,13 @@ function Row({ track, variant, position, fallbackArtwork, onPlayRow }: RowProps)
 }
 
 function Header() {
+  const { t } = useTranslation();
   return (
     <div className={`grid h-8 items-center ${playlistColumns} type-callout-emphasized text-secondary max-md:hidden`} aria-hidden="true">
-      <div className={`${cell} gap-3 ps-[7px]`}>Song</div>
-      <div className={secondary}>Artist</div>
-      <div className={tertiary}>Album</div>
-      <div className={`${cell} ${time.playlist}`}>Time</div>
+      <div className={`${cell} gap-3 ps-[7px]`}>{t('common.song')}</div>
+      <div className={secondary}>{t('common.artist')}</div>
+      <div className={tertiary}>{t('common.album')}</div>
+      <div className={`${cell} ${time.playlist}`}>{t('common.time')}</div>
     </div>
   );
 }
@@ -213,6 +215,7 @@ function Header() {
  * are virtualized against the page's scroll container (prompt §3).
  */
 export function TrackList({ tracks, variant, fallbackArtwork, fallbackArtists, onNearEnd, source }: TrackListProps) {
+  const { t } = useTranslation();
   const playRow = (i: number) => {
     // Rows from another catalogue that found no YouTube Music song stay out of the queue.
     if (source) {
@@ -243,7 +246,7 @@ export function TrackList({ tracks, variant, fallbackArtwork, fallbackArtists, o
   }, [last?.index, tracks.length, virtual, onNearEnd]);
 
   return (
-    <div className="mx-(--body-gutter) type-callout text-secondary" data-variant={variant} role="table" aria-label="Songs">
+    <div className="mx-(--body-gutter) type-callout text-secondary" data-variant={variant} role="table" aria-label={t('common.songs')}>
       {variant === 'playlist' && <Header />}
       <div ref={container}>
         {virtual ? (

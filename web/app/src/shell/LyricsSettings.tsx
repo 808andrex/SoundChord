@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getBridge } from '@/extension/bridge';
+import { useTranslation } from '@/i18n';
 import { LYRIC_EXTENSION_ORIGINS as EXTENSION_ORIGINS } from '@/lyrics/http';
 import { useLyricsSettings } from '@/lyrics/settings';
 import { sourceById } from '@/lyrics/sources';
@@ -21,6 +22,7 @@ const moveButton = 'grid size-[26px] place-items-center rounded-[6px] text-secon
  * page can't.
  */
 export function LyricsSettings({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   const { order, disabled, preferSyllables, paxsenixKey, setEnabled, move, setPreferSyllables, setPaxsenixKey, reset } =
     useLyricsSettings();
   const [granted, setGranted] = useState<string[] | null>(null);
@@ -51,18 +53,18 @@ export function LyricsSettings({ onClose }: { onClose: () => void }) {
         className="flex max-h-[min(720px,calc(100vh-48px))] w-[min(520px,calc(100vw-32px))] animate-zoom flex-col rounded-[14px] bg-page shadow-glass"
         role="dialog"
         aria-modal="true"
-        aria-label="Lyric settings"
+        aria-label={t('lyrics.lyricSettingsTitle')}
       >
         <header className="flex items-center justify-between px-5 pt-[18px] pb-2">
-          <h2 className="type-title-2-emphasized">Lyrics</h2>
-          <button className="grid size-[30px] place-items-center rounded-full bg-[#333336] text-secondary" aria-label="Close" onClick={onClose}>
+          <h2 className="type-title-2-emphasized">{t('lyrics.lyricSettingsTitle')}</h2>
+          <button className="grid size-[30px] place-items-center rounded-full bg-[#333336] text-secondary" aria-label={t('common.close')} onClick={onClose}>
             <X size={16} />
           </button>
         </header>
 
         <div className="overflow-y-auto px-5 pb-5">
-          <h3 className={section}>Providers</h3>
-          <p className={note}>Asked all at once; the first in this order with word-timed lyrics wins.</p>
+          <h3 className={section}>{t('lyrics.providers')}</h3>
+          <p className={note}>{t('lyrics.providersOrderNote')}</p>
           <ol className={group}>
             {order.map((id, index) => {
               const source = sourceById(id)!;
@@ -77,10 +79,10 @@ export function LyricsSettings({ onClose }: { onClose: () => void }) {
                     </span>
                   </label>
                   <span className="flex gap-0.5">
-                    <button className={moveButton} aria-label={`Move ${source.label} up`} disabled={index === 0} onClick={() => move(id, -1)}>
+                    <button className={moveButton} aria-label={t('lyrics.moveUp', { label: source.label })} disabled={index === 0} onClick={() => move(id, -1)}>
                       <ArrowUp size={14} />
                     </button>
-                    <button className={moveButton} aria-label={`Move ${source.label} down`} disabled={index === order.length - 1} onClick={() => move(id, 1)}>
+                    <button className={moveButton} aria-label={t('lyrics.moveDown', { label: source.label })} disabled={index === order.length - 1} onClick={() => move(id, 1)}>
                       <ArrowDown size={14} />
                     </button>
                   </span>
@@ -92,33 +94,32 @@ export function LyricsSettings({ onClose }: { onClose: () => void }) {
           <label className={`${group} ${toggle} py-2 pr-2.5 pl-3`}>
             <input type="checkbox" className={checkbox} checked={preferSyllables} onChange={(e) => setPreferSyllables(e.currentTarget.checked)} />
             <span className="flex min-w-0 flex-col">
-              <span className="type-body-emphasized">Prefer syllable timing</span>
-              <span className="truncate type-callout text-secondary">Keep looking past a line-timed answer for a word-timed one.</span>
+              <span className="type-body-emphasized">{t('lyrics.preferSyllableTiming')}</span>
+              <span className="truncate type-callout text-secondary">{t('lyrics.preferSyllableTimingDetail')}</span>
             </span>
           </label>
 
-          <h3 className={section}>Extension access</h3>
+          <h3 className={section}>{t('lyrics.extensionAccess')}</h3>
           {granted === null ? (
-            <p className={note}>KuGou, Musixmatch, Genius and PaxSenix need the SoundChord extension.</p>
+            <p className={note}>{t('lyrics.providersNeedExtension')}</p>
           ) : missing.length ? (
             <div className="flex items-center gap-3">
               <p className={note}>
-                KuGou, Musixmatch, Genius and PaxSenix don’t let web pages ask them directly. Allow the extension to,
-                once.
+                {t('lyrics.providersAllowExtension')}
               </p>
               <button className="flex-none rounded-[14px] bg-key px-3.5 py-1.5 type-callout-emphasized text-white" onClick={() => void getBridge()?.call('lyrics.requestPermissions', { origins: missing })}>
-                Allow
+                {t('common.allow')}
               </button>
             </div>
           ) : (
-            <p className={note}>All providers are reachable.</p>
+            <p className={note}>{t('lyrics.allProvidersReachable')}</p>
           )}
 
-          <h3 className={section}>PaxSenix key</h3>
+          <h3 className={section}>{t('lyrics.paxsenixKey')}</h3>
           <input
             className="w-full rounded-[10px] border-0 bg-quinary px-3 py-2 type-body text-primary"
             type="password"
-            placeholder="For PaxSenix: Spotify and Musixmatch"
+            placeholder={t('lyrics.paxsenixPlaceholder')}
             value={key}
             onChange={(e) => setKey(e.currentTarget.value)}
             onBlur={() => setPaxsenixKey(key)}
@@ -126,7 +127,7 @@ export function LyricsSettings({ onClose }: { onClose: () => void }) {
           />
 
           <button className="mt-[18px] type-callout-emphasized text-key" onClick={reset}>
-            Restore Defaults
+            {t('lyrics.restoreDefaults')}
           </button>
         </div>
       </div>

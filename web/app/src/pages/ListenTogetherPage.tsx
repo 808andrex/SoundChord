@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { PageHeader } from '@/components/PageHeader';
 import { useSignedIn } from '@/data/music/queries';
+import { useTranslation } from '@/i18n';
 import { cleanCode, inviteUrl } from '@/party/invite';
 import {
   controlsLocked,
@@ -38,6 +39,7 @@ const inviteCode = 'type-[700_40px/48px] tracking-[0.18em]';
  * start after the listener has interacted with the page.
  */
 export default function ListenTogetherPage() {
+  const { t } = useTranslation();
   const params = useParams();
   const [search] = useSearchParams();
   const inviteCode = params.code ? cleanCode(params.code) : null;
@@ -47,7 +49,7 @@ export default function ListenTogetherPage() {
 
   return (
     <div className={settingsUi.centered}>
-      <PageHeader title="Listen Together" />
+      <PageHeader title={t('party.title')} />
       <div className={settingsUi.body}>
         {state.code ? (
           <InParty />
@@ -63,15 +65,16 @@ export default function ListenTogetherPage() {
 }
 
 function SignInFirst() {
+  const { t } = useTranslation();
   return (
     <p className={`${settingsUi.footer} mb-4`}>
-      Listen Together uses your YouTube Music account for your name and picture in the party. Sign in on music.youtube.com,
-      then come back.
+      {t('party.signInFirst')}
     </p>
   );
 }
 
 function StartOrJoin({ signedIn }: { signedIn: boolean }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [code, setCode] = useState('');
   const [settings, setSettings] = useState(partySettings);
@@ -85,17 +88,17 @@ function StartOrJoin({ signedIn }: { signedIn: boolean }) {
   return (
     <>
       <p className={lede}>
-        Listen to the same music at the same moment with up to five devices. Anyone in the party can play, pause and skip.
+        {t('party.lede')}
       </p>
       {!signedIn && <SignInFirst />}
       <section className={settingsUi.group}>
         <div className={settingsUi.row}>
           <span className={settingsUi.rowText}>
-            <span>Start a Party</span>
-            <span className={settingsUi.rowDetail}>Whatever you’re playing comes with you.</span>
+            <span>{t('party.startParty')}</span>
+            <span className={settingsUi.rowDetail}>{t('party.startPartyDetail')}</span>
           </span>
           <button className={primary} disabled={!signedIn || create.isPending} onClick={() => create.mutate()}>
-            {create.isPending ? 'Starting…' : 'Start'}
+            {create.isPending ? t('party.starting') : t('party.start')}
           </button>
         </div>
         <form
@@ -106,27 +109,27 @@ function StartOrJoin({ signedIn }: { signedIn: boolean }) {
             if (cleaned) navigate(`/invite/${cleaned}`);
           }}
         >
-          <span>Join with a Code</span>
+          <span>{t('party.joinWithCode')}</span>
           <span className="flex gap-2">
             <input
               className="w-[110px] flex-none rounded-[8px] border-0 bg-quaternary px-2.5 py-[5px] text-center type-body tracking-[0.12em] text-primary uppercase"
               value={code}
               maxLength={7}
               placeholder="ABC123"
-              aria-label="Party code"
+              aria-label={t('party.joinWithCode')}
               onChange={(e) => setCode(e.currentTarget.value.toUpperCase())}
             />
             <button className={primary} type="submit" disabled={!cleanCode(code)}>
-              Join
+              {t('party.join')}
             </button>
           </span>
         </form>
       </section>
 
-      <h2 className={settingsUi.sectionHeader}>You</h2>
+      <h2 className={settingsUi.sectionHeader}>{t('party.you')}</h2>
       <section className={settingsUi.group}>
         <label className={settingsUi.controlRow}>
-          <span>Name in parties</span>
+          <span>{t('party.nameInParties')}</span>
           <input
             className={settingsUi.input}
             placeholder="Your YouTube name"
@@ -136,7 +139,7 @@ function StartOrJoin({ signedIn }: { signedIn: boolean }) {
           />
         </label>
         <label className={settingsUi.controlRow}>
-          <span>Party server</span>
+          <span>{t('party.partyServer')}</span>
           <input
             className={settingsUi.input}
             placeholder={DEFAULT_SERVER ? new URL(DEFAULT_SERVER).host : 'party.example.com'}
@@ -145,26 +148,27 @@ function StartOrJoin({ signedIn }: { signedIn: boolean }) {
           />
         </label>
       </section>
-      <p className={settingsUi.footer}>Leave the server empty to use SoundChord’s. Anyone joining your party uses the server it’s on.</p>
+      <p className={settingsUi.footer}>{t('party.serverFooter')}</p>
     </>
   );
 }
 
 /** An invite: who's in it, then a tap to join (the tap also lets the browser start audio). */
 function InviteCard({ code, server, signedIn }: { code: string; server: string | null; signedIn: boolean }) {
+  const { t } = useTranslation();
   const preview = useQuery({ queryKey: ['party', 'preview', code, server], queryFn: () => previewParty(code, server), retry: false });
   const join = useMutation({ mutationFn: () => joinParty(code, server) });
   const data = preview.data;
   return (
     <div className={invite}>
       <p className={inviteCode}>{code}</p>
-      {preview.isPending && <p className={settingsUi.footer}>Looking up the party…</p>}
+      {preview.isPending && <p className={settingsUi.footer}>{t('party.lookingUpParty')}</p>}
       {preview.isError && <p className={error}>{messageOf(preview.error)}</p>}
       {data && (
         <>
           <p className={lede}>
-            {data.hostName ? `${data.hostName}’s party` : 'A Listen Together party'}
-            {data.memberCount ? ` · ${data.memberCount} of ${data.maxMembers} listening` : ''}
+            {data.hostName ? t('party.hostPartyTitle', { host: data.hostName }) : t('party.genericPartyTitle')}
+            {data.memberCount ? ` · ${t('party.listeningCount', { count: data.memberCount, max: data.maxMembers })}` : ''}
           </p>
           <div className="flex gap-1.5">
             {data.members.map((m, i) => (
@@ -179,7 +183,7 @@ function InviteCard({ code, server, signedIn }: { code: string; server: string |
         disabled={!signedIn || join.isPending || data?.isFull || preview.isError}
         onClick={() => join.mutate()}
       >
-        {data?.isFull ? 'This party is full' : join.isPending ? 'Joining…' : 'Tap to Join'}
+        {data?.isFull ? t('party.partyFull') : join.isPending ? t('party.joining') : t('party.tapToJoin')}
       </button>
     </div>
   );
@@ -195,6 +199,7 @@ function Avatar({ name, url, large = false }: { name: string; url: string | null
 }
 
 function InParty() {
+  const { t } = useTranslation();
   const state = useParty();
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
@@ -204,18 +209,18 @@ function InParty() {
   const link = inviteUrl(state.code!, custom);
   useEffect(() => {
     if (!copied) return;
-    const t = setTimeout(() => setCopied(false), 1500);
-    return () => clearTimeout(t);
+    const tTimer = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(tTimer);
   }, [copied]);
 
   const status =
     state.connection === 'live'
       ? state.clockSynced
-        ? `In sync · ${state.roundTripMs} ms round trip`
-        : 'Measuring the clock…'
+        ? t('party.inSync', { ms: state.roundTripMs })
+        : t('party.measuringClock')
       : state.connection === 'connecting'
-        ? 'Reconnecting…'
-        : 'Offline';
+        ? t('party.reconnecting')
+        : t('party.offline');
 
   return (
     <>
@@ -228,12 +233,12 @@ function InParty() {
           title={link}
         >
           {copied ? <Check size={15} /> : <Copy size={15} />}
-          {copied ? 'Copied' : 'Copy Invite Link'}
+          {copied ? t('party.copied') : t('party.copyInviteLink')}
         </button>
       </div>
 
       <h2 className={settingsUi.sectionHeader}>
-        Listening · {state.members.length} of {state.maxMembers}
+        {t('party.listening', { current: state.members.length, max: state.maxMembers })}
       </h2>
       <section className={settingsUi.group}>
         {state.members.map((m) => (
@@ -241,13 +246,13 @@ function InParty() {
             <Avatar name={m.displayName} url={m.avatarUrl} />
             <span className={settingsUi.integrationName}>
               {m.displayName}
-              {m.memberId === state.you?.memberId && <span className="text-secondary"> (you)</span>}
+              {m.memberId === state.you?.memberId && <span className="text-secondary">{t('party.youIndicator')}</span>}
             </span>
             <span className={settingsUi.value}>
               {m.isHost && <Crown size={14} aria-label="Host" />}
-              <span className="size-2 rounded-full bg-quaternary data-on:bg-green" data-on={m.connected || undefined} title={m.connected ? 'Connected' : 'Reconnecting'} />
+              <span className="size-2 rounded-full bg-quaternary data-on:bg-green" data-on={m.connected || undefined} title={m.connected ? t('party.connected') : t('party.reconnecting')} />
               {isHost && m.memberId !== state.you?.memberId && (
-                <button className={settingsUi.inlineButton} onClick={() => party.kick(m.memberId)} title="Remove from the party">
+                <button className={settingsUi.inlineButton} onClick={() => party.kick(m.memberId)} title={t('party.removeFromParty')}>
                   <UserMinus size={13} />
                 </button>
               )}
@@ -256,28 +261,28 @@ function InParty() {
         ))}
       </section>
 
-      <h2 className={settingsUi.sectionHeader}>Party</h2>
+      <h2 className={settingsUi.sectionHeader}>{t('party.party')}</h2>
       <section className={settingsUi.group}>
         <Toggle
-          label="AutoPlay"
-          detail="Keep the party going with similar music when the queue runs out."
+          label={t('party.autoPlay')}
+          detail={t('party.autoPlayDetail')}
           checked={state.playback.autoplayEnabled}
           onChange={(on) => !locked && party.setAutoplay(on)}
         />
         {isHost && (
           <Toggle
-            label="Only I control the music"
-            detail="Others can listen but not play, pause, skip or change the queue."
+            label={t('party.onlyIControl')}
+            detail={t('party.onlyIControlDetail')}
             checked={state.hostOnlyControl}
             onChange={party.setHostOnlyControl}
           />
         )}
       </section>
-      {locked && <p className={settingsUi.footer}>The host controls the music in this party. You can still pause your own device.</p>}
+      {locked && <p className={settingsUi.footer}>{t('party.hostControlsNotice')}</p>}
 
       {state.activity.length > 0 && (
         <>
-          <h2 className={settingsUi.sectionHeader}>Activity</h2>
+          <h2 className={settingsUi.sectionHeader}>{t('party.activity')}</h2>
           <section className={settingsUi.group}>
             {state.activity.slice(0, 8).map((a, i) => (
               <div key={i} className={settingsUi.row}>
@@ -296,7 +301,7 @@ function InParty() {
 
       <button className="mx-4 mt-6 inline-flex items-center gap-1.5 type-body-emphasized text-red" onClick={() => void leaveParty().then(() => navigate('/settings/listen-together'))}>
         <LogOut size={15} />
-        Leave Party
+        {t('party.leaveParty')}
       </button>
     </>
   );

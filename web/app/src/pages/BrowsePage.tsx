@@ -5,11 +5,13 @@ import { Shelves } from '@/components/music/ShelfView';
 import { EmptyState, LoadError, NeedsExtension } from '@/components/music/States';
 import { TrackList } from '@/components/music/TrackList';
 import { useBrowse, useYouTubeReady } from '@/data/music/queries';
+import { useTranslation } from '@/i18n';
 import { PlainSkeleton } from '@/skeletons/PageSkeletons';
 import { seeAllGrid, seeAllTracks } from './pageStyles';
 
 /** See All, moods and genres: a grid, a song list, or shelves, whichever the page is. */
 export default function BrowsePage() {
+  const { t } = useTranslation();
   const browseId = decodeURIComponent(useParams().id ?? '');
   const [params] = useSearchParams();
   const { missing } = useYouTubeReady();
@@ -20,12 +22,12 @@ export default function BrowsePage() {
   if (!browse.data) return <PlainSkeleton />;
 
   const page = browse.data;
-  const title = page.title || 'Browse';
+  const title = page.title || t('search.browseCategories');
   const empty = !page.grid.length && !page.tracks.length && !page.shelves.length;
   return (
     <>
       <PageHeader title={title} />
-      {empty && <EmptyState title="Nothing here yet" />}
+      {empty && <EmptyState title={t('common.nothingHereYet')} />}
       {page.grid.length > 0 && (
         <ul className={seeAllGrid} data-wide={page.grid.every((i) => i.wide) || undefined}>
           {page.grid.map((item, i) => (

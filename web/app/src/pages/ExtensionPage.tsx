@@ -8,6 +8,7 @@ import { config } from '@/config';
 import { useExtension, type ExtensionStatus } from '@/extension/useExtension';
 import { downloadUrl, useExtensionUpdate, usePublishedExtension, type PublishedExtension } from '@/extension/useExtensionUpdate';
 import { useYtAuth, type YtAuthStatus } from '@/extension/useYtAuth';
+import { useTranslation, type TranslationKey } from '@/i18n';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { DiscordIntegration, SpotifyIntegration } from './IntegrationSettings';
 import { settingsUi } from './settingsStyles';
@@ -16,8 +17,8 @@ type Browser = 'chrome' | 'firefox';
 
 interface Download {
   browser: Browser;
-  title: string;
-  detail: string;
+  titleKey: TranslationKey;
+  detailKey: TranslationKey;
   href: string;
   Icon: ComponentType<{ size?: number; className?: string }>;
   steps: string[];
@@ -34,8 +35,8 @@ function downloadsFor(published: PublishedExtension | null): Download[] {
   return [
     {
       browser: 'chrome',
-      title: 'Download for Chrome',
-      detail: 'Chrome, Edge, Brave and other Chromium browsers',
+      titleKey: 'extension.downloadForChrome',
+      detailKey: 'extension.chromeDetail',
       href: published ? downloadUrl(published.files.chrome) : config.extensionChromeUrl,
       Icon: FaChrome,
       steps: [
@@ -52,8 +53,8 @@ function downloadsFor(published: PublishedExtension | null): Download[] {
     },
     {
       browser: 'firefox',
-      title: 'Download for Firefox',
-      detail: 'Firefox 128 or newer',
+      titleKey: 'extension.downloadForFirefox',
+      detailKey: 'extension.firefoxDetail',
       href: published ? downloadUrl(published.files.firefox) : config.extensionFirefoxUrl,
       Icon: FaFirefoxBrowser,
       steps: [
@@ -80,33 +81,39 @@ interface Integration {
   color: string;
   capability: Capability;
   /** What the row says when the extension serves this integration. */
-  ready: string;
+  readyKey: TranslationKey;
 }
 
 const INTEGRATIONS: Integration[] = [
-  { name: 'YouTube Music', Icon: SiYoutubemusic, color: '#ff0033', capability: 'yt', ready: 'Playback ready · not signed in' },
-  { name: 'Spotify', Icon: SiSpotify, color: '#1ed760', capability: 'spotify', ready: 'Not connected' },
-  { name: 'Discord', Icon: SiDiscord, color: '#5865f2', capability: 'discord', ready: 'Off' },
+  { name: 'YouTube Music', Icon: SiYoutubemusic, color: '#ff0033', capability: 'yt', readyKey: 'extension.playbackReadyNotSignedIn' },
+  { name: 'Spotify', Icon: SiSpotify, color: '#1ed760', capability: 'spotify', readyKey: 'extension.notConnected' },
+  { name: 'Discord', Icon: SiDiscord, color: '#5865f2', capability: 'discord', readyKey: 'queue.off' },
 ];
 
 /** YouTube Music's row: who requests act as, once the extension reports it. */
-function youtubeStatus(auth: YtAuthStatus): string | null {
+function youtubeStatus(auth: YtAuthStatus, t: (k: TranslationKey, p?: Record<string, string | number>) => string): string | null {
   if (auth.state !== 'ready') return null;
   const { browserSignedIn, connected, active } = auth.auth;
-  if (!browserSignedIn) return 'Playback ready · not signed in';
-  if (!connected) return 'Disconnected';
-  return active ? `Signed in as ${active.name}` : 'Signed in · no account could be read';
+  if (!browserSignedIn) return t('extension.playbackReadyNotSignedIn');
+  if (!connected) return t('settings.disconnected');
+  return active ? t('extension.signedInAs', { name: active.name }) : t('extension.signedInNoAccount');
 }
 
 /** One integration's state, honest about what this extension version can do. */
-function integrationStatus(status: ExtensionStatus, integration: Integration, auth: YtAuthStatus): string {
-  if (status.state === 'checking') return 'Checking…';
-  if (status.state === 'missing') return 'Needs the extension';
-  if (!status.extension.info.capabilities.includes(integration.capability)) return 'Not available in this version yet';
-  return (integration.capability === 'yt' && youtubeStatus(auth)) || integration.ready;
+function integrationStatus(
+  status: ExtensionStatus,
+  integration: Integration,
+  auth: YtAuthStatus,
+  t: (k: TranslationKey, p?: Record<string, string | number>) => string,
+): string {
+  if (status.state === 'checking') return t('common.checking');
+  if (status.state === 'missing') return t('extension.needsTheExtension');
+  if (!status.extension.info.capabilities.includes(integration.capability)) return t('extension.notAvailableInVersion');
+  return (integration.capability === 'yt' && youtubeStatus(auth, t)) || t(integration.readyKey);
 }
 
 export default function ExtensionPage() {
+  const { t } = useTranslation();
   const status = useExtension();
   const update = useExtensionUpdate();
   const DOWNLOADS = downloadsFor(usePublishedExtension());
@@ -121,36 +128,36 @@ export default function ExtensionPage() {
 
   return (
     <div className={settingsUi.centered}>
-      <PageHeader title="SoundChord Extension" />
+      <PageHeader title={t('extension.title')} />
       <div className={settingsUi.body}>
         <section className={settingsUi.group} aria-live="polite">
           <div className={settingsUi.row}>
-            <span>Status</span>
+            <span>{t('extension.status')}</span>
             <span className={settingsUi.value}>
-              {status.state === 'checking' && 'Checking…'}
-              {status.state === 'missing' && 'Not installed'}
+              {status.state === 'checking' && t('common.checking')}
+              {status.state === 'missing' && t('extension.notInstalled')}
               {status.state === 'present' && (
                 <>
                   <span className={settingsUi.dot} aria-hidden="true" />
-                  Installed · v{status.extension.info.version}
+                  {t('extension.installed', { version: status.extension.info.version })}
                 </>
               )}
             </span>
           </div>
           {update.state !== 'unknown' && (
             <div className={settingsUi.row}>
-              <span>Latest</span>
+              <span>{t('extension.latest')}</span>
               <span className={settingsUi.value}>
                 v{update.latest.version}
-                {update.state === 'current' && ' · Up to date'}
+                {update.state === 'current' && t('extension.upToDate')}
               </span>
             </div>
           )}
           {status.state === 'present' && (
             <div className={settingsUi.row}>
-              <span>Connection</span>
+              <span>{t('extension.connection')}</span>
               <span className={settingsUi.value}>
-                {status.extension.bridge.transport === 'external' ? 'Direct' : 'Page relay'} ·{' '}
+                {(status.extension.bridge.transport === 'external' ? t('extension.direct') : t('extension.pageRelay')) + ' · '}
                 {status.extension.info.browser === 'firefox' ? 'Firefox' : 'Chromium'}
               </span>
             </div>
@@ -166,10 +173,14 @@ export default function ExtensionPage() {
             >
               <span className={settingsUi.updateDot} aria-hidden="true" />
               <span className={settingsUi.downloadText}>
-                <span className={settingsUi.downloadTitle}>Update to v{update.latest.version}</span>
+                <span className={settingsUi.downloadTitle}>
+                  {t('extension.updateTo', { version: update.latest.version })}
+                </span>
                 <span className={settingsUi.downloadDetail}>
-                  You have v{update.installed}. Download the new {forUpdate.browser === 'firefox' ? 'Firefox' : 'Chrome'}{' '}
-                  build, then reload the extension.
+                  {t('extension.updateDetail', {
+                    installed: update.installed,
+                    browser: forUpdate.browser === 'firefox' ? 'Firefox' : 'Chrome',
+                  })}
                 </span>
               </span>
               <ChevronRight size={16} strokeWidth={2.4} className={settingsUi.chevron} />
@@ -183,14 +194,11 @@ export default function ExtensionPage() {
             )}
           </>
         )}
-        <p className={settingsUi.footer}>
-          The extension does the networking and sign-in work a web page isn’t allowed to do. Addons and most lyric
-          providers work without it.
-        </p>
+        <p className={settingsUi.footer}>{t('extension.footer')}</p>
 
-        <h2 className={settingsUi.sectionHeader}>Get the extension</h2>
+        <h2 className={settingsUi.sectionHeader}>{t('extension.getTheExtension')}</h2>
         <section className={settingsUi.group}>
-          {downloads.map(({ browser, title, detail, href, Icon }) => (
+          {downloads.map(({ browser, titleKey, detailKey, href, Icon }) => (
             <a
               key={browser}
               className={settingsUi.download}
@@ -200,10 +208,10 @@ export default function ExtensionPage() {
             >
               <Icon size={28} className="text-primary" />
               <span className={settingsUi.downloadText}>
-                <span className={settingsUi.downloadTitle}>{title}</span>
+                <span className={settingsUi.downloadTitle}>{t(titleKey)}</span>
                 <span className={settingsUi.downloadDetail}>
-                  {detail}
-                  {browser === currentBrowser && ' · This browser'}
+                  {t(detailKey)}
+                  {browser === currentBrowser && t('extension.thisBrowser')}
                 </span>
               </span>
               <ChevronRight size={16} strokeWidth={2.4} className={settingsUi.chevron} />
@@ -217,10 +225,10 @@ export default function ExtensionPage() {
             ))}
           </ol>
         ) : (
-          <p className={settingsUi.footer}>Pick your browser to download the extension and see how to install it.</p>
+          <p className={settingsUi.footer}>{t('extension.pickBrowserFooter')}</p>
         )}
 
-        <h2 className={settingsUi.sectionHeader}>Integrations</h2>
+        <h2 className={settingsUi.sectionHeader}>{t('extension.integrations')}</h2>
         <section className={settingsUi.group}>
           {INTEGRATIONS.map((integration) => (
             <div key={integration.name} className={settingsUi.integration}>
@@ -233,7 +241,7 @@ export default function ExtensionPage() {
               ) : status.state === 'present' && integration.capability === 'discord' ? (
                 <DiscordIntegration />
               ) : (
-                <span className={settingsUi.value}>{integrationStatus(status, integration, auth)}</span>
+                <span className={settingsUi.value}>{integrationStatus(status, integration, auth, t)}</span>
               )}
             </div>
           ))}
@@ -241,13 +249,11 @@ export default function ExtensionPage() {
         {auth.state === 'ready' && auth.auth.problem && (
           <p className={settingsUi.footer}>YouTube Music: {auth.auth.problem}.</p>
         )}
+        <p className={settingsUi.footer}>{t('extension.privacyFooter')}</p>
         <p className={settingsUi.footer}>
-          Sign-ins stay inside the extension: this page only ever sees results, never your cookies or tokens.
-        </p>
-        <p className={settingsUi.footer}>
-          Spotify Canvas, Discord presence and Listen Together are in{' '}
+          {t('extension.moreIntegrationsInSettings')}{' '}
           <PrefetchLink to="/settings" className={settingsUi.inlineLink}>
-            Settings
+            {t('nav.settings')}
           </PrefetchLink>
           .
         </p>

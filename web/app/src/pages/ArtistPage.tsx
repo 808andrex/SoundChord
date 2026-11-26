@@ -8,6 +8,7 @@ import { Shelves, TrackShelf } from '@/components/music/ShelfView';
 import { LoadError, NeedsExtension } from '@/components/music/States';
 import { requestAppleAccess, useAppleArtistArt, useUngrantedAppleOrigins, type AppleArtistArt } from '@/data/apple/artistArt';
 import { useArtist, useYouTubeReady } from '@/data/music/queries';
+import { useTranslation } from '@/i18n';
 import type { ArtworkColor } from '@/lib/artworkColor';
 import { usePageTint } from '@/lib/usePageTint';
 import { ArtistSkeleton } from '@/skeletons/PageSkeletons';
@@ -58,6 +59,7 @@ function ArtistName({ name, apple }: { name: string; apple: AppleArtistArt | nul
  * colour behind the whole page, and its colour on the Play button.
  */
 export default function ArtistPage() {
+  const { t } = useTranslation();
   const id = decodeURIComponent(useParams().id ?? '');
   const { missing } = useYouTubeReady();
   const artist = useArtist(id);
@@ -74,7 +76,7 @@ export default function ArtistPage() {
   if (!artist.data) return <ArtistSkeleton />;
 
   const data = artist.data;
-  const topSongs = { title: `${data.name}: Top Songs`, type: 'artist' as const, id: data.id };
+  const topSongs = { title: t('detail.topSongsTitle', { name: data.name }), type: 'artist' as const, id: data.id };
   return (
     <>
       {/* The hero (report §4): full-bleed, ~1.93:1 of the content column, the name and actions centred near the bottom. */}
@@ -111,7 +113,7 @@ export default function ArtistPage() {
                 ? ({ '--play-fill': apple.keyColor ?? '#ffffff', '--play-glyph': apple.background } as CSSProperties)
                 : undefined
             }
-            aria-label={`Play ${data.name}`}
+            aria-label={t('detail.playArtist', { name: data.name })}
             disabled={!data.topSongs.length}
             onClick={() => playList(data.topSongs, 0, { source: topSongs })}
           >
@@ -120,13 +122,13 @@ export default function ArtistPage() {
           {!apple && appleUngranted.length > 0 && (
             // The lyrics panel's permission notice, as a pill over the photograph.
             <div className="mt-3 flex items-center gap-2.5 rounded-[999px] bg-[#0000004d] py-1.5 pr-2 pl-3.5 type-callout text-[#ffffffcc] [backdrop-filter:blur(20px)_saturate(1.6)]">
-              <span>Apple Music artist art needs the extension’s permission.</span>
+              <span>{t('detail.appleArtistArtPermission')}</span>
               <button
                 className="flex-none rounded-[999px] bg-[#ffffff26] px-2.5 py-1 type-callout-emphasized text-white hover:bg-[#ffffff40]"
                 // Stays until the extension confirms the grant (checked when this tab comes back).
                 onClick={requestAppleAccess}
               >
-                Allow
+                {t('common.allow')}
               </button>
             </div>
           )}
@@ -135,7 +137,7 @@ export default function ArtistPage() {
 
       {data.topSongs.length > 0 && (
         <TrackShelf
-          title="Top Songs"
+          title={t('detail.topSongs')}
           to={data.topSongsSeeAll ? browseHref(data.topSongsSeeAll) : null}
           tracks={data.topSongs}
           source={topSongs}
@@ -145,8 +147,8 @@ export default function ArtistPage() {
       <Shelves shelves={data.shelves} />
 
       {data.description && (
-        <section className="mx-(--body-gutter) mt-3 mb-10" aria-label={`About ${data.name}`}>
-          <h2 className="type-title-2-emphasized">About {data.name}</h2>
+        <section className="mx-(--body-gutter) mt-3 mb-10" aria-label={t('detail.aboutArtist', { name: data.name })}>
+          <h2 className="type-title-2-emphasized">{t('detail.aboutArtist', { name: data.name })}</h2>
           <p className="mt-2 max-w-[720px] type-body-tall whitespace-pre-line text-secondary">{data.description}</p>
         </section>
       )}

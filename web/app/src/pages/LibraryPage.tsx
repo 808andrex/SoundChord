@@ -4,9 +4,10 @@ import { PageHeader } from '@/components/PageHeader';
 import { CircleLockup, SquareLockup, VideoLockup } from '@/components/music/Lockups';
 import { EmptyState, LoadError, LoadMoreError, NeedsExtension } from '@/components/music/States';
 import { TrackList } from '@/components/music/TrackList';
-import { isLibrarySection, LIBRARY_SECTIONS } from '@/data/music/library';
+import { isLibrarySection, LIBRARY_SECTION_KEYS } from '@/data/music/library';
 import { useLibrary, useSignedIn, useYouTubeReady } from '@/data/music/queries';
 import { useYtAuth } from '@/extension/useYtAuth';
+import { useTranslation } from '@/i18n';
 import { PlainSkeleton } from '@/skeletons/PageSkeletons';
 import { seeAllGrid, seeAllTracks } from './pageStyles';
 
@@ -27,6 +28,7 @@ function useLoadMore(onVisible: (() => void) | null) {
 
 /** A library section (prompt §5.3): Recently Played, Artists, Albums, Songs, Made for You, All Playlists. */
 export default function LibraryPage() {
+  const { t } = useTranslation();
   const section = useParams().section ?? '';
   const { missing } = useYouTubeReady();
   const auth = useYtAuth();
@@ -39,15 +41,15 @@ export default function LibraryPage() {
   );
 
   if (!isLibrarySection(section)) return <Navigate to="/home" replace />;
-  const title = LIBRARY_SECTIONS[section].title;
-  if (missing) return <NeedsExtension what="your library" />;
+  const title = t(LIBRARY_SECTION_KEYS[section]);
+  if (missing) return <NeedsExtension what={t('library.yourLibrary')} />;
   if (auth.state === 'ready' && !signedIn) {
     return (
       <>
         <PageHeader title={title} />
         <EmptyState
-          title="Sign in to see your library"
-          detail="SoundChord uses the YouTube Music account this browser is signed in to. Sign in on music.youtube.com, then come back."
+          title={t('library.signInToSeeLibrary')}
+          detail={t('library.signInToSeeLibraryDetail')}
         />
       </>
     );
@@ -60,7 +62,7 @@ export default function LibraryPage() {
   return (
     <>
       <PageHeader title={title} />
-      {!grid.length && !tracks.length && <EmptyState title="Nothing here yet" />}
+      {!grid.length && !tracks.length && <EmptyState title={t('common.nothingHereYet')} />}
       {grid.length > 0 && (
         <ul className={seeAllGrid} data-wide={grid.every((i) => i.wide) || undefined}>
           {grid.map((item, i) => (

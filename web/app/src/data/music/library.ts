@@ -1,3 +1,5 @@
+import type { TranslationKey } from '@/i18n/types';
+
 /**
  * The library sections, signed in (prompt §5.3), in Apple's sidebar order
  * (report §1: Recently Added · Artists · Albums · Songs · Made for You). Each
@@ -15,6 +17,15 @@ export const LIBRARY_SECTIONS = {
 } as const;
 
 export type LibrarySection = keyof typeof LIBRARY_SECTIONS;
+
+export const LIBRARY_SECTION_KEYS: Record<LibrarySection, TranslationKey> = {
+  recent: 'nav.recent',
+  artists: 'nav.artists',
+  albums: 'nav.albums',
+  songs: 'nav.songs',
+  'made-for-you': 'nav.madeForYou',
+  playlists: 'nav.allPlaylists',
+};
 
 export function isLibrarySection(value: string): value is LibrarySection {
   return Object.hasOwn(LIBRARY_SECTIONS, value);

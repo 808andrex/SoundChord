@@ -4,6 +4,7 @@ import { useAppleSettings } from '@/data/apple/motionArt';
 import { useHostAccess } from '@/extension/useHostAccess';
 import { LYRIC_EXTENSION_ORIGINS } from '@/lyrics/http';
 import { useSpotifySettings } from '@/data/spotify/canvas';
+import { useTranslation, type TranslationKey } from '@/i18n';
 import {
   useDiscord,
   useDiscordConnect,
@@ -24,13 +25,20 @@ import { Select } from '@/components/Select';
 
 /** Allowed, or an Allow button that opens the extension's permission page. */
 function HostAccessValue({ access, request }: ReturnType<typeof useHostAccess>) {
-  const text = { checking: 'Checking…', unavailable: 'Needs the extension', granted: 'Allowed', needed: 'Not allowed' }[access];
+  const { t } = useTranslation();
+  const textMap: Record<string, string> = {
+    checking: t('common.checking'),
+    unavailable: t('extension.needsTheExtension'),
+    granted: t('common.allowed'),
+    needed: t('common.notAllowed'),
+  };
+  const text = textMap[access] ?? access;
   return (
     <span className={settingsUi.value}>
       <span>{text}</span>
       {access === 'needed' && (
         <button className={settingsUi.inlineButton} onClick={request}>
-          Allow
+          {t('common.allow')}
         </button>
       )}
     </span>
@@ -44,18 +52,19 @@ export function AppleMusicIntegration() {
 
 /** The Apple Music section's switches. Neither needs an Apple Music account. */
 export function AppleMusicToggles() {
+  const { t } = useTranslation();
   const { artistArt, motion, setArtistArt, setMotion } = useAppleSettings();
   return (
     <>
       <Toggle
-        label="Artist Art"
-        detail="Artist pages take Apple Music’s photo, logo and colour."
+        label={t('settings.artistArt')}
+        detail={t('settings.artistArtDetail')}
         checked={artistArt}
         onChange={setArtistArt}
       />
       <Toggle
-        label="Animated Artwork"
-        detail="Apple Music’s moving covers in the full-screen player and on album pages. Not on metered connections or with reduced motion."
+        label={t('settings.animatedArtwork')}
+        detail={t('settings.animatedArtworkDetail')}
         checked={motion}
         onChange={setMotion}
       />
@@ -75,21 +84,22 @@ export function LyricSourcesAccess() {
 
 /** The Spotify row's words and button (SpotifyLibraryScreen's states). */
 export function SpotifyIntegration() {
+  const { t } = useTranslation();
   const auth = useSpotifyAuth();
   const connect = useSetSpotifyConnected();
   const retry = useRefreshSpotifyAuth();
-  if (auth.state !== 'ready') return <span className={settingsUi.value}>{spotifyText(auth)}</span>;
+  if (auth.state !== 'ready') return <span className={settingsUi.value}>{spotifyText(auth, t)}</span>;
   const { browserSignedIn, connected, signedIn } = auth.auth;
   const action = !browserSignedIn
-    ? { label: 'Sign In', run: openSpotifySignIn }
+    ? { label: t('common.signIn'), run: openSpotifySignIn }
     : !connected
-      ? { label: 'Connect', run: () => connect.mutate(true) }
+      ? { label: t('common.connect'), run: () => connect.mutate(true) }
       : !signedIn
-        ? { label: 'Retry', run: () => retry.mutate() }
-        : { label: 'Disconnect', run: () => connect.mutate(false) };
+        ? { label: t('common.tryAgain'), run: () => retry.mutate() }
+        : { label: t('common.disconnect'), run: () => connect.mutate(false) };
   return (
     <span className={settingsUi.value}>
-      <span title={auth.auth.problem ?? undefined}>{spotifyText(auth)}</span>
+      <span title={auth.auth.problem ?? undefined}>{spotifyText(auth, t)}</span>
       <button className={settingsUi.inlineButton} onClick={action.run} disabled={connect.isPending || retry.isPending}>
         {action.label}
       </button>
@@ -97,13 +107,13 @@ export function SpotifyIntegration() {
   );
 }
 
-function spotifyText(auth: SpotifyAuthStatus): string {
-  if (auth.state === 'checking') return 'Checking…';
-  if (auth.state === 'unavailable') return 'Not available in this version yet';
+function spotifyText(auth: SpotifyAuthStatus, t: (k: TranslationKey, p?: Record<string, string | number>) => string): string {
+  if (auth.state === 'checking') return t('common.checking');
+  if (auth.state === 'unavailable') return t('extension.notAvailableInVersion');
   const { browserSignedIn, connected, signedIn, user } = auth.auth;
-  if (!browserSignedIn) return 'Not signed in in this browser';
-  if (!connected) return 'Disconnected';
-  return signedIn ? `Signed in as ${user?.name ?? 'your account'}` : 'Couldn’t read your account';
+  if (!browserSignedIn) return t('settings.notSignedIn');
+  if (!connected) return t('settings.disconnected');
+  return signedIn ? t('settings.signedInAs', { name: user?.name ?? 'your account' }) : t('spotify.couldNotReadTitle');
 }
 
 export function DiscordIntegration() {
@@ -154,14 +164,15 @@ export function Toggle({ label, detail, checked, onChange }: { label: string; de
 
 /** Spotify Canvas behind the lyrics; only offered once signed in to Spotify. */
 export function CanvasToggle() {
+  const { t } = useTranslation();
   const auth = useSpotifyAuth();
   const canvas = useSpotifySettings((s) => s.canvas);
   const setCanvas = useSpotifySettings((s) => s.setCanvas);
   if (auth.state !== 'ready' || !auth.auth.signedIn) return null;
   return (
     <Toggle
-      label="Spotify Canvas"
-      detail="Spotify’s looping clip behind the lyrics. Not on metered connections or with reduced motion."
+      label={t('settings.spotifyCanvas')}
+      detail={t('settings.spotifyCanvasDetail')}
       checked={canvas}
       onChange={setCanvas}
     />
