@@ -15,7 +15,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "BitChord"
+rootProject.name = "SoundChord"
 include(":shared")
 include(":sharedUi")
 

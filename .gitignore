@@ -53,3 +53,5 @@ AGENTS.md
 
 # Superseded local signing key; keep it out of Git.
 release.keystore.bad-credentials
+
+node_modules/
