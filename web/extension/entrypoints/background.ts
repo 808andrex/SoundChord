@@ -9,7 +9,7 @@ import {
   type BridgeRequest,
   type BridgeResponse,
   type Capability,
-} from '@bitchord/shared/bridge';
+} from '@soundchord/shared/bridge';
 import * as discord from '../lib/discord';
 import { grantedOrigins, lyricsFetch, requestOrigins } from '../lib/lyricsFetch';
 import { installRules } from '../lib/rules';
@@ -37,7 +37,18 @@ function originOf(sender: Browser.runtime.MessageSender): string | null {
 
 function allowed(sender: Browser.runtime.MessageSender): boolean {
   const origin = originOf(sender);
-  return !!origin && (ALLOWED_ORIGINS.has(origin) || (origin === OWN_ORIGIN && sender.id === browser.runtime.id));
+  if (!origin) return false;
+  if (origin === OWN_ORIGIN && sender.id === browser.runtime.id) return true;
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  try {
+    const host = new URL(origin).hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host === 'soundchord.vercel.app' || host.endsWith('.vercel.app')) {
+      return true;
+    }
+  } catch {
+    // ignore invalid URLs
+  }
+  return false;
 }
 
 function failure(id: string, error: unknown): BridgeResponse {
@@ -217,7 +228,7 @@ function onCookieChanged({ cookie }: Browser.cookies.CookieChangeInfo): void {
       spotify
         .authState()
         .then((data) => broadcast({ event: 'spotify.authState', data }))
-        .catch((error: unknown) => console.warn('BitChord: reading the Spotify session failed', error));
+        .catch((error: unknown) => console.warn('SoundChord: reading the Spotify session failed', error));
     }, 1000);
     return;
   }
@@ -228,7 +239,7 @@ function onCookieChanged({ cookie }: Browser.cookies.CookieChangeInfo): void {
   cookieTimer = setTimeout(() => {
     authState(true)
       .then((data) => broadcast({ event: 'yt.authState', data }))
-      .catch((error: unknown) => console.warn('BitChord: reading the YouTube session failed', error));
+      .catch((error: unknown) => console.warn('SoundChord: reading the YouTube session failed', error));
   }, 1000);
 }
 
@@ -236,7 +247,7 @@ export default defineBackground(() => {
   // Dynamic rules persist, but are rewritten on every install and startup so
   // an update that changes them never leaves stale ones behind.
   const refreshRules = () =>
-    installRules(__SITE_ORIGINS__).catch((error: unknown) => console.error('BitChord: installing rules failed', error));
+    installRules(__SITE_ORIGINS__).catch((error: unknown) => console.error('SoundChord: installing rules failed', error));
   browser.runtime.onInstalled.addListener(refreshRules);
   browser.runtime.onStartup.addListener(refreshRules);
 

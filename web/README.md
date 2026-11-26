@@ -1,4 +1,4 @@
-# BitChord Web
+# SoundChord Web
 
 The web player and its companion browser extension. The plan, and the decisions behind it, are in [`docs/web-app-build-prompt.md`](../docs/web-app-build-prompt.md).
 
@@ -46,7 +46,7 @@ corepack pnpm --dir web/extension package
 
 This builds both targets and writes three files to `app/public/downloads/` (git-ignored):
 
-- `bitchord-extension-chrome.zip` and `bitchord-extension-firefox.zip`. Each holds a single folder (`bitchord-extension-<browser>/`), so extracting it in place leaves one folder to load unpacked.
+- `soundchord-extension-chrome.zip` and `soundchord-extension-firefox.zip`. Each holds a single folder (`soundchord-extension-<browser>/`), so extracting it in place leaves one folder to load unpacked.
 - `extension.json`, with the version. The site compares it with the installed extension's version and shows **Update** in the sidebar and an update row on the Extension page when the zip is newer. Bump `version` in `extension/package.json` to publish an update.
 
 `VITE_EXTENSION_CHROME_URL`, `VITE_EXTENSION_FIREFOX_URL` and `VITE_EXTENSION_MANIFEST_URL` override those links, for example to point at store listings.
@@ -59,19 +59,19 @@ Then open `http://localhost:5173/extension`. It shows "Installed", with the vers
 
 | Variable | Where | Default |
 |---|---|---|
-| `BITCHORD_SITE_ORIGINS` | extension build | `https://bitchord.in,https://bitchord-8bw.pages.dev,http://localhost:5173` (store builds leave out localhost). Comma-separated origins the extension serves; replaces the default |
-| `BITCHORD_STORE_BUILD=1` | extension build | Leaves out the dev `key` for a Chrome Web Store upload |
+| `SOUNDCHORD_SITE_ORIGINS` | extension build | `https://soundchord.vercel.app,http://localhost:5173,http://127.0.0.1:5173` (store builds leave out localhost). Comma-separated origins the extension serves; replaces the default |
+| `SOUNDCHORD_STORE_BUILD=1` | extension build | Leaves out the dev `key` for a Chrome Web Store upload |
 | `VITE_EXTENSION_ID_CHROMIUM` | app (`app/.env.local`) | The pinned dev id. Set it for a store-built extension |
-| `VITE_ANDROID_APP_URL` | app | The GitHub releases page |
-| `VITE_PARTY_SERVER_URL` | app (`app/.env.local`, Pages env) | None. The Listen Together server; `vite build` fails without it |
+| `VITE_ANDROID_APP_URL` | app | The GitHub releases page (`https://github.com/808andrex/SoundChord/releases/latest`) |
+| `VITE_PARTY_SERVER_URL` | app (`app/.env.local`) | None. The Listen Together server; `vite build` fails without it |
 
-## Deploy (Cloudflare Pages)
+## Deploy (Vercel)
 
 | Setting | Value |
-| --- | --- |
-| Root directory | `web` |
-| Build command | `pnpm build:site` |
-| Output directory | `app/dist` |
+|---|---|
+| Root directory | `web/app` |
+| Build command | `pnpm --filter @soundchord/extension package && pnpm --filter @soundchord/app build` |
+| Output directory | `dist` |
 | Environment | `NODE_VERSION=22`, `VITE_PARTY_SERVER_URL` |
 
 `build:site` packages the extension first, so each deploy publishes the zips and `downloads/extension.json` with the version from `web/extension/package.json`. The Extension page polls that file and offers the update when it's newer than the installed one. Bump that version to make an update show.

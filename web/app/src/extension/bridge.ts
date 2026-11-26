@@ -1,4 +1,4 @@
-import type { Bridge, DetectedExtension } from '@bitchord/shared/bridge';
+import type { Bridge, DetectedExtension } from '@soundchord/shared/bridge';
 import { queryClient } from '@/lib/queryClient';
 import { extensionQueryKey } from './useExtension';
 

@@ -2,18 +2,31 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <script>
-      // The extension trusts https://bitchord.in only (web/extension/site.config.ts),
-      // so www goes there before anything loads, keeping its path and query.
-      if (location.hostname === 'www.bitchord.in') location.replace('https://bitchord.in' + location.pathname + location.search + location.hash);
-    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1f1f1f" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0A0A0A" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
-    <title>BitChord</title>
+    <title>SoundChord</title>
+    <meta name="description" content="SoundChord — Apple Music-inspired web player with Liquid Glass aesthetic, synced lyrics, and party listening." />
+
+    <!-- OpenGraph Metadata -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="SoundChord" />
+    <meta property="og:description" content="SoundChord — Apple Music-inspired web player with Liquid Glass aesthetic, synced lyrics, and party listening." />
+    <meta property="og:site_name" content="SoundChord" />
+    <meta property="og:image" content="/favicon.svg" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="SoundChord" />
+    <meta name="twitter:description" content="SoundChord — Apple Music-inspired web player with Liquid Glass aesthetic, synced lyrics, and party listening." />
+    <meta name="twitter:image" content="/favicon.svg" />
+
+    <!-- Icons & PWA -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <!-- DM Sans is the app's typeface (web/docs/apple-music-dom.md, "Font"). -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

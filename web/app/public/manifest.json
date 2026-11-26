@@ -1,0 +1,17 @@
+{
+  "name": "SoundChord",
+  "short_name": "SoundChord",
+  "description": "SoundChord web player with Liquid Glass aesthetic and companion browser extension.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0A0A",
+  "theme_color": "#0A0A0A",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
