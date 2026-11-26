@@ -10,7 +10,7 @@
     "dev": "pnpm --filter @soundchord/app dev",
     "dev:ext": "pnpm --filter @soundchord/extension dev",
     "dev:ext:firefox": "pnpm --filter @soundchord/extension dev:firefox",
-    "build": "pnpm -r build",
+    "build": "pnpm --filter @soundchord/extension package && pnpm --filter @soundchord/app build",
     "build:site": "pnpm --filter @soundchord/extension package && pnpm --filter @soundchord/app build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",

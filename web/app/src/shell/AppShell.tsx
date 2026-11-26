@@ -10,6 +10,7 @@ import { config } from '@/config';
 import { useExtension } from '@/extension/useExtension';
 import { isMobileBrowser } from '@/lib/platform';
 import { useUi } from '@/state/ui';
+import { useTranslation } from '@/i18n';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { Banner, bannerButtonClass } from './Banner';
 import { MobileTopBar } from './MobileTopBar';
@@ -27,6 +28,7 @@ const FullScreenPlayer = lazy(() => import('./FullScreenPlayer').then((m) => ({ 
  * player pill, the side panel, and the bottom band when there is one.
  */
 export function AppShell() {
+  const { t } = useTranslation();
   useKeyboardShortcuts();
   useDiscordPresence();
   // Listen Together: pick a party back up after a reload, and keep the player in step with it.
@@ -47,11 +49,11 @@ export function AppShell() {
   if (mobile) {
     banner = (
       <Banner
-        title="SoundChord is better in the app."
-        detail="Phone browsers can’t run the SoundChord extension. The Android app has everything."
+        title={t('banner.mobileTitle')}
+        detail={t('banner.mobileDetail')}
         action={
           <a className={bannerButtonClass} href={config.androidAppUrl} target="_blank" rel="noreferrer">
-            Get the App
+            {t('banner.getApp')}
           </a>
         }
       />
@@ -59,14 +61,15 @@ export function AppShell() {
   } else if (extension.state === 'missing' && !bannerDismissed) {
     banner = (
       <Banner
-        title="Play YouTube Music with the SoundChord extension."
-        detail="Playback, YouTube Music sign-in, Spotify and Discord need the extension. Addons and lyrics work without it."
+        title={t('banner.extensionTitle')}
+        detail={t('banner.extensionDetail')}
         action={
           <PrefetchLink className={bannerButtonClass} to="/extension">
-            Get the Extension
+            {t('banner.getExtension')}
           </PrefetchLink>
         }
         onDismiss={dismissBanner}
+        dismissLabel={t('banner.dismiss')}
       />
     );
   }

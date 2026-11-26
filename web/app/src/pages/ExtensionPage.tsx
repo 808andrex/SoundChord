@@ -30,7 +30,10 @@ interface Download {
  * carry the version, "soundchord-extension-chrome (0.4.3)". Before that file
  * has loaded, the configured URLs and the unversioned names stand in.
  */
-function downloadsFor(published: PublishedExtension | null): Download[] {
+function downloadsFor(
+  published: PublishedExtension | null,
+  t: (k: TranslationKey, p?: Record<string, string | number>) => string,
+): Download[] {
   const folder = (browser: Browser) => `soundchord-extension-${browser}${published ? ` (${published.version})` : ''}`;
   return [
     {
@@ -40,15 +43,15 @@ function downloadsFor(published: PublishedExtension | null): Download[] {
       href: published ? downloadUrl(published.files.chrome) : config.extensionChromeUrl,
       Icon: FaChrome,
       steps: [
-        `Extract the zip somewhere you’ll keep it. It holds one folder, ${folder('chrome')}.`,
-        'Open chrome://extensions and turn on Developer mode.',
-        'Choose Load unpacked and select that folder.',
-        'Come back to this page: the status above turns to Installed.',
+        t('extension.chromeStep1', { folder: folder('chrome') }),
+        t('extension.chromeStep2'),
+        t('extension.chromeStep3'),
+        t('extension.chromeStep4'),
       ],
       updateSteps: [
-        `Extract the new zip. It holds ${folder('chrome')}.`,
-        'In chrome://extensions, choose Load unpacked and select that folder. It has the same ID, so it takes the old one’s place and keeps your settings.',
-        'Delete the old folder, then come back to this page: the version above updates on its own.',
+        t('extension.chromeUpdateStep1', { folder: folder('chrome') }),
+        t('extension.chromeUpdateStep2'),
+        t('extension.chromeUpdateStep3'),
       ],
     },
     {
@@ -58,15 +61,15 @@ function downloadsFor(published: PublishedExtension | null): Download[] {
       href: published ? downloadUrl(published.files.firefox) : config.extensionFirefoxUrl,
       Icon: FaFirefoxBrowser,
       steps: [
-        `Extract the zip. It holds one folder, ${folder('firefox')}.`,
-        'Open about:debugging#/runtime/this-firefox and choose Load Temporary Add-on.',
-        'Select manifest.json inside that folder.',
-        'Firefox removes temporary add-ons when it quits; a signed version is coming.',
+        t('extension.firefoxStep1', { folder: folder('firefox') }),
+        t('extension.firefoxStep2'),
+        t('extension.firefoxStep3'),
+        t('extension.firefoxStep4'),
       ],
       updateSteps: [
-        `Extract the new zip. It holds ${folder('firefox')}.`,
-        'In about:debugging, choose Load Temporary Add-on and select manifest.json in the new folder.',
-        'Come back to this page: the version above updates on its own.',
+        t('extension.firefoxUpdateStep1', { folder: folder('firefox') }),
+        t('extension.firefoxUpdateStep2'),
+        t('extension.firefoxUpdateStep3'),
       ],
     },
   ];
@@ -116,7 +119,7 @@ export default function ExtensionPage() {
   const { t } = useTranslation();
   const status = useExtension();
   const update = useExtensionUpdate();
-  const DOWNLOADS = downloadsFor(usePublishedExtension());
+  const DOWNLOADS = downloadsFor(usePublishedExtension(), t);
   const auth = useYtAuth();
   const [chosen, setChosen] = useState<Browser | null>(null);
   const [updating, setUpdating] = useState(false);

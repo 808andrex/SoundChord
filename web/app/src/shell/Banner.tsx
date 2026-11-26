@@ -6,13 +6,14 @@ interface BannerProps {
   detail: string;
   action: ReactNode;
   onDismiss?: () => void;
+  dismissLabel?: string;
 }
 
 /**
  * The full-width key-colour band Apple pins under the player for signed-out
  * visitors (report §1). An invitation, not an error.
  */
-export function Banner({ title, detail, action, onDismiss }: BannerProps) {
+export function Banner({ title, detail, action, onDismiss, dismissLabel }: BannerProps) {
   return (
     <div
       className="relative z-(--z-web-chrome) flex min-h-[71px] items-center gap-4 bg-key-bg px-[30px] py-3 text-white max-sm:pr-4 max-sm:pl-5"
@@ -28,7 +29,7 @@ export function Banner({ title, detail, action, onDismiss }: BannerProps) {
         <button
           className="-mr-3.5 grid size-7 place-items-center rounded-full text-white opacity-85 hover:bg-[#ffffff26] hover:opacity-100"
           onClick={onDismiss}
-          aria-label="Dismiss"
+          aria-label={dismissLabel ?? 'Dismiss'}
         >
           <X size={16} strokeWidth={2.4} />
         </button>

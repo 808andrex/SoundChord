@@ -280,6 +280,23 @@ export const en: Translations = {
   'extension.firefoxDetail': 'Firefox 128 or newer',
   'extension.thisBrowser': ' · This browser',
   'extension.pickBrowserFooter': 'Pick your browser to download the extension and see how to install it.',
+  'extension.chromeStep1': 'Extract the zip somewhere you’ll keep it. It holds one folder, {folder}.',
+  'extension.chromeStep2': 'Open chrome://extensions and turn on Developer mode.',
+  'extension.chromeStep3': 'Choose Load unpacked and select that folder.',
+  'extension.chromeStep4': 'Come back to this page: the status above turns to Installed.',
+  'extension.chromeUpdateStep1': 'Extract the new zip. It holds {folder}.',
+  'extension.chromeUpdateStep2':
+    'In chrome://extensions, choose Load unpacked and select that folder. It has the same ID, so it takes the old one’s place and keeps your settings.',
+  'extension.chromeUpdateStep3':
+    'Delete the old folder, then come back to this page: the version above updates on its own.',
+  'extension.firefoxStep1': 'Extract the zip. It holds one folder, {folder}.',
+  'extension.firefoxStep2': 'Open about:debugging#/runtime/this-firefox and choose Load Temporary Add-on.',
+  'extension.firefoxStep3': 'Select manifest.json inside that folder.',
+  'extension.firefoxStep4': 'Firefox removes temporary add-ons when it quits; a signed version is coming.',
+  'extension.firefoxUpdateStep1': 'Extract the new zip. It holds {folder}.',
+  'extension.firefoxUpdateStep2':
+    'In about:debugging, choose Load Temporary Add-on and select manifest.json in the new folder.',
+  'extension.firefoxUpdateStep3': 'Come back to this page: the version above updates on its own.',
   'extension.integrations': 'Integrations',
   'extension.needsTheExtension': 'Needs the extension',
   'extension.notAvailableInVersion': 'Not available in this version yet',
@@ -292,6 +309,17 @@ export const en: Translations = {
   'extension.privacyFooter':
     'Sign-ins stay inside the extension: this page only ever sees results, never your cookies or tokens.',
   'extension.moreIntegrationsInSettings': 'Spotify Canvas, Discord presence and Listen Together are in',
+
+  // Banners
+  'banner.extensionTitle': 'Play YouTube Music with the SoundChord extension.',
+  'banner.extensionDetail':
+    'Playback, YouTube Music sign-in, Spotify and Discord need the extension. Addons and lyrics work without it.',
+  'banner.getExtension': 'Get the Extension',
+  'banner.mobileTitle': 'SoundChord is better in the app.',
+  'banner.mobileDetail':
+    'Phone browsers can’t run the SoundChord extension. The Android app has everything.',
+  'banner.getApp': 'Get the App',
+  'banner.dismiss': 'Dismiss',
 
   // Spotify page & import
   'spotify.title': 'Spotify',

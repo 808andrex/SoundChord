@@ -1,14 +1,17 @@
 // Zips the built extension for the site's Extension page and writes the
 // manifest the page checks for updates:
 //
+//   web/app/public/soundchord-extension-chrome.zip
+//   web/app/public/soundchord-extension-firefox.zip
+//   web/app/public/extension.json
+//   web/app/public/downloads/soundchord-extension-chrome.zip
+//   web/app/public/downloads/soundchord-extension-firefox.zip
 //   web/app/public/downloads/soundchord-extension-chrome (<version>).zip
 //   web/app/public/downloads/soundchord-extension-firefox (<version>).zip
 //   web/app/public/downloads/extension.json    { version, builtAt, files }
 //
 // Each zip holds a single folder (soundchord-extension-<browser> (<version>)/) rather than
 // loose files, so "Extract here" leaves one tidy folder to load unpacked.
-//
-//   corepack pnpm --dir web/extension package   (builds both, then runs this)
 
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -16,11 +19,19 @@ import { fileURLToPath } from 'node:url';
 import { zipSync } from 'fflate';
 
 const output = fileURLToPath(new URL('../.output/', import.meta.url));
-const target = fileURLToPath(new URL('../../app/public/downloads/', import.meta.url));
-mkdirSync(target, { recursive: true });
-// Each version's zips are named for it; the previous ones go.
-for (const name of readdirSync(target)) {
-  if (/^(soundchord|bitchord)-extension-.*\.zip$/.test(name)) rmSync(join(target, name));
+const publicDir = fileURLToPath(new URL('../../app/public/', import.meta.url));
+const downloadsDir = join(publicDir, 'downloads');
+
+mkdirSync(publicDir, { recursive: true });
+mkdirSync(downloadsDir, { recursive: true });
+
+// Clean previous extension zips in both public and downloads
+for (const dir of [publicDir, downloadsDir]) {
+  for (const name of readdirSync(dir)) {
+    if (/^(soundchord|bitchord)-extension-.*\.zip$/.test(name)) {
+      rmSync(join(dir, name));
+    }
+  }
 }
 
 function filesUnder(dir) {
@@ -48,14 +59,22 @@ for (const [browser, folder] of Object.entries(builds)) {
   for (const file of filesUnder(root)) {
     entries[`${parent}/${relative(root, file).split(sep).join('/')}`] = readFileSync(file);
   }
-  const name = `${parent}.zip`;
-  writeFileSync(join(target, name), zipSync(entries, { level: 9 }));
-  files[browser] = name;
-  console.log(`${folder} -> app/public/downloads/${name} (${parent}/, v${version})`);
+
+  const standardName = `soundchord-extension-${browser}.zip`;
+  const versionedName = `${parent}.zip`;
+  const zipBuffer = zipSync(entries, { level: 9 });
+
+  // 1. Direct file at web/app/public/ (served at /soundchord-extension-<browser>.zip)
+  writeFileSync(join(publicDir, standardName), zipBuffer);
+  // 2. Compatibility copies in web/app/public/downloads/
+  writeFileSync(join(downloadsDir, standardName), zipBuffer);
+  writeFileSync(join(downloadsDir, versionedName), zipBuffer);
+
+  files[browser] = standardName;
+  console.log(`${folder} -> app/public/${standardName} and downloads/ (${parent}/, v${version})`);
 }
 
-writeFileSync(
-  join(target, 'extension.json'),
-  `${JSON.stringify({ version, builtAt: new Date().toISOString(), files }, null, 2)}\n`,
-);
-console.log(`app/public/downloads/extension.json (v${version})`);
+const manifestPayload = `${JSON.stringify({ version, builtAt: new Date().toISOString(), files }, null, 2)}\n`;
+writeFileSync(join(publicDir, 'extension.json'), manifestPayload);
+writeFileSync(join(downloadsDir, 'extension.json'), manifestPayload);
+console.log(`app/public/extension.json and app/public/downloads/extension.json (v${version})`);

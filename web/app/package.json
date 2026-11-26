@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "pnpm --filter @soundchord/extension package",
     "build": "tsc -p . && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p . && tsc -p tsconfig.node.json",

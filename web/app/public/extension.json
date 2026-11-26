@@ -1,0 +1,8 @@
+{
+  "version": "0.4.5",
+  "builtAt": "2026-11-26T05:30:36.473Z",
+  "files": {
+    "chrome": "soundchord-extension-chrome.zip",
+    "firefox": "soundchord-extension-firefox.zip"
+  }
+}

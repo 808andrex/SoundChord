@@ -1,0 +1,41 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "cleanUrls": false,
+  "headers": [
+    {
+      "source": "/(.*\\.zip)",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/zip"
+        },
+        {
+          "key": "Content-Disposition",
+          "value": "attachment"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, must-revalidate"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/soundchord-extension-chrome.zip",
+      "destination": "/soundchord-extension-chrome.zip"
+    },
+    {
+      "source": "/soundchord-extension-firefox.zip",
+      "destination": "/soundchord-extension-firefox.zip"
+    },
+    {
+      "source": "/downloads/:path*",
+      "destination": "/downloads/:path*"
+    },
+    {
+      "source": "/((?!assets/|downloads/|models/|.*\\.(?:js|css|json|zip|svg|png|ico|wasm|onnx|txt|woff2?)$).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

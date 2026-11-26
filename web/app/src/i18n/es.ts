@@ -280,6 +280,23 @@ export const es: Translations = {
   'extension.firefoxDetail': 'Firefox 128 o posterior',
   'extension.thisBrowser': ' · Este navegador',
   'extension.pickBrowserFooter': 'Elige tu navegador para descargar la extensión y ver las instrucciones de instalación.',
+  'extension.chromeStep1': 'Extrae el archivo zip en una ubicación fija. Contiene una carpeta: {folder}.',
+  'extension.chromeStep2': 'Abre chrome://extensions y activa el Modo de desarrollador.',
+  'extension.chromeStep3': 'Haz clic en Cargar descomprimida y selecciona esa carpeta.',
+  'extension.chromeStep4': 'Vuelve a esta página: el estado superior cambiará a Instalada.',
+  'extension.chromeUpdateStep1': 'Extrae el nuevo archivo zip. Contiene {folder}.',
+  'extension.chromeUpdateStep2':
+    'En chrome://extensions, elige Cargar descomprimida y selecciona esa carpeta. Tiene el mismo ID, por lo que reemplazará a la anterior manteniendo tus ajustes.',
+  'extension.chromeUpdateStep3':
+    'Elimina la carpeta antigua y vuelve a esta página: la versión superior se actualizará automáticamente.',
+  'extension.firefoxStep1': 'Extrae el archivo zip. Contiene una carpeta: {folder}.',
+  'extension.firefoxStep2': 'Abre about:debugging#/runtime/this-firefox y haz clic en Cargar complemento temporal...',
+  'extension.firefoxStep3': 'Selecciona manifest.json dentro de esa carpeta.',
+  'extension.firefoxStep4': 'Firefox elimina los complementos temporales al cerrarse; próximamente habrá una versión firmada.',
+  'extension.firefoxUpdateStep1': 'Extrae el nuevo archivo zip. Contiene {folder}.',
+  'extension.firefoxUpdateStep2':
+    'En about:debugging, elige Cargar complemento temporal... y selecciona manifest.json en la nueva carpeta.',
+  'extension.firefoxUpdateStep3': 'Vuelve a esta página: la versión superior se actualizará automáticamente.',
   'extension.integrations': 'Integraciones',
   'extension.needsTheExtension': 'Requiere la extensión',
   'extension.notAvailableInVersion': 'No disponible en esta versión aún',
@@ -292,6 +309,17 @@ export const es: Translations = {
   'extension.privacyFooter':
     'Las sesiones permanecen dentro de la extensión: esta página solo recibe resultados, nunca tus cookies ni tokens.',
   'extension.moreIntegrationsInSettings': 'Spotify Canvas, la presencia en Discord y Escuchar juntos están en',
+
+  // Banners
+  'banner.extensionTitle': 'Reproduce YouTube Music con la extensión de SoundChord.',
+  'banner.extensionDetail':
+    'La reproducción, el inicio de sesión en YouTube Music, Spotify y Discord requieren la extensión. Los complementos y letras funcionan sin ella.',
+  'banner.getExtension': 'Obtener la extensión',
+  'banner.mobileTitle': 'SoundChord es mejor en la aplicación.',
+  'banner.mobileDetail':
+    'Los navegadores móviles no pueden ejecutar la extensión de SoundChord. La aplicación para Android lo tiene todo.',
+  'banner.getApp': 'Obtener la app',
+  'banner.dismiss': 'Descartar',
 
   // Spotify page & import
   'spotify.title': 'Spotify',

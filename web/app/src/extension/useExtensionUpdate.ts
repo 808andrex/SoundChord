@@ -2,9 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { config } from '@/config';
 import { useExtension } from './useExtension';
 
-/** Where a published zip is served: the site's downloads folder, its name escaped (it has spaces and brackets). */
+/** Where a published zip is served: directly or resolved against the extension manifest URL. */
 export function downloadUrl(name: string): string {
-  return new URL(encodeURIComponent(name), new URL(config.extensionManifestUrl, location.origin)).toString();
+  if (name.startsWith('/') || name.startsWith('http://') || name.startsWith('https://')) return name;
+  return new URL(encodeURIComponent(name), new URL(config.extensionManifestUrl, location.origin)).pathname;
 }
 
 /** What `pnpm package` last published next to the zips (web/extension/scripts/publish-to-site.mjs). */
