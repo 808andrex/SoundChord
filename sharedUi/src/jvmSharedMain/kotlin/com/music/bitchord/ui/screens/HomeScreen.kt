@@ -91,7 +91,6 @@ import com.music.bitchord.ui.components.SearchPlayingBars
 import com.music.bitchord.ui.components.SignInBanner
 import com.music.bitchord.ui.components.feedMoreSkeleton
 import com.music.bitchord.ui.components.feedSkeleton
-import com.music.bitchord.ui.components.recentlyPlayedSkeleton
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.components.trackColumnWidth
 import com.music.bitchord.ui.player.MeshGradientBackground
@@ -163,7 +162,9 @@ private fun HomeShelf.isHomeExcluded(): Boolean {
     val label = title.trim().lowercase()
     val isPrograms = listOf("programas para ti", "programas", "shows for you", "podcasts", "podcast", "episodios", "episodes").any(label::contains)
     val isVideos = listOf("vídeos musicales", "videos musicales", "music videos", "vídeos", "videos").any(label::contains) || layout == ShelfLayout.VIDEO
-    return isPrograms || isVideos
+    val isRecents = title.equals(RECENTS_TITLE, ignoreCase = true) ||
+        label == "recents" || label == "recently played" || label == "recientes"
+    return isPrograms || isVideos || isRecents
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -281,18 +282,12 @@ fun HomeScreen(
             }
             when (state) {
                 is UiState.Loading -> {
-                    if (recentlyPlayedLoading) {
-                        recentlyPlayedSkeleton()
-                    }
                     feedSkeleton()
                 }
                 is UiState.Error -> item(key = "home-error") {
                     MessageState(state.message, actionLabel = stringResource(Res.string.retry), onAction = onRetry)
                 }
                 is UiState.Success -> {
-                    if (recentlyPlayedLoading) {
-                        recentlyPlayedSkeleton()
-                    }
                     itemsIndexedShelves(
                         shelves = visibleShelves,
                         editorialShelves = editorialShelves,
@@ -345,16 +340,15 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
 ) {
     val placedEditorial = mutableSetOf<Int>()
 
+    if (onMoodClick != null) {
+        item(key = "find-your-mood", contentType = "find_your_mood") { FindYourMoodShelf(onMoodClick, onMoodsShowAll) }
+    }
+
     shelves.forEachIndexed { index, shelf ->
-        // Find Your Mood follows the lead shelf, as on Apple Music's Home.
-        if (index == 1 && onMoodClick != null) {
-            item(key = "find-your-mood", contentType = "find_your_mood") { FindYourMoodShelf(onMoodClick, onMoodsShowAll) }
-        }
-        if (index in 1..editorialShelves.size) {
-            val edIdx = index - 1
-            val edShelf = editorialShelves[edIdx]
-            placedEditorial.add(edIdx)
-            item(key = "editorial-shelf-${edShelf.title}-$edIdx", contentType = "shelf_cards") {
+        if (index in 0 until editorialShelves.size) {
+            val edShelf = editorialShelves[index]
+            placedEditorial.add(index)
+            item(key = "editorial-shelf-${edShelf.title}-$index", contentType = "shelf_cards") {
                 Shelf(
                     shelf = edShelf.copy(subtitle = ""),
                     onItemClick = { item -> onItemClick(item, edShelf.title) },
@@ -366,11 +360,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
         }
         item(key = shelf.title + index, contentType = "shelf_${shelf.layout.name}") {
             val openItem: (ShelfItem) -> Unit = { item -> onItemClick(item, shelf.title) }
-            // Listen again and Quick picks are lists on the web player, as
-            // Recents is here: one pager for all three.
-            if (shelf.layout == ShelfLayout.LIST ||
-                (index == 0 && shelf.title.equals(RECENTS_TITLE, ignoreCase = true))
-            ) {
+            // Listen again and Quick picks are lists on the web player: one pager for both.
+            if (shelf.layout == ShelfLayout.LIST) {
                 RecentShelf(
                     shelf = shelf,
                     onItemClick = openItem,

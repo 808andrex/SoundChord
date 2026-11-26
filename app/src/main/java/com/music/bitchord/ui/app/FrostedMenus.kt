@@ -720,6 +720,18 @@ internal fun BitChordChrome(
                             )
                         }
                     }
+                    IconButton(
+                        onClick = {
+                            actions.onPushRoute(AppRoute.History)
+                            actions.onLoadHistory()
+                        },
+                    ) {
+                        Icon(
+                            Icons.Rounded.History,
+                            contentDescription = stringResource(R.string.history),
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
                 if (!(state.route != null && AppRoute.Settings in state.navigator)) {
                     if (state.recognitionOpen) {
@@ -732,20 +744,6 @@ internal fun BitChordChrome(
                             Icon(
                                 Icons.Rounded.History,
                                 contentDescription = stringResource(R.string.recognition_history_title),
-                                tint = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
-                    if (state.route == null && state.detail == null && state.selectedTab == TAB_LIBRARY) {
-                        IconButton(
-                            onClick = {
-                                actions.onPushRoute(AppRoute.History)
-                                actions.onLoadHistory()
-                            },
-                        ) {
-                            Icon(
-                                Icons.Rounded.History,
-                                contentDescription = stringResource(R.string.listening_history),
                                 tint = MaterialTheme.colorScheme.onSurface,
                             )
                         }

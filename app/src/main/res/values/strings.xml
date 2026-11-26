@@ -700,7 +700,7 @@
     <string name="pipeline_device_name">Device Name</string>
     <string name="mono">Mono</string>
     <string name="stereo">Stereo</string>
-    <string name="history">History</string>
+    <string name="history">Recents</string>
     <string name="recognition_history_title">Recognition history</string>
     <string name="recognition_history_empty">Songs you identify will appear here</string>
     <string name="recognition_history_no_matches">No recognized songs match your search</string>
@@ -810,7 +810,7 @@
     <string name="like">Like</string>
     <string name="listenbrainz_token">ListenBrainz token</string>
     <string name="listenbrainz_token_description">Paste your ListenBrainz user token to enable scrobbling.</string>
-    <string name="listening_history">Listening history</string>
+    <string name="listening_history">Recents</string>
     <string name="lyrics_sources_order">Sources are tried in this order. Drag to reorder them. The first source with lyrics wins unless syllable lyrics are prioritized.</string>
     <string name="paxsenix_api_key">PaxSenix API key</string>
     <string name="paxsenix_api_key_configured">PaxSenix API key — configured</string>

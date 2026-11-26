@@ -495,7 +495,7 @@
     <string name="shuffle_off">Orden aleatorio desactivado</string>
     <string name="mono">Mono</string>
     <string name="stereo">Estéreo</string>
-    <string name="history">Historial</string>
+    <string name="history">Recientes</string>
     <string name="recognition_history_title">Historial de reconocimiento</string>
     <string name="recognition_history_empty">Las canciones que identifiques aparecerán aquí</string>
     <string name="recognition_history_no_matches">No hay canciones reconocidas que coincidan con la búsqueda</string>
@@ -582,7 +582,7 @@
     <string name="like">Me gusta</string>
     <string name="listenbrainz_token">Token de ListenBrainz</string>
     <string name="listenbrainz_token_description">Pega tu token de usuario de ListenBrainz para activar el scrobbling.</string>
-    <string name="listening_history">Historial de reproducción</string>
+    <string name="listening_history">Recientes</string>
     <string name="lyrics_sources_order">Las fuentes se prueban en este orden. Arrástralas para reordenarlas. Se usa la primera que encuentre una letra, salvo que priorices letras por sílabas.</string>
     <string name="max_delay">Retraso máximo</string>
     <string name="max_delay_subtitle">Retraso máximo del scrobbling en segundos</string>

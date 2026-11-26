@@ -2271,26 +2271,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onHomeShown() {
         if (!homeStale) return
         homeStale = false
-        // A first load already in flight will pick the new play up by itself.
-        if (_home.value is UiState.Success) refreshHomeRecents()
-    }
-
-    /**
-     * Re-fetches only the Recents shelf, swapping it in place. The rest of
-     * Home stays exactly as it was, so a shelf someone was eyeing doesn't
-     * vanish because a track started playing.
-     */
-    private fun refreshHomeRecents() {
-        if (!_signedIn.value) return
-        val identity = listenerKey()
-        val generation = homeLoadGeneration.get()
-        viewModelScope.launch {
-            YtMusicRepository.homeRecentlyPlayed().onSuccess { shelf ->
-                // A full load that started meanwhile fetches Recents itself.
-                if (!isCurrentHomeLoad(identity, generation)) return@onSuccess
-                shelf?.let { publishHomeShelves(listOf(it), prepend = true) }
-            }
-        }
     }
 
     private fun loadAccount() {
@@ -2452,10 +2432,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         homeContinuation = null
         homeSeenTitles.clear()
         _homeLoadingMore.value = false
-        _homeRecentlyPlayedLoading.value = _signedIn.value
-        // The core feed plus one browse per supplement. Recently played is left
-        // out: it has its own skeleton at the head of the page rather than the
-        // one at the tail.
+        _homeRecentlyPlayedLoading.value = false
+        // The core feed plus one browse per supplement.
         _homePendingShelves.value = 1 + YtMusicRepository.HOME_SUPPLEMENT_BROWSE_IDS.size
         loadTopPicks(identity, rebuild = false)
         viewModelScope.launch {
@@ -2474,20 +2452,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                 } finally {
                     homeShelfRequestSettled(identity, generation)
-                }
-            }
-            if (_signedIn.value) {
-                launch {
-                    YtMusicRepository.homeRecentlyPlayed()
-                        .onSuccess { shelf ->
-                            if (isCurrentHomeLoad(identity, generation)) {
-                                _homeRecentlyPlayedLoading.value = false
-                                shelf?.let { publishHomeShelves(listOf(it), prepend = true) }
-                            }
-                        }
-                        .onFailure {
-                            if (isCurrentHomeLoad(identity, generation)) _homeRecentlyPlayedLoading.value = false
-                        }
                 }
             }
             YtMusicRepository.HOME_SUPPLEMENT_BROWSE_IDS.forEach { browseId ->
@@ -2630,7 +2594,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Refreshes the core feed without blanking the current Play page first. */
     private suspend fun refreshHome(identity: String?) = coroutineScope {
-        val recent = if (_signedIn.value) async { YtMusicRepository.homeRecentlyPlayed() } else null
         // Top Picks keeps to its hour; a pull refreshes the feed, not the
         // picks, unless the hour has already turned over.
         if (topPicksJob?.isActive != true) loadTopPicks(identity, rebuild = false)
@@ -2641,9 +2604,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val shelves = feed.shelves.withoutRepeatsOf(emptyList())
                 .filter { homeSeenTitles.add(it.title.lowercase(Locale.ROOT)) }
             if (shelves.isNotEmpty()) _home.value = UiState.Success(withPlaylistCovers(shelves))
-        }
-        recent?.await()?.onSuccess { shelf ->
-            if (identity == listenerKey()) shelf?.let { publishHomeShelves(listOf(it), prepend = true) }
         }
     }
 
