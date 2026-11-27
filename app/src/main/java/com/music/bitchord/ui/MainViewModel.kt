@@ -2179,6 +2179,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         val appContext = getApplication<Application>()
+        TopPicks.tasteProvider = { localTaste() }
         com.music.bitchord.data.PlaylistCovers.init(appContext)
         AlbumRelatedDatabaseCache.init(appContext)
         viewModelScope.launch {
@@ -2550,16 +2551,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** This app's own Replay chart for the month — Top Picks' second opinion, and all it has signed out. */
-    private suspend fun localTaste(): TopPicks.LocalTaste {
+    /** This app's own Replay chart for the month/all-time, Room listening history, library and liked tracks. */
+    internal suspend fun localTaste(): TopPicks.LocalTaste {
         val month = runCatching { ListeningStats.summary(ReplayPeriod.THIS_MONTH) }.getOrNull()
+        val allTime = if (month == null || month.artists.size < 5) {
+            runCatching { ListeningStats.summary(ReplayPeriod.ALL_TIME) }.getOrNull()
+        } else null
+
+        val replayArtists = ((month?.artists.orEmpty()) + (allTime?.artists.orEmpty()))
+            .distinctBy { it.title.lowercase(Locale.ROOT) }
+            .take(25)
+            .map { ArtistRef(name = it.title, browseId = it.browseId) }
+
+        val onboarding = AppSettings.onboardingArtists.value.map { ArtistRef(name = it.name, browseId = it.browseId) }
+
+        val replaySongs = ((month?.songs.orEmpty()) + (allTime?.songs.orEmpty()))
+            .distinctBy { it.song.videoId }
+            .take(15)
+            .map { it.song }
+
+        val replayGenres = ((month?.genres.orEmpty()) + (allTime?.genres.orEmpty()))
+            .map { it.title }
+            .distinct()
+            .take(10)
+
+        val libraryData = (_library.value as? UiState.Success)?.data
+
         return TopPicks.LocalTaste(
-            artists = (
-                month?.artists.orEmpty().take(10).map { ArtistRef(name = it.title, browseId = it.browseId) } +
-                    AppSettings.onboardingArtists.value.map { ArtistRef(name = it.name, browseId = it.browseId) }
-                ).distinctBy { it.browseId ?: it.name },
-            songs = month?.songs.orEmpty().take(5).map { it.song },
-            genres = month?.genres.orEmpty().take(3).map { it.title },
+            artists = (replayArtists + onboarding).distinctBy { it.browseId ?: it.name },
+            songs = replaySongs,
+            genres = replayGenres,
+            likedSongs = libraryData?.likedSongs.orEmpty(),
+            librarySongs = libraryData?.librarySongs.orEmpty(),
         )
     }
 

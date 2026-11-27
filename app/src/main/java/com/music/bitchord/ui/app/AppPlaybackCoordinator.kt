@@ -492,7 +492,8 @@ internal fun openTopPickCard(
     } else if (controller != null && !refusedByHost()) {
         val request = onPlayRequested()
         scope.launch {
-            val songs = TopPicks.queue(pick).getOrNull().orEmpty()
+            val taste = runCatching { viewModel.localTaste() }.getOrNull()
+            val songs = TopPicks.queue(pick, taste).getOrNull().orEmpty()
             if (!isCurrentRequest(request)) return@launch
             val activeController = controller ?: return@launch
             if (songs.isEmpty()) {

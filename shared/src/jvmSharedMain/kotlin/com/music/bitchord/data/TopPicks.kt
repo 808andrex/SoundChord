@@ -19,6 +19,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import com.music.bitchord.data.model.normalizedArtistName
+import com.music.bitchord.playback.MoodStationFilters
+import com.music.bitchord.playback.QueueBuilder
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
@@ -74,13 +76,22 @@ object TopPicks {
         val artists: List<ArtistRef> = emptyList(),
         val songs: List<Song> = emptyList(),
         val genres: List<String> = emptyList(),
+        val likedSongs: List<Song> = emptyList(),
+        val librarySongs: List<Song> = emptyList(),
     )
+
+    @Volatile
+    var tasteProvider: (suspend () -> LocalTaste)? = null
+
+    @Volatile
+    var currentTaste: LocalTaste? = null
 
     suspend fun build(
         homeShelves: List<HomeShelf>,
         local: LocalTaste,
         now: LocalDateTime = LocalDateTime.now(),
     ): List<TopPick> = coroutineScope {
+        currentTaste = local
         val historyAsync = async { YtMusicRepository.recentHistory().getOrNull().orEmpty() }
         val mixesAsync = async { findMixes(homeShelves) }
 
@@ -194,8 +205,8 @@ object TopPicks {
     }
 
     /** The queue a card starts. Never called for [TopPickKind.LATEST_RELEASE] or [TopPickKind.EDITORIAL_PLAYLIST], which open a page. */
-    suspend fun queue(pick: TopPick): Result<List<Song>> {
-        if (pick.kind == TopPickKind.MOOD) return moodQueue(pick)
+    suspend fun queue(pick: TopPick, local: LocalTaste? = null): Result<List<Song>> {
+        if (pick.kind == TopPickKind.MOOD) return moodQueue(pick, local)
         if (pick.kind == TopPickKind.FAVORITES_MIX) {
             val target = pick.watch
             if (target != null) {
@@ -753,37 +764,166 @@ object TopPicks {
      * Indian", "Pop romance", …). A shelf naming the listener's own scene
      * wins; two of its playlists are drawn at random and mixed.
      */
-    private suspend fun moodQueue(pick: TopPick): Result<List<Song>> = coroutineScope {
+    /**
+     * A personalized mood station (Ticket #63):
+     *  - Combines the selected mood seed with the user's real listening profile
+     *    (Room ListeningStats, liked songs, library, and YouTube Music account history).
+     *  - Strictly filters candidate tracks to official songs (1:1 square artwork,
+     *    no UGC, no videos, no lyric videos, no spoken intros).
+     *  - Applies cultural & language affinity filtering (blocks Bollywood, Punjabi,
+     *    Hindi, Desi, etc. unless user actively listens to them).
+     *  - Rotates candidate seeds and order per session so each tap yields fresh variety.
+     */
+    private suspend fun moodQueue(
+        pick: TopPick,
+        providedTaste: LocalTaste? = null,
+    ): Result<List<Song>> = coroutineScope {
         val mood = pick.mood ?: return@coroutineScope Result.failure(IllegalStateException("mood card without a mood"))
-        val shelves = YtMusicRepository.moodGenreShelves(TopPickMood.CATEGORY_BROWSE_ID, mood.params)
-            .getOrElse { return@coroutineScope Result.failure(it) }
+
+        // 1. Resolve user profile / taste
+        val taste = providedTaste ?: currentTaste ?: tasteProvider?.invoke() ?: LocalTaste()
+        val historyAsync = async { runCatching { YtMusicRepository.recentHistory().getOrNull() }.getOrNull().orEmpty() }
+        val libraryAsync = async { runCatching { YtMusicRepository.library().getOrNull() }.getOrNull() }
+        val shelvesAsync = async {
+            YtMusicRepository.moodGenreShelves(TopPickMood.CATEGORY_BROWSE_ID, mood.params)
+        }
+
+        val ytHistory = historyAsync.await()
+        val ytLibrary = libraryAsync.await()
+
+        val allUserArtists = buildSet {
+            taste.artists.forEach { add(it.name) }
+            ytHistory.forEach { song ->
+                add(song.artist)
+                song.artists.forEach { add(it.name) }
+            }
+            ytLibrary?.shelves?.firstOrNull { it.title.equals("Artists", ignoreCase = true) }?.items?.forEach {
+                add(it.title)
+            }
+            ytLibrary?.likedSongs?.forEach { add(it.artist) }
+            ytLibrary?.librarySongs?.forEach { add(it.artist) }
+            taste.likedSongs.forEach { add(it.artist) }
+            taste.librarySongs.forEach { add(it.artist) }
+        }.filter { it.isNotBlank() && !it.equals("Unknown artist", ignoreCase = true) }
+
+        val allUserGenres = buildSet {
+            taste.genres.forEach { add(it) }
+        }
+
+        val allUserSongs = (taste.songs + taste.likedSongs + ytHistory + (ytLibrary?.likedSongs.orEmpty())).distinctBy { it.videoId }
+
+        // Cultural profile to filter out foreign regional music
+        val culturalProfile = MoodStationFilters.buildCulturalProfile(
+            artists = allUserArtists,
+            genres = allUserGenres,
+            songs = allUserSongs,
+        )
+
+        val shelvesResult = shelvesAsync.await()
+        val shelves = shelvesResult.getOrElse { return@coroutineScope Result.failure(it) }
+
+        // 2. Filter shelves by cultural affinity
         val playlists = { shelf: HomeShelf -> shelf.items.filter { it.browseId?.startsWith("VL") == true } }
-        val candidates = shelves.filter { playlists(it).isNotEmpty() }
+        val allowedShelves = shelves
+            .filter { playlists(it).isNotEmpty() }
+            .filter { MoodStationFilters.isCulturallyAllowedShelf(it.title, culturalProfile) }
+            .ifEmpty {
+                shelves.filter { playlists(it).isNotEmpty() }
+            }
+
+        // 3. Score candidate shelves combining mood seed with real user genres and hints
+        val genreKeywords = allUserGenres.map { it.lowercase(Locale.ROOT) }
         val score = { shelf: HomeShelf ->
             val title = shelf.title.lowercase(Locale.ROOT)
-            2 * mood.shelfWords.count { it in title } + pick.hints.count { it.isNotBlank() && it in title }
+            val moodScore = 3 * mood.shelfWords.count { it in title }
+            val genreScore = 2 * genreKeywords.count { it.isNotBlank() && it in title }
+            val hintScore = pick.hints.count { it.isNotBlank() && it in title }
+            moodScore + genreScore + hintScore
         }
-        val best = candidates.maxOfOrNull(score)
-            ?: return@coroutineScope Result.failure(IllegalStateException("no playlists for $mood"))
-        // With no scene in common, any shelf of the mood will do.
-        val shelf = candidates.filter { score(it) == best }.random()
-        val chosen = playlists(shelf).take(6).shuffled().take(MOOD_PLAYLISTS)
-        val songs = chosen.map { item ->
+
+        // Session seed for deterministic yet rotating variety per session
+        val sessionSeed = (System.currentTimeMillis() / (1000 * 60 * 20)).toInt() xor mood.ordinal
+        val random = Random(sessionSeed)
+
+        // Select top scoring candidate shelves
+        val sortedCandidates = allowedShelves.sortedByDescending(score)
+        val maxScore = sortedCandidates.firstOrNull()?.let(score) ?: 0
+        val topShelfPool = if (maxScore > 0) {
+            sortedCandidates.takeWhile { score(it) >= (maxScore - 2).coerceAtLeast(1) }.take(6)
+        } else {
+            allowedShelves.take(6)
+        }
+
+        val chosenShelves = topShelfPool.shuffled(random).take(MOOD_PLAYLISTS)
+        val candidatePlaylists = chosenShelves.flatMap { playlists(it) }.distinctBy { it.browseId }
+            .shuffled(random).take(MOOD_PLAYLISTS)
+
+        // 4. Fetch songs from the chosen mood playlists
+        val moodPlaylistSongsDeferred = candidatePlaylists.map { item ->
             async {
                 val playlistId = item.browseId!!.removePrefix("VL")
-                // As a watch queue, so YouTube hands over each official video's
-                // song version directly; the playlist page only lists videos.
                 YtMusicRepository.playlistAsAudio(playlistId).getOrNull()?.takeIf { it.isNotEmpty() }
                     ?: YtMusicRepository.browseSongs(item.browseId!!).getOrNull()?.songs.orEmpty()
             }
-        }.awaitAll().flatten()
-            // A row YouTube couldn't pair stays the video, and plays as one;
-            // the player menu's version switch turns it into the song.
-            .distinctBy { it.videoId }
-            .shuffled()
-            .take(MOOD_QUEUE)
-        if (songs.isEmpty()) Result.failure(IllegalStateException("$mood playlists were empty"))
-        else Result.success(songs)
+        }
+
+        // 5. Combine with user's own profile matching the mood
+        val userSeedsDeferred = async {
+            val userCandidates = allUserSongs
+                .filter { MoodStationFilters.isOfficialSong(it) && MoodStationFilters.hasCulturalAffinity(it, culturalProfile) }
+                .shuffled(random)
+                .take(3)
+            userCandidates.map { seedSong ->
+                async {
+                    runCatching {
+                        YtMusicRepository.radio(seedSong.videoId, preferVideo = false).getOrNull().orEmpty()
+                    }.getOrNull().orEmpty()
+                }
+            }.awaitAll().flatten()
+        }
+
+        val moodSongs = moodPlaylistSongsDeferred.awaitAll().flatten()
+        val userRelatedSongs = userSeedsDeferred.await()
+
+        // 6. Strict filtering on all candidate songs:
+        // - Only official songs (1:1 square artwork, no videos, no UGC, no lyric videos, no spoken intros)
+        // - Strict cultural affinity (no alien regional / language music)
+        val validMoodSongs = moodSongs.filter {
+            MoodStationFilters.isOfficialSong(it) && MoodStationFilters.hasCulturalAffinity(it, culturalProfile)
+        }
+        val validUserSongs = userRelatedSongs.filter {
+            MoodStationFilters.isOfficialSong(it) && MoodStationFilters.hasCulturalAffinity(it, culturalProfile)
+        }
+
+        // Blend: 70% mood songs + 30% user profile related songs, interleaved
+        val combined = mutableListOf<Song>()
+        val moodPool = validMoodSongs.shuffled(random).toMutableList()
+        val userPool = validUserSongs.shuffled(random).toMutableList()
+
+        while (combined.size < MOOD_QUEUE && (moodPool.isNotEmpty() || userPool.isNotEmpty())) {
+            repeat(2) {
+                if (moodPool.isNotEmpty()) combined.add(moodPool.removeAt(0))
+            }
+            if (userPool.isNotEmpty()) {
+                combined.add(userPool.removeAt(0))
+            } else if (moodPool.isNotEmpty()) {
+                combined.add(moodPool.removeAt(0))
+            }
+        }
+
+        // Deduplicate using recording matching and cap per artist
+        val finalQueue = QueueBuilder.extend(
+            existing = emptyList(),
+            candidates = combined.ifEmpty { validMoodSongs.ifEmpty { moodSongs } },
+            limit = MOOD_QUEUE,
+            preferVideos = false,
+        )
+
+        // Session rotation: shuffle slightly with rotation so order isn't static
+        val rotatedQueue = finalQueue.shuffled(Random(sessionSeed + 7))
+
+        if (rotatedQueue.isEmpty()) Result.failure(IllegalStateException("$mood queue was empty"))
+        else Result.success(rotatedQueue)
     }
 
     private const val MOOD_PLAYLISTS = 3
@@ -793,15 +933,13 @@ object TopPicks {
      * A mood station for a Find Your Mood tile — the same queue the Mood for
      * You card plays, steered toward the listener's scene by [hints].
      */
-    fun moodStation(mood: TopPickMood, hints: List<String> = regionHints()): TopPick =
+    fun moodStation(mood: TopPickMood, hints: List<String> = emptyList()): TopPick =
         TopPick(kind = TopPickKind.MOOD, mood = mood, hints = hints)
 
     fun regionHints(): List<String> = when (Locale.getDefault().country) {
-        "IN" -> listOf("bollywood", "indian", "hindi", "punjabi", "desi")
-        "PK" -> listOf("pakistani", "urdu", "punjabi")
         "KR" -> listOf("k-pop", "korean")
         "JP" -> listOf("j-pop", "japanese")
-        "BR" -> listOf("brazil", "sertanejo", "funk")
+        "BR" -> listOf("brazil", "funk")
         "MX", "ES", "AR", "CO", "CL", "PE" -> listOf("latin", "latino", "reggaeton")
         else -> emptyList()
     }
