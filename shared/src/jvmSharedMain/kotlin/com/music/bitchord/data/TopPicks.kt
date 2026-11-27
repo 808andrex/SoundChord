@@ -270,23 +270,47 @@ object TopPicks {
         }
         val around = radios.awaitAll().flatten()
 
+        val isPersonalOrDiscovery = pick.kind == TopPickKind.PERSONAL_STATION || pick.kind == TopPickKind.DISCOVERY_STATION
         val discovery = pick.kind == TopPickKind.DISCOVERY_STATION
         val heard = if (discovery) history.mapTo(HashSet()) { it.videoId } + pick.exclude else emptySet()
         val seedArtist = pick.artistName?.takeIf { discovery }?.lowercase(Locale.ROOT)
         fun keep(song: Song): Boolean =
             song.videoId !in heard &&
-                (seedArtist == null || !song.artist.lowercase(Locale.ROOT).contains(seedArtist))
-        val core = mix.filter(::keep).shuffled().take(STATION_FROM_MIX)
+                (seedArtist == null || !song.artist.lowercase(Locale.ROOT).contains(seedArtist)) &&
+                (!isPersonalOrDiscovery || MoodStationFilters.isOfficialSong(song))
+
+        val core = mix.filter(::keep)
+            .let { list -> if (isPersonalOrDiscovery) list.map(MoodStationFilters::sanitizeSongMetadata) else list }
+            .shuffled().take(STATION_FROM_MIX)
         val coreIds = core.mapTo(HashSet()) { it.videoId }
         val extra = around.filter { keep(it) && it.videoId !in coreIds }
+            .let { list -> if (isPersonalOrDiscovery) list.map(MoodStationFilters::sanitizeSongMetadata) else list }
             .distinctBy { it.videoId }
             .shuffled()
             .take(STATION_SIZE - core.size)
-        val station = (core + extra).shuffled()
+        var station = (core + extra).shuffled()
+
+        // If station is small due to filtering out videos and UGC, top up with more history radio seeds
+        if (isPersonalOrDiscovery && station.size < MIN_FILTERED_QUEUE && history.isNotEmpty()) {
+            val moreSeeds = history.drop(SEED_RADIOS).shuffled().take(4)
+            val moreRadios = moreSeeds.map { seed ->
+                async {
+                    YtMusicRepository.radio(seed.videoId, preferVideo = false).getOrNull().orEmpty()
+                }
+            }.awaitAll().flatten()
+            val moreFiltered = moreRadios.filter { keep(it) && it.videoId !in station.map { s -> s.videoId } }
+                .map(MoodStationFilters::sanitizeSongMetadata)
+                .distinctBy { it.videoId }
+            station = (station + moreFiltered).distinctBy { it.videoId }.take(STATION_SIZE).shuffled()
+        }
+
         Log.d(TAG, "station ${pick.kind}: mix=${mix.size} core=${core.size} radios=${seeds.size} extra=${extra.size}")
+        val cleanMix = if (isPersonalOrDiscovery) {
+            mix.filter(::keep).map(MoodStationFilters::sanitizeSongMetadata)
+        } else mix
         when {
             station.size >= MIN_FILTERED_QUEUE -> Result.success(station)
-            mix.isNotEmpty() -> Result.success(mix.shuffled())
+            cleanMix.isNotEmpty() -> Result.success(cleanMix.shuffled())
             else -> Result.failure(IllegalStateException("${pick.kind} came back empty"))
         }
     }

@@ -21,6 +21,29 @@ object MoodStationFilters {
     }
 
     /**
+     * Checks if a song belongs to an active "Estación de [Usuario]" (Personal Station).
+     */
+    fun isPersonalStationSong(song: Song): Boolean {
+        val id = song.playbackSourceId ?: return false
+        return id.startsWith("station:personal", ignoreCase = true) || id.equals("personal_station", ignoreCase = true)
+    }
+
+    /**
+     * Checks if a song belongs to an active "Estación por descubrir" (Discovery Station).
+     */
+    fun isDiscoveryStationSong(song: Song): Boolean {
+        val id = song.playbackSourceId ?: return false
+        return id.startsWith("station:discovery", ignoreCase = true) || id.equals("discovery_station", ignoreCase = true)
+    }
+
+    /**
+     * Checks if a song belongs to any station requiring strict official song filtering and metadata sanitization.
+     */
+    fun isFilteredPersonalOrDiscoveryStation(song: Song): Boolean {
+        return isPersonalStationSong(song) || isDiscoveryStationSong(song)
+    }
+
+    /**
      * Strict filter: only official catalogue tracks.
      * Rejects videos, UGC uploads, lyric videos, spoken intros, and widescreen 16:9 covers.
      */
@@ -86,12 +109,12 @@ object MoodStationFilters {
     }
 
     private val UGC_OR_VIDEO_PATTERN = Regex(
-        """\b(lyric\s*video|lyrics|lyrical|video\s*l[ií]rico|letra|letras|official\s*video|music\s*video|videoclip|video\s*oficial|audio\s*oficial|official\s*audio|visualizer|visualiser|full\s*video|short\s*version|extended\s*version|skit|spoken\s*intro|intro\s*spoken|intro\s*hablada|interview|entrevista|audio\s*commentary|comentario|behind\s*the\s*scenes|making\s*of|teaser|trailer|clip\s*oficial|karaoke|sing\s*king|instrumental|tribute|tributo|sped\s*up|slowed\s*(?:and|\+)?\s*reverb|nightcore|8d\s*audio|bass\s*boosted|dance\s*performance|dance\s*practice|choreography|fan\s*made|fan\s*video|ugc)\b""",
+        """\b(lyric\s*video|lyrics|lyrical|video\s*l[ií]rico|letra|letras|official\s*video|music\s*video|videoclip|video\s*oficial|audio\s*oficial|official\s*audio|visualizer|visualiser|full\s*video|short\s*version|extended\s*version|skit|spoken\s*intro|intro\s*spoken|intro\s*hablada|interview|entrevista|audio\s*commentary|comentario|behind\s*the\s*scenes|making\s*of|teaser|trailer|clip\s*oficial|karaoke|sing\s*king|instrumental|tribute|tributo|sped\s*up|slowed\s*(?:and|\+)?\s*reverb|nightcore|8d\s*audio|bass\s*boosted|dance\s*performance|dance\s*practice|choreography|fan\s*made|fan\s*video|ugc|vevo|\w+vevo)\b""",
         RegexOption.IGNORE_CASE,
     )
 
     private val BRACKET_VIDEO_PATTERN = Regex(
-        """[(\[](?:[^)\]]*\b(?:video|videoclip|lyric|lyrics|letra|official|4k|hd|audio|visualizer)\b[^)\]]*)[)\]]""",
+        """[(\[](?:[^)\]]*\b(?:video|videoclip|lyric|lyrics|letra|official|4k|hd|audio|visualizer|vevo)\b[^)\]]*)[)\]]""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -111,6 +134,90 @@ object MoodStationFilters {
             else -> return true
         }
         return totalSeconds in 45..720
+    }
+
+    // ── Metadata Sanitization ────────────────────────────────────────────────
+
+    /**
+     * Cleans an artist name: strips " - Topic", "VEVO" channel tags, etc.
+     */
+    fun cleanArtist(rawArtist: String): String {
+        var artist = rawArtist.trim()
+        artist = artist.replace(Regex("""\s*[-_]?\s*topic\b""", RegexOption.IGNORE_CASE), "").trim()
+        artist = artist.replace(Regex("""\s*[-_]?\s*vevo\b""", RegexOption.IGNORE_CASE), "").trim()
+        if (artist.endsWith("VEVO", ignoreCase = true) && artist.length > 4) {
+            artist = artist.substring(0, artist.length - 4).trim()
+        }
+        return artist.ifBlank { rawArtist }
+    }
+
+    /**
+     * Cleans a track title: removes channel prefixes like "Artist - Title",
+     * removes video/lyric/audio tags like "(Official Video)", "[Official Music Video]",
+     * and trims trailing dash or pipe noise.
+     */
+    fun cleanTitle(rawTitle: String, rawArtist: String): String {
+        var title = rawTitle.trim()
+
+        // 1. Remove pipe noise: e.g. "Title | Official Music Video" -> "Title"
+        if (title.contains(" | ")) {
+            val beforePipe = title.substringBefore(" | ").trim()
+            val afterPipe = title.substringAfter(" | ").trim()
+            if (isUgcOrVideoText(afterPipe) || afterPipe.contains("video", ignoreCase = true) || afterPipe.contains("audio", ignoreCase = true)) {
+                title = beforePipe
+            }
+        }
+
+        // 2. Remove bracket/parenthesis noise: e.g. "(Official Music Video)", "[Official Video]", "(Audio)", "(Video Oficial)"
+        val bracketNoise = Regex(
+            """\s*[\(\[](?:official\s*(?:music\s*|lyric\s*)?video|video\s*oficial|audio\s*oficial|official\s*audio|official|official\s*hd|audio|video|visualizer|visualiser|4k|hd|videoclip|clip\s*oficial|lyric\s*video|lyrics|letra|letras|extended\s*version|short\s*version)[\)\]]\s*""",
+            RegexOption.IGNORE_CASE,
+        )
+        title = title.replace(bracketNoise, " ").trim()
+
+        // 3. Remove trailing dash noise: e.g. "Title - Official Video"
+        val dashNoise = Regex(
+            """\s*[-–—]\s*(?:official\s*(?:music\s*|lyric\s*)?video|video\s*oficial|audio\s*oficial|official\s*audio|visualizer|visualiser|videoclip|clip\s*oficial|lyric\s*video|lyrics|letra)\s*$""",
+            RegexOption.IGNORE_CASE,
+        )
+        title = title.replace(dashNoise, "").trim()
+
+        // 4. Remove channel/artist prefix in title: e.g. "Coldplay - Yellow" -> "Yellow"
+        val cleanArt = cleanArtist(rawArtist).lowercase(Locale.ROOT)
+        val separatorMatch = Regex("""\s*[-–—:]\s*""").find(title)
+        if (separatorMatch != null && separatorMatch.range.first > 0) {
+            val partBefore = title.substring(0, separatorMatch.range.first).trim()
+            val partAfter = title.substring(separatorMatch.range.last + 1).trim()
+            val partBeforeLower = partBefore.lowercase(Locale.ROOT)
+            if (partBeforeLower == cleanArt ||
+                cleanArt.contains(partBeforeLower) ||
+                partBeforeLower.contains(cleanArt) ||
+                (cleanArt.isNotBlank() && cleanArt.split(" ", ",", "&").any { it.length > 2 && it in partBeforeLower })
+            ) {
+                if (partAfter.isNotBlank()) {
+                    title = partAfter
+                }
+            }
+        }
+
+        // Clean any residual bracket noise that might have been revealed
+        title = title.replace(bracketNoise, " ").trim()
+        title = title.replace(Regex("""\s+"""), " ").trim()
+
+        return title.ifBlank { rawTitle }
+    }
+
+    /**
+     * Sanitizes a song's metadata to guarantee it matches an official catalogue track
+     * (clean album track title and clean artist name).
+     */
+    fun sanitizeSongMetadata(song: Song): Song {
+        val cleanArt = cleanArtist(song.artist)
+        val cleanTit = cleanTitle(song.title, song.artist)
+        return song.copy(
+            title = cleanTit,
+            artist = cleanArt,
+        )
     }
 
     // ── Cultural Affinity & Foreign Music Blocking ───────────────────────────

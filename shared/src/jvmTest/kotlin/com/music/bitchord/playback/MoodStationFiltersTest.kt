@@ -144,4 +144,65 @@ class MoodStationFiltersTest {
         val noSourceSong = sampleSong().copy(playbackSourceId = null)
         assertFalse(MoodStationFilters.isMoodStationSong(noSourceSong))
     }
+
+    @Test
+    fun officialSongFilterRejectsVevoVideoMarkers() {
+        assertFalse(MoodStationFilters.isOfficialSong(sampleSong(artist = "TheWeekndVEVO")))
+        assertFalse(MoodStationFilters.isOfficialSong(sampleSong(artist = "DuaLipaVEVO")))
+        assertFalse(MoodStationFilters.isOfficialSong(sampleSong(title = "Blinding Lights (VEVO Official)")))
+        assertFalse(MoodStationFilters.isOfficialSong(sampleSong(title = "Levitating [VEVO]")))
+    }
+
+    @Test
+    fun metadataSanitizationCleansChannelPrefixesAndVideoSuffixes() {
+        val dirty1 = sampleSong(
+            title = "The Weeknd - Blinding Lights (Official Video)",
+            artist = "TheWeekndVEVO",
+        )
+        val clean1 = MoodStationFilters.sanitizeSongMetadata(dirty1)
+        kotlin.test.assertEquals("Blinding Lights", clean1.title)
+        kotlin.test.assertEquals("TheWeeknd", clean1.artist)
+
+        val dirty2 = sampleSong(
+            title = "Coldplay - Yellow [Official Music Video]",
+            artist = "Coldplay - Topic",
+        )
+        val clean2 = MoodStationFilters.sanitizeSongMetadata(dirty2)
+        kotlin.test.assertEquals("Yellow", clean2.title)
+        kotlin.test.assertEquals("Coldplay", clean2.artist)
+
+        val dirty3 = sampleSong(
+            title = "Dua Lipa - Levitating | Official Video",
+            artist = "Dua Lipa",
+        )
+        val clean3 = MoodStationFilters.sanitizeSongMetadata(dirty3)
+        kotlin.test.assertEquals("Levitating", clean3.title)
+        kotlin.test.assertEquals("Dua Lipa", clean3.artist)
+
+        val dirty4 = sampleSong(
+            title = "Starboy (Audio)",
+            artist = "The Weeknd - VEVO",
+        )
+        val clean4 = MoodStationFilters.sanitizeSongMetadata(dirty4)
+        kotlin.test.assertEquals("Starboy", clean4.title)
+        kotlin.test.assertEquals("The Weeknd", clean4.artist)
+    }
+
+    @Test
+    fun stationIdentificationDetectsPersonalAndDiscoveryQueues() {
+        val personalSong = sampleSong().copy(playbackSourceId = "station:personal:RDTMAK55")
+        assertTrue(MoodStationFilters.isPersonalStationSong(personalSong))
+        assertFalse(MoodStationFilters.isDiscoveryStationSong(personalSong))
+        assertTrue(MoodStationFilters.isFilteredPersonalOrDiscoveryStation(personalSong))
+
+        val discoverySong = sampleSong().copy(playbackSourceId = "station:discovery:RDTMAK12")
+        assertFalse(MoodStationFilters.isPersonalStationSong(discoverySong))
+        assertTrue(MoodStationFilters.isDiscoveryStationSong(discoverySong))
+        assertTrue(MoodStationFilters.isFilteredPersonalOrDiscoveryStation(discoverySong))
+
+        val regularSong = sampleSong().copy(playbackSourceId = "VLPL123456789")
+        assertFalse(MoodStationFilters.isPersonalStationSong(regularSong))
+        assertFalse(MoodStationFilters.isDiscoveryStationSong(regularSong))
+        assertFalse(MoodStationFilters.isFilteredPersonalOrDiscoveryStation(regularSong))
+    }
 }

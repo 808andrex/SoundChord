@@ -103,26 +103,33 @@ suspend fun loadAutoplayTracks(
 ): Result<List<Song>> {
     val seed = youtubeSeedFor(seedSong) ?: return Result.success(emptyList())
     val isMood = MoodStationFilters.isMoodStationSong(seedSong)
+    val isPersonalOrDiscovery = MoodStationFilters.isFilteredPersonalOrDiscoveryStation(seedSong)
     // A music video plays on with music videos, as YouTube Music does — unless
     // they would only be converted again, when the station's songs are the answer.
-    // For mood stations, strictly require official songs (never prefer video).
-    val videos = !isMood && seedSong.isVideo && seed == seedSong.videoId && !MusicOnlyPlayback.isActive()
+    // For mood, personal, and discovery stations, strictly require official songs (never prefer video).
+    val videos = !isMood && !isPersonalOrDiscovery && seedSong.isVideo && seed == seedSong.videoId && !MusicOnlyPlayback.isActive()
     val related = YtMusicRepository.radio(seed, preferVideo = videos).getOrElse { return Result.failure(it) }
 
-    val candidates = if (isMood) {
-        val taste = com.music.bitchord.data.TopPicks.currentTaste
-            ?: com.music.bitchord.data.TopPicks.tasteProvider?.invoke()
-            ?: com.music.bitchord.data.TopPicks.LocalTaste()
-        val culturalProfile = MoodStationFilters.buildCulturalProfile(
-            artists = taste.artists.map { it.name },
-            genres = taste.genres,
-            songs = taste.songs + taste.likedSongs,
-        )
-        related.filter {
-            MoodStationFilters.isOfficialSong(it) && MoodStationFilters.hasCulturalAffinity(it, culturalProfile)
+    val candidates = when {
+        isMood -> {
+            val taste = com.music.bitchord.data.TopPicks.currentTaste
+                ?: com.music.bitchord.data.TopPicks.tasteProvider?.invoke()
+                ?: com.music.bitchord.data.TopPicks.LocalTaste()
+            val culturalProfile = MoodStationFilters.buildCulturalProfile(
+                artists = taste.artists.map { it.name },
+                genres = taste.genres,
+                songs = taste.songs + taste.likedSongs,
+            )
+            related.filter {
+                MoodStationFilters.isOfficialSong(it) && MoodStationFilters.hasCulturalAffinity(it, culturalProfile)
+            }.map(MoodStationFilters::sanitizeSongMetadata)
         }
-    } else {
-        related
+        isPersonalOrDiscovery -> {
+            related.filter {
+                MoodStationFilters.isOfficialSong(it)
+            }.map(MoodStationFilters::sanitizeSongMetadata)
+        }
+        else -> related
     }
 
     val extra = QueueBuilder.extend(existing, candidates, limit, preferVideos = videos)

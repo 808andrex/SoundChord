@@ -36,6 +36,7 @@ import com.music.bitchord.playback.cast.CastController
 import com.music.bitchord.playback.commitRadioQueue
 import com.music.bitchord.playback.fromAutoplay
 import com.music.bitchord.playback.loadAutoplayTracks
+import com.music.bitchord.playback.MoodStationFilters
 import com.music.bitchord.playback.playBoundedContext
 import com.music.bitchord.playback.playSongs
 import com.music.bitchord.playback.smart.VersionAudioAligner
@@ -500,9 +501,16 @@ internal fun openTopPickCard(
                 Toast.makeText(context, R.string.couldnt_load_tracks, Toast.LENGTH_SHORT).show()
                 return@launch
             }
-            val sourceId = pick.watch?.playlistId ?: pick.mood?.name
+            val sourceId = when (pick.kind) {
+                TopPickKind.PERSONAL_STATION -> "station:personal:${pick.watch?.playlistId.orEmpty()}"
+                TopPickKind.DISCOVERY_STATION -> "station:discovery:${pick.watch?.playlistId.orEmpty()}"
+                else -> pick.watch?.playlistId ?: pick.mood?.name
+            }
             val station = songs.map {
-                it.copy(
+                val cleaned = if (pick.kind == TopPickKind.PERSONAL_STATION || pick.kind == TopPickKind.DISCOVERY_STATION || pick.kind == TopPickKind.MOOD) {
+                    MoodStationFilters.sanitizeSongMetadata(it)
+                } else it
+                cleaned.copy(
                     radioName = label,
                     playbackSource = label,
                     playbackSourceType = PlaybackSourceType.HOME,
