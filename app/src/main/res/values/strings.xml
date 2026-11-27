@@ -1334,6 +1334,55 @@
     <string name="shelf_quick_picks">Quick picks</string>
 
     <string name="shelf_listen_again">Listen again</string>
+    <string name="top_picks_for_you">Top Picks for You</string>
+    <string name="top_pick_new_release">New release</string>
+    <string name="top_pick_mood_eyebrow">Mood</string>
+    <string name="top_pick_featuring_label">Featuring</string>
+    <string name="top_pick_featured_playlist">Featured playlist</string>
+    <string name="top_pick_made_for_you">Made for You</string>
+    <string name="top_pick_discovery_subtitle">Station · Continuous music</string>
+    <string name="top_pick_personal_subtitle">Personal Station · Endless mix</string>
+    <string name="top_pick_and_similar_subtitle">Station &amp; similar</string>
+    <string name="shelf_album_item">Album</string>
+    <string name="playlist_label">Playlist</string>
+    <string name="artist_label">Artist</string>
+    <string name="mix_label">Mix</string>
+    <string name="daypart_morning_shelf_1">Start Your Day</string>
+    <string name="daypart_morning_shelf_2">Morning Energy</string>
+    <string name="daypart_morning_shelf_3">New for You</string>
+    <string name="daypart_morning_shelf_4">Music to Focus</string>
+    <string name="daypart_afternoon_shelf_1">Work Out</string>
+    <string name="daypart_afternoon_shelf_2">Focus Mode</string>
+    <string name="daypart_afternoon_shelf_3">Today\'s Trends</string>
+    <string name="daypart_afternoon_shelf_4">Afternoon Recharge</string>
+    <string name="daypart_evening_shelf_1">On the Road</string>
+    <string name="daypart_evening_shelf_1_party">Party Starters</string>
+    <string name="daypart_evening_shelf_2">Sunset &amp; Chill</string>
+    <string name="daypart_evening_shelf_3">Just Essentials</string>
+    <string name="daypart_evening_shelf_4">All-Time Favorites</string>
+    <string name="daypart_night_shelf_1">Night Mode</string>
+    <string name="daypart_night_shelf_2">Slow Down</string>
+    <string name="daypart_night_shelf_3">Late Night Session</string>
+    <string name="daypart_night_shelf_4">Before Sleep</string>
+    <string name="find_your_mood_sub">Stations for every feeling and activity</string>
+    <string name="listen_again_default_sub">Your recent favorites and playlists</string>
+    <string name="daypart_morning_shelf_1_sub">Upbeat mixes and playlists to start with energy</string>
+    <string name="daypart_morning_shelf_2_sub">Active rhythms and energetic pop/urban</string>
+    <string name="daypart_morning_shelf_3_sub">Latest releases from artists you follow</string>
+    <string name="daypart_morning_shelf_4_sub">Lo-fi, instrumental, and ambient focus sounds</string>
+    <string name="daypart_afternoon_shelf_1_sub">Workout, urban, and electronic music to keep you motivated</string>
+    <string name="daypart_afternoon_shelf_2_sub">Beats for studying, coding, or working</string>
+    <string name="daypart_afternoon_shelf_3_sub">Today\'s most played and viral tracks</string>
+    <string name="daypart_afternoon_shelf_4_sub">Your most replayed songs for the second half of the day</string>
+    <string name="daypart_evening_shelf_1_sub">Soundtracks for the ride home</string>
+    <string name="daypart_evening_shelf_1_party_sub">Weekend party vibe and pre-game playlists</string>
+    <string name="daypart_evening_shelf_2_sub">Laid-back music to unwind and disconnect</string>
+    <string name="daypart_evening_shelf_3_sub">Essential tracks that never miss</string>
+    <string name="daypart_evening_shelf_4_sub">Saved albums and songs that always deliver</string>
+    <string name="daypart_night_shelf_1_sub">Smooth R&amp;B, soul, and atmospheric grooves</string>
+    <string name="daypart_night_shelf_2_sub">Ballads, acoustic tunes, and serene sounds</string>
+    <string name="daypart_night_shelf_3_sub">Deep electronic and mixes for the late hours</string>
+    <string name="daypart_night_shelf_4_sub">Ambient sounds and tranquil melodies for rest</string>
 
     <string name="shelf_mixed_for_you">Mixed for you</string>
 
@@ -1347,7 +1396,12 @@
 
     <string name="shelf_charts">Charts</string>
 
-    <string name="shelf_new_releases">New releases</string>
+    <string name="shelf_new_releases">Albums &amp; singles</string>
+    <string name="shelf_music_videos">Music videos</string>
+    <string name="shelf_song_mixes">Song mixes</string>
+    <string name="shelf_discoveries_and_favorites">New discoveries and all-time favorites</string>
+    <string name="shelf_daily_discovery">Your daily discovery</string>
+    <string name="shelf_custom_mixes">Custom mixes</string>
 
     <string name="shelf_top_music_videos">Top music videos</string>
 
@@ -1368,6 +1422,9 @@
     <string name="shelf_sleep">Sleep</string>
 
     <string name="shelf_party">Party</string>
+    <string name="shelf_start_with_rhythm">Start with rhythm</string>
+    <string name="shelf_trends_in_your_style">Trending in your style</string>
+    <string name="shelf_weekend_vibe">Weekend vibe</string>
 
     <string name="shelf_romance">Romance</string>
 

@@ -482,11 +482,11 @@ internal fun openTopPickCard(
     onActiveRadioSeedChanged: (Pair<String, String>?) -> Unit,
 ) {
     val browseId = pick.browseId
-    if (pick.kind == TopPickKind.LATEST_RELEASE && browseId != null) {
+    if ((pick.kind == TopPickKind.LATEST_RELEASE || pick.kind == TopPickKind.EDITORIAL_PLAYLIST) && browseId != null) {
         viewModel.openDetail(
             browseId = browseId,
             title = pick.title,
-            subtitle = pick.artistName.orEmpty(),
+            subtitle = pick.artistName ?: pick.subtitle,
             thumbnailUrl = pick.images.firstOrNull(),
         )
     } else if (controller != null && !refusedByHost()) {

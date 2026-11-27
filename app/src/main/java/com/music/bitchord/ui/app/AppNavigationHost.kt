@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.History
 import com.soundchord.features.editorial.data.AlbumRelatedRepository
+import com.soundchord.features.daypart.data.DaypartRepository
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.runtime.Composable
@@ -82,6 +83,7 @@ import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.TopPick
+import com.music.bitchord.data.model.TopPickKind
 import com.music.bitchord.data.model.TopPickMood
 import com.music.bitchord.data.model.UiState
 import com.music.bitchord.data.model.UserPlaylist
@@ -660,14 +662,52 @@ internal fun AppNavigationHost(
 ) {
     val context = LocalContext.current
     com.soundchord.features.editorial.data.AppleMusicEditorialRepository.init(context)
+    DaypartRepository.init(context)
     val scope = rememberCoroutineScope()
     val radioSort = AppSettings.librarySort.collectAsStateWithLifecycle().value
     val radioListState = lists.radioListState ?: rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     val hideHomeEditorial = AppSettings.hideHomeEditorial.collectAsStateWithLifecycle().value
     var homeEditorialShelves by remember { mutableStateOf<List<HomeShelf>>(emptyList()) }
+    var daypartShelves by remember {
+        mutableStateOf<List<HomeShelf>>(
+            DaypartRepository.getCachedShelves(com.soundchord.features.daypart.model.Daypart.current()).orEmpty()
+        )
+    }
+    var personalizedEssentialsShelf by remember { mutableStateOf<HomeShelf?>(null) }
     LaunchedEffect(Unit) {
         com.soundchord.features.editorial.data.AppleMusicEditorialRepository.init(context)
+        DaypartRepository.init(context)
         homeEditorialShelves = com.soundchord.features.editorial.data.AppleMusicEditorialRepository.getHomeDiscoveryShelves()
+    }
+    LaunchedEffect(states.visibleHomeState, homeEditorialShelves, states.topPicks) {
+        val homeShelves = (states.visibleHomeState as? UiState.Success)?.data.orEmpty()
+        val currentDaypart = com.soundchord.features.daypart.model.Daypart.current()
+        val topArtistNames = states.topPicks?.mapNotNull { pick ->
+            when (pick.kind) {
+                TopPickKind.FEATURED_ARTIST -> pick.artistName?.takeIf { it.isNotBlank() } ?: pick.title.takeIf { it.isNotBlank() }
+                TopPickKind.ARTIST_AND_SIMILAR -> pick.artistName?.takeIf { it.isNotBlank() } ?: pick.subtitle.takeIf { it.isNotBlank() }
+                TopPickKind.LATEST_RELEASE -> pick.artistName?.takeIf { it.isNotBlank() } ?: pick.subtitle.takeIf { it.isNotBlank() }
+                TopPickKind.NEW_RELEASE_MIX -> pick.artistName?.takeIf { it.isNotBlank() } ?: pick.subtitle.takeIf { it.isNotBlank() }
+                else -> pick.artistName?.takeIf { it.isNotBlank() }
+            }
+        }?.mapNotNull { com.soundchord.features.daypart.data.UserTasteDaypartEngine.sanitizeArtist(it) }.orEmpty()
+        val resolved = DaypartRepository.getDaypartShelves(
+            homeShelves = homeShelves,
+            editorialShelves = homeEditorialShelves,
+            daypart = currentDaypart,
+            userArtists = topArtistNames,
+        )
+        if (resolved.isNotEmpty()) {
+            daypartShelves = resolved
+        }
+        val resolvedEssentials = DaypartRepository.getPersonalizedEssentialsShelf(
+            homeShelves = homeShelves,
+            editorialShelves = homeEditorialShelves,
+            userArtists = topArtistNames,
+        )
+        if (resolvedEssentials != null) {
+            personalizedEssentialsShelf = resolvedEssentials
+        }
     }
 
     SharedTransitionLayout {
@@ -1410,6 +1450,8 @@ internal fun AppNavigationHost(
                     artworkMotion = states.artworkMotion && !states.showDiwali,
                     onTopPickLongPress = onHomeTopPickLongPress,
                     editorialShelves = if (hideHomeEditorial) emptyList() else homeEditorialShelves,
+                    daypartShelves = daypartShelves,
+                    personalizedEssentialsShelf = personalizedEssentialsShelf,
                 )
                 TAB_EXPLORE -> states.selectedMoodGenre?.let { category ->
                     MoodGenrePlaylistsScreen(

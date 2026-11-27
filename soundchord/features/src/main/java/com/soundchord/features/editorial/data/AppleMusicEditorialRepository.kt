@@ -85,6 +85,29 @@ object AppleMusicEditorialRepository {
         return true
     }
 
+    fun isFitnessItem(item: AppleMusicEditorialItem): Boolean {
+        val t = item.title.lowercase(Locale.ROOT)
+        val s = item.subtitle.lowercase(Locale.ROOT)
+        val d = (item.description ?: "").lowercase(Locale.ROOT)
+        val fitnessTerms = listOf(
+            "fitness", "cardio", "pure cardio", "puro cardio", "pure gym", "puro gym",
+            "pure running", "puro running", "treadmill", "cycling", "spinning", "pilates",
+            "hiit", "crossfit", "cinta de correr", "entreno", "entrenamiento", "apple music fitness", "apple music entreno"
+        )
+        return fitnessTerms.any { t.contains(it) || s.contains(it) || d.contains(it) }
+    }
+
+    fun isHolidayItem(item: AppleMusicEditorialItem): Boolean {
+        val t = item.title.lowercase(Locale.ROOT)
+        val s = item.subtitle.lowercase(Locale.ROOT)
+        val d = (item.description ?: "").lowercase(Locale.ROOT)
+        val holidayTerms = listOf(
+            "navidad", "navideñ", "christmas", "villancico", "xmas", "holiday",
+            "boda", "wedding", "matrimonio", "casamiento", "cumpleaños"
+        )
+        return holidayTerms.any { t.contains(it) || s.contains(it) || d.contains(it) }
+    }
+
     fun isValidItem(item: AppleMusicEditorialItem): Boolean {
         return isValidArtworkUrl(item.thumbnailUrl)
     }
@@ -196,7 +219,7 @@ object AppleMusicEditorialRepository {
             )
         }
 
-        val chillShelfItems = feed.chillPlaylists.filter { isValidItem(it) }.take(15).map { item ->
+        val chillShelfItems = feed.chillPlaylists.filter { isValidItem(it) && !isFitnessItem(it) && !isHolidayItem(it) }.take(15).map { item ->
             ShelfItem(
                 title = item.title,
                 subtitle = item.subtitle,
@@ -206,7 +229,7 @@ object AppleMusicEditorialRepository {
             )
         }
 
-        val essentialsShelfItems = feed.essentialsPlaylists.filter { isValidItem(it) }.take(18).map { item ->
+        val essentialsShelfItems = feed.essentialsPlaylists.filter { isValidItem(it) && !isFitnessItem(it) && !isHolidayItem(it) }.take(18).map { item ->
             ShelfItem(
                 title = item.title,
                 subtitle = item.subtitle,
@@ -216,7 +239,7 @@ object AppleMusicEditorialRepository {
             )
         }
 
-        val focusShelfItems = feed.focusPlaylists.filter { isValidItem(it) }.take(15).map { item ->
+        val focusShelfItems = feed.focusPlaylists.filter { isValidItem(it) && !isFitnessItem(it) && !isHolidayItem(it) }.take(15).map { item ->
             ShelfItem(
                 title = item.title,
                 subtitle = item.subtitle,
@@ -226,7 +249,7 @@ object AppleMusicEditorialRepository {
             )
         }
 
-        val partyShelfItems = feed.partyPlaylists.filter { isValidItem(it) }.take(15).map { item ->
+        val partyShelfItems = feed.partyPlaylists.filter { isValidItem(it) && !isFitnessItem(it) && !isHolidayItem(it) }.take(15).map { item ->
             ShelfItem(
                 title = item.title,
                 subtitle = item.subtitle,
@@ -236,7 +259,7 @@ object AppleMusicEditorialRepository {
             )
         }
 
-        val feelGoodShelfItems = feed.feelGoodPlaylists.filter { isValidItem(it) }.take(15).map { item ->
+        val feelGoodShelfItems = feed.feelGoodPlaylists.filter { isValidItem(it) && !isFitnessItem(it) && !isHolidayItem(it) }.take(15).map { item ->
             ShelfItem(
                 title = item.title,
                 subtitle = item.subtitle,
@@ -1423,6 +1446,7 @@ object AppleMusicEditorialRepository {
         query: String,
         limit: Int = 12,
         storefront: String = defaultStorefront(),
+        excludeFitness: Boolean = true,
     ): List<AppleMusicEditorialItem> = withContext(Dispatchers.IO) {
         val cleanQuery = query.trim()
         if (cleanQuery.isEmpty()) return@withContext emptyList()
@@ -1455,7 +1479,12 @@ object AppleMusicEditorialRepository {
             }
         }
 
-        prioritizeEditorialPlaylists(matchedItems).take(limit)
+        val qLower = cleanQuery.lowercase(Locale.ROOT)
+        val isWorkoutQuery = qLower.contains("gym") || qLower.contains("workout") || qLower.contains("entrenamiento") || qLower.contains("cardio") || qLower.contains("fitness")
+        val shouldExcludeFitness = excludeFitness && !isWorkoutQuery
+        prioritizeEditorialPlaylists(matchedItems)
+            .filter { if (shouldExcludeFitness) !isFitnessItem(it) else true }
+            .take(limit)
     }
 
     private fun parsePlaylistSearchResults(

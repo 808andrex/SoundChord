@@ -116,6 +116,7 @@ object TopPicks {
             }
             artists.getOrNull(2)?.let { andSimilar(it, photos) }?.let(::add)
             discoveryStation(mixes, artists, history)?.let(::add)
+            featuredEditorialPlaylist(homeShelves)?.let(::add)
         }.shuffled()
         listOfNotNull(lead) + rest
     }
@@ -137,7 +138,7 @@ object TopPicks {
         return picked
     }
 
-    /** The queue a card starts. Never called for [TopPickKind.LATEST_RELEASE], which opens a page. */
+    /** The queue a card starts. Never called for [TopPickKind.LATEST_RELEASE] or [TopPickKind.EDITORIAL_PLAYLIST], which open a page. */
     suspend fun queue(pick: TopPick): Result<List<Song>> {
         if (pick.kind == TopPickKind.MOOD) return moodQueue(pick)
         val target = pick.watch ?: return Result.failure(IllegalStateException("no queue behind ${pick.kind}"))
@@ -352,6 +353,36 @@ object TopPicks {
             artistName = seed.name,
             watch = radio,
             exclude = history.take(200).map { it.videoId },
+        )
+    }
+
+    private fun featuredEditorialPlaylist(homeShelves: List<HomeShelf>): TopPick? {
+        val playlistShelves = homeShelves.filter { shelf ->
+            val t = shelf.title.lowercase(Locale.ROOT)
+            t.contains("playlist") || t.contains("featured") || t.contains("destacad") ||
+                t.contains("community") || t.contains("hits") || t.contains("éxitos") ||
+                t.contains("charts") || t.contains("top")
+        }
+        val candidate = playlistShelves.flatMap { it.items }
+            .firstOrNull { item ->
+                val id = item.browseId.orEmpty()
+                (id.startsWith("VL") || id.startsWith("PL") || id.startsWith("RD") || id.isNotEmpty()) &&
+                    !id.startsWith("MPRE") && !id.startsWith("UC") &&
+                    !item.thumbnailUrl.isNullOrBlank()
+            }
+            ?: homeShelves.flatMap { it.items }
+                .firstOrNull { item ->
+                    val id = item.browseId.orEmpty()
+                    (id.startsWith("VL") || id.startsWith("PL")) && !item.thumbnailUrl.isNullOrBlank()
+                }
+            ?: return null
+
+        return TopPick(
+            kind = TopPickKind.EDITORIAL_PLAYLIST,
+            title = candidate.title,
+            subtitle = candidate.subtitle.ifBlank { "SoundChord" },
+            images = listOfNotNull(candidate.thumbnailUrl),
+            browseId = candidate.browseId,
         )
     }
 

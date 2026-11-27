@@ -41,6 +41,9 @@ enum class TopPickKind {
 
     /** Music the listener hasn't played yet — YouTube's Discover Mix. */
     DISCOVERY_STATION,
+
+    /** Editorial featured playlist (e.g. Apple Music / YouTube Music featured editorial playlists). */
+    EDITORIAL_PLAYLIST,
 }
 
 /**
