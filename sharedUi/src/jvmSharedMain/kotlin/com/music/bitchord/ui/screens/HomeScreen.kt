@@ -91,6 +91,7 @@ import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
 import com.music.bitchord.ui.components.VideoThumbnails
 import com.music.bitchord.ui.components.SearchPlayingBars
 import com.music.bitchord.ui.components.SignInBanner
+import com.music.bitchord.ui.components.SongMixes4RowSkeleton
 import com.music.bitchord.ui.components.feedMoreSkeleton
 import com.music.bitchord.ui.components.feedSkeleton
 import com.music.bitchord.ui.components.thumbnailBorder
@@ -129,6 +130,22 @@ object HomeScrollStateHolder {
 object NativeHomeShelvesHolder {
     var lastValidDiscoveriesFavorites: HomeShelf? = null
     var lastValidDailyDiscovery: HomeShelf? = null
+    var lastValidSongMixes: HomeShelf? = null
+}
+
+private val KidsJunkTerms = listOf(
+    "biper", "gallina pintadita", "patito juan", "luli pampin", "cocomelon", "baby shark",
+    "plim plim", "vaca lola", "reino infantil", "zenón", "zenon", "cantajuego", "pinkfong",
+    "canciones infantiles", "canción infantil", "cancion infantil", "infantil", "infantiles",
+    "canciones de cuna", "cancion de cuna", "lullaby", "lullabies", "nursery rhyme", "nursery rhymes",
+    "para dormir bebés", "para dormir bebes", "música infantil", "musica infantil", "para niños", "para ninos",
+    "kids songs", "super simple songs", "chuchu tv", "toobys", "toddler", "canciones para niños",
+)
+
+private fun isKidsOrNurseryTrack(title: String, subtitle: String = ""): Boolean {
+    val t = title.lowercase(Locale.ROOT)
+    val s = subtitle.lowercase(Locale.ROOT)
+    return KidsJunkTerms.any { t.contains(it) || s.contains(it) }
 }
 
 private fun isViewCountSubtitle(subtitle: String): Boolean {
@@ -148,8 +165,31 @@ private fun isCleanMusicTrack(item: ShelfItem): Boolean {
     if (item.isVideo) return false
     if (isViewCountSubtitle(item.subtitle)) return false
     if (isVideoTitle(item.title)) return false
+    if (isKidsOrNurseryTrack(item.title, item.subtitle)) return false
     val bId = item.browseId
     return item.videoId != null || (bId != null && !bId.startsWith("UC"))
+}
+
+private fun isCleanIndividualSong(item: ShelfItem): Boolean {
+    if (item.videoId.isNullOrBlank()) return false
+    if (item.isVideo) return false
+    if (isViewCountSubtitle(item.subtitle)) return false
+    if (isVideoTitle(item.title)) return false
+    if (isKidsOrNurseryTrack(item.title, item.subtitle)) return false
+    val bId = item.browseId
+    if (bId != null) {
+        val bLower = bId.lowercase(Locale.ROOT)
+        if (bLower.startsWith("vl") || bLower.startsWith("rd") || bLower.startsWith("mp") || bLower.startsWith("uc")) {
+            return false
+        }
+    }
+    val sub = item.subtitle.lowercase(Locale.ROOT)
+    if (sub.contains("playlist") || sub.contains("lista de reproducción") ||
+        sub.contains("álbum") || sub.contains("album") || sub.contains("ep") ||
+        sub.contains("mix") || sub.contains("radio")) {
+        return false
+    }
+    return true
 }
 
 class HomeRowScrollController(
@@ -198,7 +238,44 @@ private fun HomeShelf.isHomeExcluded(): Boolean {
 private val VideoJunkTerms = listOf(
     "karaoke", "sing king", "instrumental", "8d audio", "sped up", "slowed",
     "lyrics", "letra", "nightcore", "bass boosted", "tribute",
+    "mix", "playlist", "recopilacion", "recopilación", "compilation",
+    "serenata", "serenatas",
+    "concierto", "conciertos", "concert", "en vivo", "live at", "live from", "live in",
+    "festival", "festival.", "tour", "world tour", "en directo", "full show",
+    "full set", "set live", "liveset", "live session", "live performance",
+    "dj set", "boiler room", "tomorrowland", "coachella", "rolling loud",
+    "lollapalooza", "astroworld", "primavera sound", "rock in rio",
 )
+
+private fun isCleanOfficialMusicVideo(item: ShelfItem): Boolean {
+    // 1. Debe ser un video individual válido con videoId
+    if (item.videoId.isNullOrBlank()) return false
+
+    // 2. No debe ser una lista de reproducción ni colección
+    val bId = item.browseId
+    if (bId != null) {
+        val bLower = bId.lowercase(Locale.ROOT)
+        if (bLower.startsWith("vl") || bLower.startsWith("rd") || bLower.startsWith("mp") || bLower.startsWith("uc")) {
+            return false
+        }
+    }
+
+    // 3. Chequeo de términos no deseados (mixes, playlists, serenatas, conciertos, festivales, etc.)
+    val t = item.title.lowercase(Locale.ROOT)
+    val s = item.subtitle.lowercase(Locale.ROOT)
+
+    if (VideoJunkTerms.any { t.contains(it) || s.contains(it) }) return false
+    if (isKidsOrNurseryTrack(item.title, item.subtitle)) return false
+
+    // 4. Excluir si el subtítulo indica playlist, álbum, mix o radio
+    if (s.contains("playlist") || s.contains("lista de reproducción") ||
+        s.contains("álbum") || s.contains("album") || s.contains("mix") ||
+        s.contains("radio") || s.contains("recopilación") || s.contains("recopilacion")) {
+        return false
+    }
+
+    return true
+}
 
 internal fun HomeShelf.isListenAgainShelf(): Boolean {
     val label = title.trim().lowercase()
@@ -283,6 +360,8 @@ fun HomeScreen(
     editorialShelves: List<HomeShelf> = emptyList(),
     daypartShelves: List<HomeShelf> = emptyList(),
     personalizedEssentialsShelf: HomeShelf? = null,
+    stationsForYou: List<TopPick>? = null,
+    onStationClick: ((TopPick, String) -> Unit)? = onTopPickClick,
 ) {
     // Top Picks' pictures and motion wait for the feed — see LocalArtworkImages.
     val feedReady = state !is UiState.Loading
@@ -322,17 +401,24 @@ fun HomeScreen(
         }
     }
     val songMixesShelf = remember(visibleShelves, albumsAndSinglesShelf, musicVideosShelf) {
-        visibleShelves.firstOrNull { s ->
+        val found = visibleShelves.firstOrNull { s ->
             if (s.layout == ShelfLayout.VIDEO || s == albumsAndSinglesShelf || s == musicVideosShelf || s.isListenAgainShelf()) return@firstOrNull false
             val t = s.title.trim().lowercase(Locale.ROOT)
             if (t.contains("video") || t.contains("vídeo") || t.contains("podcast") || t.contains("programa")) return@firstOrNull false
             (s.layout == ShelfLayout.LIST ||
                 t.contains("mixed") || t.contains("quick") || t.contains("picks") ||
                 t.contains("mixes para ti") || t.contains("dành riêng") || t.contains("selección") ||
-                t.contains("song mix")) && s.items.any { !it.isVideo && !isViewCountSubtitle(it.subtitle) }
+                t.contains("song mix")) && s.items.any { isCleanMusicTrack(it) }
         }?.let { raw ->
-            val cleanItems = raw.items.filter { !it.isVideo && !isViewCountSubtitle(it.subtitle) && !isVideoTitle(it.title) }
+            val cleanItems = raw.items.filter { isCleanMusicTrack(it) }
             if (cleanItems.isNotEmpty()) raw.copy(items = cleanItems) else null
+        }
+
+        if (found != null && found.items.size >= 4) {
+            NativeHomeShelvesHolder.lastValidSongMixes = found
+            found
+        } else {
+            NativeHomeShelvesHolder.lastValidSongMixes?.takeIf { it.items.size >= 4 } ?: found
         }
     }
     val libraryShelf = remember(visibleShelves) {
@@ -361,9 +447,9 @@ fun HomeScreen(
         found?.also { NativeHomeShelvesHolder.lastValidDiscoveriesFavorites = it }
             ?: NativeHomeShelvesHolder.lastValidDiscoveriesFavorites
     }
-    val dailyDiscoveryShelf = remember(visibleShelves, songMixesShelf, albumsAndSinglesShelf, musicVideosShelf) {
+    val dailyDiscoveryShelf = remember(visibleShelves, songMixesShelf, albumsAndSinglesShelf, musicVideosShelf, listenAgainShelf, discoveriesAndFavoritesShelf) {
         val found = visibleShelves.firstOrNull { s ->
-            if (s.layout == ShelfLayout.VIDEO || s == albumsAndSinglesShelf || s == musicVideosShelf || s == songMixesShelf || s.isListenAgainShelf()) return@firstOrNull false
+            if (s.layout == ShelfLayout.VIDEO || s == albumsAndSinglesShelf || s == musicVideosShelf || s == songMixesShelf || s == discoveriesAndFavoritesShelf || s.isListenAgainShelf()) return@firstOrNull false
             val t = s.title.trim().lowercase(Locale.ROOT)
             if (t.contains("video") || t.contains("vídeo") || t.contains("podcast") || t.contains("programa") || t.contains("shows")) return@firstOrNull false
             val isDiscoveryTitle = t.contains("daily discovery") || t.contains("descubrimiento diario") ||
@@ -373,8 +459,14 @@ fun HomeScreen(
                 (t.contains("for you") && !t.contains("mixes"))
             isDiscoveryTitle && s.items.any { isCleanMusicTrack(it) }
         }?.let { raw ->
-            val cleanItems = raw.items.filter { isCleanMusicTrack(it) }
-            if (cleanItems.isNotEmpty()) raw.copy(items = cleanItems) else null
+            // Si la shelf contiene canciones individuales (con videoId), filtramos estrictamente solo canciones
+            val trackItems = raw.items.filter { isCleanMusicTrack(it) && it.videoId != null }
+            if (trackItems.isNotEmpty()) {
+                raw.copy(items = trackItems)
+            } else {
+                val cleanItems = raw.items.filter { isCleanMusicTrack(it) }
+                if (cleanItems.isNotEmpty()) raw.copy(items = cleanItems) else null
+            }
         }
         found?.also { NativeHomeShelvesHolder.lastValidDailyDiscovery = it }
             ?: NativeHomeShelvesHolder.lastValidDailyDiscovery
@@ -520,12 +612,20 @@ fun HomeScreen(
                         }
                     }
 
-                    // 6. Videos musicales (tarjetas panorámicas 16:9 con filtro anti-karaoke/audios)
-                    if (musicVideosShelf != null && musicVideosShelf.items.isNotEmpty()) {
-                        val cleanItems = musicVideosShelf.items.filter { item ->
-                            val t = item.title.lowercase(Locale.ROOT)
-                            VideoJunkTerms.none { t.contains(it) }
+                    // 5.1 Emisoras para ti (Ticket #60: carrusel fijo de 10 a 12 tarjetas cuadradas personalizadas desde YouTube Music)
+                    if (!stationsForYou.isNullOrEmpty() && onStationClick != null) {
+                        item(key = "fixed-stations-for-you", contentType = "shelf_stations") {
+                            StationsForYouShelf(
+                                stations = stationsForYou,
+                                listenerName = listenerName,
+                                onClick = onStationClick,
+                            )
                         }
+                    }
+
+                    // 6. Videos musicales (tarjetas panorámicas 16:9 con filtro estricto: solo videos oficiales de artistas, no mixes/conciertos/serenatas)
+                    if (musicVideosShelf != null && musicVideosShelf.items.isNotEmpty()) {
+                        val cleanItems = musicVideosShelf.items.filter { isCleanOfficialMusicVideo(it) }
                         if (cleanItems.isNotEmpty()) {
                             item(key = "fixed-music-videos", contentType = "shelf_videos") {
                                 val shelf = musicVideosShelf.copy(
@@ -562,9 +662,12 @@ fun HomeScreen(
                     }
 
                     // 8. Mixes de canciones (cuadrícula/carrusel compacto de 4 filas con mixes de canciones)
-                    if (songMixesShelf != null && songMixesShelf.items.isNotEmpty()) {
+                    val effectiveSongMixes = songMixesShelf?.takeIf { it.items.size >= 4 }
+                        ?: NativeHomeShelvesHolder.lastValidSongMixes?.takeIf { it.items.size >= 4 }
+
+                    if (effectiveSongMixes != null && effectiveSongMixes.items.size >= 4) {
                         item(key = "fixed-song-mixes", contentType = "shelf_list") {
-                            val shelf = songMixesShelf.copy(
+                            val shelf = effectiveSongMixes.copy(
                                 title = songMixesTitle,
                                 layout = ShelfLayout.LIST,
                             )
@@ -575,6 +678,10 @@ fun HomeScreen(
                                 currentSong = currentSong,
                                 isPlaying = isPlaying,
                             )
+                        }
+                    } else if (state is UiState.Loading || (songMixesShelf != null && songMixesShelf.items.size < 4)) {
+                        item(key = "fixed-song-mixes-skeleton", contentType = "shelf_list_skeleton") {
+                            SongMixes4RowSkeleton(title = songMixesTitle)
                         }
                     }
 
@@ -644,7 +751,23 @@ fun HomeScreen(
                         }
                     }
 
-                    // 12. Tu descubrimiento diario (carrusel horizontal con descubrimientos diarios)
+                    // Dinámico #4 ("Para empezar con ritmo" / "Tendencias en tu estilo" / "Para bajar el ritmo"): Antes de Tu descubrimiento diario
+                    if (dynamicShelf4 != null && dynamicShelf4.items.isNotEmpty()) {
+                        item(
+                            key = "daypart-shelf-4-${dynamicShelf4.title}",
+                            contentType = "shelf_cards",
+                        ) {
+                            Shelf(
+                                shelf = dynamicShelf4,
+                                onItemClick = { item -> onItemClick(item, dynamicShelf4.title) },
+                                onItemLongPress = onItemLongPress,
+                                currentSong = currentSong,
+                                isPlaying = isPlaying,
+                            )
+                        }
+                    }
+
+                    // 12. Tu descubrimiento diario (carrusel horizontal entre Para bajar el ritmo y Mixes personalizados)
                     if (dailyDiscoveryShelf != null && dailyDiscoveryShelf.items.isNotEmpty()) {
                         item(key = "fixed-daily-discovery", contentType = "shelf_cards") {
                             val shelf = dailyDiscoveryShelf.copy(
@@ -671,22 +794,6 @@ fun HomeScreen(
                             Shelf(
                                 shelf = shelf,
                                 onItemClick = { item -> onItemClick(item, shelf.title) },
-                                onItemLongPress = onItemLongPress,
-                                currentSong = currentSong,
-                                isPlaying = isPlaying,
-                            )
-                        }
-                    }
-
-                    // Dinámico #4 ("Para empezar con ritmo" / "Tendencias en tu estilo" / "Para bajar el ritmo"): Al final de toda la pantalla (justo debajo de Mixes personalizados)
-                    if (dynamicShelf4 != null && dynamicShelf4.items.isNotEmpty()) {
-                        item(
-                            key = "daypart-shelf-4-${dynamicShelf4.title}",
-                            contentType = "shelf_cards",
-                        ) {
-                            Shelf(
-                                shelf = dynamicShelf4,
-                                onItemClick = { item -> onItemClick(item, dynamicShelf4.title) },
                                 onItemLongPress = onItemLongPress,
                                 currentSong = currentSong,
                                 isPlaying = isPlaying,

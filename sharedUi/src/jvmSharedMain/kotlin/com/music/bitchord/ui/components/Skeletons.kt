@@ -367,7 +367,7 @@ fun LazyListScope.detailSkeleton(isArtist: Boolean) {
 
 /** The tighter row used inside the artist page's top-songs pager. */
 @Composable
-private fun CompactSongRowSkeleton(index: Int) {
+internal fun CompactSongRowSkeleton(index: Int) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -378,6 +378,37 @@ private fun CompactSongRowSkeleton(index: Int) {
             SkeletonLine(fraction = TitleWidths[index % TitleWidths.size], height = 14.dp)
             Spacer(Modifier.height(6.dp))
             SkeletonLine(fraction = SubtitleWidths[index % SubtitleWidths.size], height = 11.dp)
+        }
+    }
+}
+
+/** 4-row placeholder for Song Mixes while loading so it never displays an incomplete 1-row sliver. */
+@Composable
+fun SongMixes4RowSkeleton(title: String, modifier: Modifier = Modifier) {
+    Column(modifier.padding(bottom = 26.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = PAGE_GUTTER, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.weight(1f)) {
+                SkeletonLine(fraction = 0.48f, height = 18.dp)
+            }
+        }
+        BoxWithConstraints {
+            val columnWidth = trackColumnWidth(maxWidth)
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                userScrollEnabled = false,
+            ) {
+                items(2) {
+                    Column(Modifier.width(columnWidth)) {
+                        repeat(4) { index -> CompactSongRowSkeleton(index) }
+                    }
+                }
+            }
         }
     }
 }

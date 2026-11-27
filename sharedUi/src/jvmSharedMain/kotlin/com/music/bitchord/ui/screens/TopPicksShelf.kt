@@ -808,7 +808,7 @@ private class PersonalBrushes(val background: Brush, val layers: List<Brush>)
  * drift in and out of step, so the stack seems to fold and unfold.
  */
 @Composable
-private fun PersonalStationArt(modifier: Modifier) {
+internal fun PersonalStationArt(modifier: Modifier) {
     val phase by loopPhase(STATION_PERIOD_MS)
     val path = remember { Path() }
     val brushes = remember {
@@ -865,7 +865,7 @@ private class DiscoveryBrushes(val background: Brush, val top: List<Brush>, val 
  * indigo and teal shards opening around its tip, which sweep slowly to and fro.
  */
 @Composable
-private fun DiscoveryStationArt(modifier: Modifier) {
+internal fun DiscoveryStationArt(modifier: Modifier) {
     val phase by loopPhase(STATION_PERIOD_MS)
     val path = remember { Path() }
     val brushes = remember {
@@ -1713,7 +1713,7 @@ private fun MoodTile(mood: TopPickMood, onClick: (TopPickMood, String) -> Unit, 
 
 // ---- Featuring … & Similar Artists ----------------------------------------------
 
-private class CollagePalette(val top: Color, val bottom: Color, val eyebrow: Color)
+internal class CollagePalette(val top: Color, val bottom: Color, val eyebrow: Color)
 
 /** Vivid backdrops, one per artist and the same one every day. */
 private val CollagePalettes = listOf(
@@ -1725,7 +1725,7 @@ private val CollagePalettes = listOf(
     CollagePalette(Color(0xFF8E1426), Color(0xFFF0364F), Color(0xFFFFC4CC)),
 )
 
-private fun collagePalette(name: String): CollagePalette = CollagePalettes[abs(name.hashCode()) % CollagePalettes.size]
+internal fun collagePalette(name: String): CollagePalette = CollagePalettes[abs(name.hashCode()) % CollagePalettes.size]
 
 /**
  * The artist in a large circle, with up to two related artists in smaller
@@ -1736,7 +1736,7 @@ private fun collagePalette(name: String): CollagePalette = CollagePalettes[abs(n
  * a small moving tile rather than the artist.
  */
 @Composable
-private fun ArtistCollageArt(
+internal fun ArtistCollageArt(
     images: List<String>,
     palette: CollagePalette,
     modifier: Modifier,
@@ -1778,7 +1778,7 @@ private val GOOGLE_SIZE_SUFFIX = Regex("""=w\d+-h\d+[^/?]*$""")
  * or a square with `-p`, the server crops it around the subject, which a
  * centre crop of the banner does not. Anything else is sized as usual.
  */
-private fun String?.croppedAt(width: Int, height: Int = width): String? {
+internal fun String?.croppedAt(width: Int, height: Int = width): String? {
     if (this == null) return null
     // Apple Music's photos: the last path segment is the size. Their artist
     // portraits are square, and asking for a portrait crop gets the square

@@ -372,4 +372,6 @@
     <string name="daypart_night_shelf_2_sub">Ballads, acoustic tunes, and serene sounds</string>
     <string name="daypart_night_shelf_3_sub">Deep electronic and mixes for the late hours</string>
     <string name="daypart_night_shelf_4_sub">Ambient sounds and tranquil melodies for rest</string>
+    <string name="stations_for_you">Stations for You</string>
+    <string name="radio_station_subtitle">Radio Station</string>
 </resources>

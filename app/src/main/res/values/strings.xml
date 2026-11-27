@@ -1741,4 +1741,6 @@
     <string name="more_by_artist_generic">More by Artist</string>
     <string name="appears_on">Appears On</string>
     <string name="album_you_might_also_like">You Might Also Like</string>
+    <string name="stations_for_you">Stations for You</string>
+    <string name="radio_station_subtitle">Radio Station</string>
 </resources>

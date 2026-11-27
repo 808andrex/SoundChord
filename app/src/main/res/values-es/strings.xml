@@ -1864,4 +1864,6 @@
     <string name="more_by_artist_generic">Más del artista</string>
     <string name="appears_on">Aparece en</string>
     <string name="album_you_might_also_like">Quizás también te interese</string>
+    <string name="stations_for_you">Emisoras para ti</string>
+    <string name="radio_station_subtitle">Estación de radio</string>
 </resources>

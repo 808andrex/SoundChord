@@ -355,4 +355,6 @@
     <string name="daypart_night_shelf_2_sub">Baladas, acústicos y sonidos serenos</string>
     <string name="daypart_night_shelf_3_sub">Electrónica profunda y mezclas para trasnochar</string>
     <string name="daypart_night_shelf_4_sub">Sonidos ambientales y melodías de descanso</string>
+    <string name="stations_for_you">Emisoras para ti</string>
+    <string name="radio_station_subtitle">Estación de radio</string>
 </resources>
