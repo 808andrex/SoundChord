@@ -1509,6 +1509,10 @@ object AppleMusicEditorialRepository {
                 lowerTitle.contains("audio commentary") ||
                 lowerTitle.contains("comentario de audio")
             ) continue
+
+            val trackCount = attributes["trackCount"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+            if (trackCount != null && trackCount <= 0) continue
+
             val curator = attributes["curatorName"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
             val subtitle = curator.ifBlank { "Apple Music" }
 
@@ -1549,6 +1553,7 @@ object AppleMusicEditorialRepository {
                     kind = EditorialItemKind.PLAYLIST,
                     isExplicit = isExplicit,
                     storefront = storefront,
+                    trackCount = trackCount,
                 )
             )
         }
@@ -1650,6 +1655,7 @@ object AppleMusicEditorialRepository {
             val cleanDescription = rawDescription.replace(Regex("<[^>]+>"), "").trim()
 
             val isExplicit = attributes["contentRating"]?.jsonPrimitive?.contentOrNull.equals("explicit", ignoreCase = true)
+            val trackCount = attributes["trackCount"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
 
             items.add(
                 AppleMusicEditorialItem(
@@ -1663,6 +1669,7 @@ object AppleMusicEditorialRepository {
                     kind = EditorialItemKind.ALBUM,
                     isExplicit = isExplicit,
                     storefront = storefront,
+                    trackCount = trackCount,
                 )
             )
         }

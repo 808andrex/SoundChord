@@ -710,24 +710,21 @@ internal fun AppNavigationHost(
             NativeHomeShelvesHolder.lastValidSongMixes = cachedSongMixes
         }
     }
-    LaunchedEffect(states.visibleHomeState, homeEditorialShelves, states.topPicks, states.account) {
+    LaunchedEffect(states.visibleHomeState, homeEditorialShelves, states.topPicks, states.account, states.historyState, states.libraryState) {
         val homeShelves = (states.visibleHomeState as? UiState.Success)?.data.orEmpty()
         val currentDaypart = com.soundchord.features.daypart.model.Daypart.current()
-        val topArtistNames = states.topPicks?.mapNotNull { pick ->
-            when (pick.kind) {
-                TopPickKind.FEATURED_ARTIST -> pick.artistName?.takeIf { it.isNotBlank() } ?: pick.title.takeIf { it.isNotBlank() }
-                TopPickKind.ARTIST_AND_SIMILAR -> pick.artistName?.takeIf { it.isNotBlank() } ?: pick.subtitle.takeIf { it.isNotBlank() }
-                TopPickKind.LATEST_RELEASE -> pick.artistName?.takeIf { it.isNotBlank() } ?: pick.subtitle.takeIf { it.isNotBlank() }
-                TopPickKind.NEW_RELEASE_MIX -> pick.artistName?.takeIf { it.isNotBlank() } ?: pick.subtitle.takeIf { it.isNotBlank() }
-                TopPickKind.FAVORITES_MIX -> pick.artistName?.takeIf { it.isNotBlank() } ?: pick.subtitle.takeIf { it.isNotBlank() }
-                else -> pick.artistName?.takeIf { it.isNotBlank() }
-            }
-        }?.mapNotNull { com.soundchord.features.daypart.data.UserTasteDaypartEngine.sanitizeArtist(it) }.orEmpty()
+        val userRealArtists = UserArtistPoolResolver.resolveUserRealArtists(
+            historyState = states.historyState,
+            libraryState = states.libraryState,
+            savedCollections = states.savedCollections,
+            topPicks = states.topPicks,
+            homeShelves = homeShelves,
+        )
         val resolved = DaypartRepository.getDaypartShelves(
             homeShelves = homeShelves,
             editorialShelves = homeEditorialShelves,
             daypart = currentDaypart,
-            userArtists = topArtistNames,
+            userArtists = userRealArtists,
         )
         if (resolved.isNotEmpty()) {
             daypartShelves = resolved
@@ -735,7 +732,7 @@ internal fun AppNavigationHost(
         val resolvedEssentials = DaypartRepository.getPersonalizedEssentialsShelf(
             homeShelves = homeShelves,
             editorialShelves = homeEditorialShelves,
-            userArtists = topArtistNames,
+            userArtists = userRealArtists,
         )
         if (resolvedEssentials != null) {
             personalizedEssentialsShelf = resolvedEssentials

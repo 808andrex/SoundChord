@@ -19,6 +19,7 @@ data class AppleMusicEditorialItem(
     val kind: EditorialItemKind = EditorialItemKind.PLAYLIST,
     val isExplicit: Boolean = false,
     val storefront: String = "us",
+    val trackCount: Int? = null,
 )
 
 @Serializable

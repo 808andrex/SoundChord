@@ -8,7 +8,10 @@ import com.soundchord.features.daypart.model.Daypart
 import com.soundchord.features.editorial.data.AppleMusicEditorialRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -27,7 +30,11 @@ object DaypartRepository {
         "track by track", "video essentials", "audio commentary", "comentario de audio",
     )
 
+    @Volatile
+    private var appContext: Context? = null
+
     fun init(context: Context) {
+        appContext = context.applicationContext
         DaypartDatabaseCache.init(context)
         AppleMusicEditorialRepository.init(context)
     }
@@ -198,6 +205,7 @@ object DaypartRepository {
 
     /**
      * Resolves dynamically personalized "Imprescindibles" shelf based on the user's top artists.
+     * Guarantees between 10 and 12 distinct Essentials playlists.
      */
     suspend fun getPersonalizedEssentialsShelf(
         homeShelves: List<HomeShelf>,
@@ -209,64 +217,166 @@ object DaypartRepository {
         val cacheKey = "essentials_user_${date}"
         if (!forceRefresh) {
             val cached = DaypartDatabaseCache.get(cacheKey)
-            if (!cached.isNullOrEmpty()) return@withContext cached.firstOrNull()
-        }
-
-        val topArtists = UserTasteDaypartEngine.extractUserArtists(homeShelves, userArtists)
-        val candidateItems = mutableListOf<ShelfItem>()
-        val seenArtists = mutableSetOf<String>()
-
-        for (artist in topArtists.take(12)) {
-            val cleanArtist = artist.trim()
-            val lowerArtist = cleanArtist.lowercase(Locale.ROOT)
-            if (seenArtists.contains(lowerArtist)) continue
-
-            val essentials = searchCuratedPool("$cleanArtist Essentials imprescindibles", limit = 10)
-                .filter { item ->
-                    val t = item.title.lowercase(Locale.ROOT)
-                    val s = item.subtitle.lowercase(Locale.ROOT)
-                    !t.contains("video essentials") && !s.contains("video") &&
-                        (t.contains("essentials") || t.contains("imprescindibles") || t.contains(lowerArtist))
+            if (!cached.isNullOrEmpty()) {
+                val cachedShelf = cached.firstOrNull()
+                // Require between 10 and 12 items so user is never stuck with 1 card
+                if (cachedShelf != null && cachedShelf.items.size in 10..12) {
+                    return@withContext cachedShelf
+                } else if (cachedShelf != null && cachedShelf.items.size > 12) {
+                    return@withContext cachedShelf.copy(items = cachedShelf.items.take(12))
                 }
-            val best = essentials.firstOrNull()
-            if (best != null) {
-                candidateItems.add(best)
-                seenArtists.add(lowerArtist)
             }
         }
 
-        if (candidateItems.size < 15) {
+        // 1. Extract up to 25 real artists from user history & rotate order daily
+        val topArtists = UserTasteDaypartEngine.extractUserArtists(homeShelves, userArtists, limit = 25)
+        val rotatedArtists = UserTasteDaypartEngine.rotateArtistsDaily(topArtists, date)
+
+        val candidateItems = mutableListOf<ShelfItem>()
+        val seenArtists = mutableSetOf<String>()
+        val seenBrowseIds = mutableSetOf<String>()
+
+        fun addCandidate(item: ShelfItem): Boolean {
+            val browseId = item.browseId ?: return false
+            if (seenBrowseIds.contains(browseId)) return false
+            val artistKey = UserTasteDaypartEngine.extractArtistKey(item.title, item.subtitle)
+            if (artistKey.isNotBlank() && seenArtists.contains(artistKey)) return false
+
+            candidateItems.add(item)
+            seenBrowseIds.add(browseId)
+            if (artistKey.isNotBlank()) seenArtists.add(artistKey)
+            return true
+        }
+
+        // 2. Query in parallel with concurrency semaphore (Semaphore = 4)
+        val gate = Semaphore(4)
+        val chunkSize = 6
+
+        for (chunk in rotatedArtists.chunked(chunkSize)) {
+            if (candidateItems.size >= 12) break
+            coroutineScope {
+                val deferred = chunk.map { artist ->
+                    async {
+                        gate.withPermit {
+                            searchArtistEssentials(artist)
+                        }
+                    }
+                }
+                for (item in deferred.awaitAll().filterNotNull()) {
+                    addCandidate(item)
+                    if (candidateItems.size >= 12) break
+                }
+            }
+        }
+
+        // 3. Smart genre affinity fill if user history yielded fewer than 10 Essentials playlists
+        if (candidateItems.size < 10) {
+            val dominantGenres = UserTasteDaypartEngine.rankUserGenres(topArtists)
+                .ifEmpty { listOf(UserGenre.POP, UserGenre.URBANO, UserGenre.RNB, UserGenre.HIPHOP) }
+
+            val similarArtistsPool = mutableListOf<String>()
+            for (genre in dominantGenres) {
+                val genreArtists = UserGenre.getSimilarArtistsForGenre(genre)
+                val rotatedGenreArtists = UserTasteDaypartEngine.rotateArtistsDaily(genreArtists, date)
+                for (artist in rotatedGenreArtists) {
+                    val lower = artist.lowercase(Locale.ROOT)
+                    if (!seenArtists.contains(lower) && !similarArtistsPool.any { it.equals(artist, ignoreCase = true) }) {
+                        similarArtistsPool.add(artist)
+                    }
+                }
+            }
+
+            for (chunk in similarArtistsPool.chunked(chunkSize)) {
+                if (candidateItems.size >= 12) break
+                coroutineScope {
+                    val deferred = chunk.map { artist ->
+                        async {
+                            gate.withPermit {
+                                searchArtistEssentials(artist)
+                            }
+                        }
+                    }
+                    for (item in deferred.awaitAll().filterNotNull()) {
+                        addCandidate(item)
+                        if (candidateItems.size >= 12) break
+                    }
+                }
+            }
+        }
+
+        // 4. Fallback from editorial shelves if still under 10 (network / catalogue constraints)
+        if (candidateItems.size < 10) {
             val fallbackPool = editorialShelves.firstOrNull {
                 val t = it.title.lowercase(Locale.ROOT)
                 t.contains("imprescindibles") || t.contains("essentials")
             }?.items.orEmpty()
 
             for (item in fallbackPool) {
-                if (candidateItems.size >= 18) break
+                if (candidateItems.size >= 12) break
+                if (!isValidCard(item)) continue
                 val t = item.title.lowercase(Locale.ROOT)
-                if (t.contains("video essentials")) continue
-                val artistKey = t.replace("essentials", "").replace("imprescindibles", "").replace(":", "").trim()
-                if (artistKey.isNotBlank() && seenArtists.contains(artistKey)) continue
-                if (candidateItems.none { it.browseId == item.browseId || it.title.equals(item.title, ignoreCase = true) }) {
-                    candidateItems.add(item)
-                    if (artistKey.isNotBlank()) seenArtists.add(artistKey)
-                }
+                if (t.contains("video essentials") || item.isVideo) continue
+                if (UserTasteDaypartEngine.isFitness(item.title, item.subtitle)) continue
+                addCandidate(item)
             }
         }
 
         if (candidateItems.isEmpty()) return@withContext null
 
-        val seed = date.toEpochDay() * 50L
-        val cleanItems = selectDailyPlaylists(candidateItems, seed = seed, targetCount = 18)
+        val finalItems = candidateItems.take(12)
+
+        val shelfTitle = appContext?.getString(com.soundchord.features.R.string.shelf_essentials) ?: "Imprescindibles"
+        val shelfSubtitle = appContext?.getString(com.soundchord.features.R.string.shelf_essentials_subtitle)
+            ?: "Las canciones imprescindibles de tus artistas favoritos"
 
         val shelf = HomeShelf(
-            title = "Imprescindibles",
-            subtitle = "Las canciones esenciales que no pueden faltar",
-            items = cleanItems,
+            title = shelfTitle,
+            subtitle = shelfSubtitle,
+            items = finalItems,
             layout = ShelfLayout.CARDS,
         )
-        DaypartDatabaseCache.put(cacheKey, listOf(shelf))
+
+        // 5. Daily Room/SQLite cache: persist full batch of 10 to 12 items for instant cold start
+        if (finalItems.size >= 10) {
+            DaypartDatabaseCache.put(cacheKey, listOf(shelf))
+        }
         shelf
+    }
+
+    private suspend fun searchArtistEssentials(artist: String): ShelfItem? {
+        val cleanArtist = artist.trim()
+        val lowerArtist = cleanArtist.lowercase(Locale.ROOT)
+        if (lowerArtist.isBlank()) return null
+
+        val queries = listOf("$cleanArtist Essentials", "$cleanArtist imprescindibles")
+        for (query in queries) {
+            val candidates = searchCuratedPool(query, limit = 6)
+            val match = candidates.firstOrNull { item ->
+                isValidEssentialsCard(item, lowerArtist)
+            }
+            if (match != null) return match
+        }
+        return null
+    }
+
+    private fun isValidEssentialsCard(item: ShelfItem, lowerArtist: String): Boolean {
+        if (!isValidCard(item)) return false
+        val t = item.title.lowercase(Locale.ROOT)
+        val s = item.subtitle.lowercase(Locale.ROOT)
+
+        if (t.contains("video essentials") || s.contains("video essentials") || item.isVideo) return false
+        if (t.contains("videoclips") || t.contains("video") || s.contains("video")) return false
+        if (UserTasteDaypartEngine.isFitness(item.title, item.subtitle)) return false
+        if (t.contains("track by track") || t.contains("audio commentary") || t.contains("comentario de audio")) return false
+
+        val isEssentialsTitle = t.contains("essentials") || t.contains("imprescindibles")
+        if (!isEssentialsTitle) return false
+
+        val titleArtist = UserTasteDaypartEngine.extractArtistKey(item.title, item.subtitle)
+        val artistMatches = t.contains(lowerArtist) || s.contains(lowerArtist) ||
+            (titleArtist.isNotBlank() && (lowerArtist.contains(titleArtist) || titleArtist.contains(lowerArtist)))
+
+        return artistMatches
     }
 
     private suspend fun searchArtistPlaylists(
@@ -307,6 +417,7 @@ object DaypartRepository {
                     val curator = item.subtitle.lowercase(Locale.ROOT)
                     val title = item.title.lowercase(Locale.ROOT)
                     AppleMusicEditorialRepository.isValidItem(item) &&
+                        (item.trackCount == null || item.trackCount > 0) &&
                         !UserTasteDaypartEngine.isFitness(item.title, item.subtitle) &&
                         !UserTasteDaypartEngine.isEventOrHoliday(item.title, item.subtitle) &&
                         (!excludeHeavy || !UserTasteDaypartEngine.isHeavyTempo(item.title, item.subtitle)) &&

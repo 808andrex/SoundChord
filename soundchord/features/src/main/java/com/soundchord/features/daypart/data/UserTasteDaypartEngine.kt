@@ -31,6 +31,47 @@ enum class UserGenre(val displayName: String, val searchTerms: String) {
             }
         }
 
+        fun getSimilarArtistsForGenre(genre: UserGenre): List<String> = when (genre) {
+            UserGenre.URBANO -> listOf(
+                "Bad Bunny", "Feid", "Karol G", "Rauw Alejandro", "Myke Towers", "Mora",
+                "Eladio Carrión", "Quevedo", "J Balvin", "Ozuna", "Maluma", "Anuel AA",
+                "Arcángel", "Young Miko", "Ryan Castro", "Blessd", "Manuel Turizo", "Duki",
+                "Trueno", "Chencho Corleone",
+            )
+            UserGenre.RNB -> listOf(
+                "The Weeknd", "SZA", "Frank Ocean", "Daniel Caesar", "Brent Faiyaz", "Giveon",
+                "Steve Lacy", "Bryson Tiller", "Kehlani", "Summer Walker", "Jhené Aiko",
+                "Khalid", "H.E.R.", "PARTYNEXTDOOR", "Leon Bridges", "Usher", "Alicia Keys",
+            )
+            UserGenre.HIPHOP -> listOf(
+                "Drake", "Kendrick Lamar", "Travis Scott", "Kanye West", "Eminem", "J. Cole",
+                "21 Savage", "Future", "Metro Boomin", "Post Malone", "A\$AP Rocky", "Jack Harlow",
+                "Tyler, The Creator", "Mac Miller", "Doja Cat",
+            )
+            UserGenre.POP -> listOf(
+                "Taylor Swift", "Ariana Grande", "Dua Lipa", "Olivia Rodrigo", "Billie Eilish",
+                "Harry Styles", "Sabrina Carpenter", "Bruno Mars", "Ed Sheeran", "Justin Bieber",
+                "Selena Gomez", "Rihanna", "Lady Gaga", "Miley Cyrus", "Shakira", "Rosalía",
+            )
+            UserGenre.ELECTRONIC -> listOf(
+                "Bizarrap", "Calvin Harris", "David Guetta", "Avicii", "Tiësto", "Fred again..",
+                "Skrillex", "Daft Punk", "Martin Garrix", "Marshmello", "Kygo", "The Chainsmokers",
+            )
+            UserGenre.INDIE_ROCK -> listOf(
+                "Arctic Monkeys", "Coldplay", "Imagine Dragons", "The Neighbourhood", "Lana Del Rey",
+                "Cigarettes After Sex", "The Strokes", "Radiohead", "Queen", "Nirvana", "Linkin Park",
+                "Red Hot Chili Peppers", "Gorillaz", "Tame Impala", "Paramore",
+            )
+            UserGenre.LATIN -> listOf(
+                "Juan Luis Guerra", "Marc Anthony", "Romeo Santos", "Aventura", "Carlos Vives",
+                "Rubén Blades", "Celia Cruz", "Fonseca", "Juanes", "Luis Miguel",
+            )
+            UserGenre.DEFAULT -> listOf(
+                "Taylor Swift", "The Weeknd", "Bad Bunny", "Drake", "Billie Eilish",
+                "Bruno Mars", "Dua Lipa", "Ariana Grande", "SZA", "Coldplay",
+            )
+        }
+
         private val URBANO_ARTISTS = listOf(
             "bad bunny", "rauw alejandro", "feid", "karol g", "myke towers", "anuel",
             "mora", "eladio carri", "quevedo", "j balvin", "ozuna", "maluma",
@@ -165,7 +206,11 @@ object UserTasteDaypartEngine {
         return null
     }
 
-    fun extractUserArtists(homeShelves: List<HomeShelf>, extraArtists: List<String> = emptyList()): List<String> {
+    fun extractUserArtists(
+        homeShelves: List<HomeShelf>,
+        extraArtists: List<String> = emptyList(),
+        limit: Int = 25,
+    ): List<String> {
         val artists = mutableListOf<String>()
 
         extraArtists.forEach { raw ->
@@ -212,7 +257,32 @@ object UserTasteDaypartEngine {
             .entries
             .sortedByDescending { it.value.size }
             .map { it.value.first() }
-            .take(15)
+            .take(limit)
+    }
+
+    /**
+     * Rotates the artist pool order daily according to [date] epoch day,
+     * ensuring that every day a distinct subset of the user's top artists is prioritized.
+     */
+    fun rotateArtistsDaily(artists: List<String>, date: LocalDate = LocalDate.now()): List<String> {
+        if (artists.isEmpty()) return emptyList()
+        val epochDay = date.toEpochDay()
+        val offset = (((epochDay % artists.size) + artists.size) % artists.size).toInt()
+        return artists.drop(offset) + artists.take(offset)
+    }
+
+    /**
+     * Normalizes and isolates the artist key from an Essentials / Imprescindibles playlist title.
+     * E.g. "Bad Bunny: imprescindibles" -> "bad bunny", "Drake Essentials" -> "drake".
+     */
+    fun extractArtistKey(title: String, subtitle: String = ""): String {
+        val clean = title
+            .replace(Regex("""(?i)\s*:\s*(?:essentials|imprescindibles|lo mejor de|lo más nuevo|setlist|deep cuts|next steps).*"""), "")
+            .replace(Regex("""(?i)\s+(?:essentials|imprescindibles|lo mejor de|lo más nuevo|setlist|deep cuts|next steps).*"""), "")
+            .replace(Regex("""(?i)\s*-\s*(?:essentials|imprescindibles|lo mejor de|lo más nuevo|setlist|deep cuts|next steps).*"""), "")
+            .trim()
+            .lowercase(Locale.ROOT)
+        return clean.ifBlank { subtitle.trim().lowercase(Locale.ROOT) }
     }
 
     fun selectFeaturedArtist(topArtists: List<String>, daypart: Daypart, date: LocalDate): String? {
