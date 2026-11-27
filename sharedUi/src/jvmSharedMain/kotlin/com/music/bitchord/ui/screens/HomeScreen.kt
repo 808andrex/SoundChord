@@ -384,11 +384,39 @@ fun HomeScreen(
         }
     }
     val musicVideosShelf = remember(visibleShelves) {
-        visibleShelves.firstOrNull { s ->
+        val found = visibleShelves.firstOrNull { s ->
             val t = s.title.trim().lowercase(Locale.ROOT)
             s.layout == ShelfLayout.VIDEO ||
                 t.contains("music video") || t.contains("vídeo") || t.contains("video") ||
                 s.items.all { it.isVideo }
+        }
+        val cleanItems = found?.items?.filter { isCleanOfficialMusicVideo(it) }.orEmpty()
+        if (cleanItems.size >= 10) {
+            found
+        } else {
+            // Pool official music videos from all visible shelves (history, recommendations, artist sections)
+            val pooledVideos = mutableListOf<ShelfItem>()
+            pooledVideos.addAll(cleanItems)
+
+            visibleShelves.forEach { shelf ->
+                shelf.items.forEach { item ->
+                    if (isCleanOfficialMusicVideo(item) && pooledVideos.none { it.videoId == item.videoId }) {
+                        pooledVideos.add(item)
+                    }
+                }
+            }
+
+            if (pooledVideos.isNotEmpty()) {
+                val base = found ?: HomeShelf(
+                    title = "Videos musicales",
+                    items = emptyList(),
+                    subtitle = "",
+                    layout = ShelfLayout.VIDEO,
+                )
+                base.copy(items = pooledVideos.take(12), layout = ShelfLayout.VIDEO)
+            } else {
+                found
+            }
         }
     }
     val essentialsShelf = personalizedEssentialsShelf ?: remember(visibleShelves, editorialShelves) {

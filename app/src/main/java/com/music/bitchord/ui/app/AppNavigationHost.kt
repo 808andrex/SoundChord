@@ -707,6 +707,7 @@ internal fun AppNavigationHost(
                 TopPickKind.ARTIST_AND_SIMILAR -> pick.artistName?.takeIf { it.isNotBlank() } ?: pick.subtitle.takeIf { it.isNotBlank() }
                 TopPickKind.LATEST_RELEASE -> pick.artistName?.takeIf { it.isNotBlank() } ?: pick.subtitle.takeIf { it.isNotBlank() }
                 TopPickKind.NEW_RELEASE_MIX -> pick.artistName?.takeIf { it.isNotBlank() } ?: pick.subtitle.takeIf { it.isNotBlank() }
+                TopPickKind.FAVORITES_MIX -> pick.artistName?.takeIf { it.isNotBlank() } ?: pick.subtitle.takeIf { it.isNotBlank() }
                 else -> pick.artistName?.takeIf { it.isNotBlank() }
             }
         }?.mapNotNull { com.soundchord.features.daypart.data.UserTasteDaypartEngine.sanitizeArtist(it) }.orEmpty()

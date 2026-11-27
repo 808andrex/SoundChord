@@ -98,12 +98,29 @@ object StationsForYouRepository {
                 localArtists = localArtists,
             )
 
-            // 2. Resolve artist pages and photos
+            // 2. Resolve artist pages and photos with daily rotation / shuffling
             val limiter = Semaphore(CONCURRENT_LANDING_LIMIT)
-            val candidateTargets = candidates.mapNotNull { artist ->
+
+            // Dynamic daily rotation: Rotate candidate pool using dayOfYear so each day
+            // shows different artists and in different card positions.
+            val daySeed = date.dayOfYear
+            val rotatedCandidates = if (candidates.size > MAX_ARTIST_STATIONS) {
+                // Take top 30 candidates and window/shuffle them deterministically by daySeed
+                val topPool = candidates.take(30)
+                val offset = (daySeed * 5) % topPool.size
+                val shifted = topPool.drop(offset) + topPool.take(offset)
+                // Deterministic pseudo-shuffle per day
+                shifted.sortedBy { artist ->
+                    (artist.name.hashCode() xor (daySeed * 31)).rem(1000)
+                }
+            } else {
+                candidates
+            }
+
+            val candidateTargets = rotatedCandidates.mapNotNull { artist ->
                 val browseId = artist.browseId ?: return@mapNotNull null
                 artist to browseId
-            }.take(16)
+            }.take(18)
 
             val artistPages = candidateTargets.map { (artist, browseId) ->
                 async {

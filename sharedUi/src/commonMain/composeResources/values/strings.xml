@@ -243,6 +243,10 @@
     <string name="top_pick_discovery_subtitle">Station · Continuous music</string>
     <string name="top_pick_personal_subtitle">Personal Station · Endless mix</string>
     <string name="top_pick_and_similar_subtitle">Station &amp; similar</string>
+    <string name="top_pick_favorites_mix">Favorites Mix</string>
+    <string name="top_pick_favorites_subtitle">Your favorite music · Dynamic mix</string>
+    <string name="top_pick_new_music_mix">New Music</string>
+    <string name="top_pick_new_music_subtitle">Recent releases from your artists</string>
     <string name="shelf_album_item">Album</string>
     <string name="playlist_label">Playlist</string>
     <string name="artist_label">Artist</string>

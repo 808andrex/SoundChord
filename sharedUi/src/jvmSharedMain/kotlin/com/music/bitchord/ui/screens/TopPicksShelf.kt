@@ -104,6 +104,9 @@ import com.music.bitchord.data.model.TopPick
 import com.music.bitchord.data.model.TopPickKind
 import com.music.bitchord.data.model.TopPickMood
 import com.music.bitchord.data.model.artworkAt
+import com.music.bitchord.ui.components.AnimatedHeroGradientCard
+import com.music.bitchord.ui.components.FavoritesMixFluidPalette
+import com.music.bitchord.ui.components.NewMusicMixFluidPalette
 import com.music.bitchord.sharedui.resources.*
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.rememberBlurredBackdrop
@@ -287,10 +290,15 @@ private fun cardText(pick: TopPick, listenerName: String?): CardText {
             title = pick.title,
             subtitle = if (pick.subtitle.isNotBlank()) "${stringResource(Res.string.artist_label)} · ${formatMonthlyListeners(pick.subtitle)}" else stringResource(Res.string.artist_label),
         )
+        TopPickKind.FAVORITES_MIX -> CardText(
+            eyebrow = stringResource(Res.string.top_pick_made_for_you),
+            title = stringResource(Res.string.top_pick_favorites_mix),
+            subtitle = pick.subtitle.ifBlank { stringResource(Res.string.top_pick_favorites_subtitle) },
+        )
         TopPickKind.NEW_RELEASE_MIX -> CardText(
             eyebrow = stringResource(Res.string.top_pick_made_for_you),
-            title = pick.title,
-            subtitle = "${stringResource(Res.string.mix_label)} · ${formatPlaylistSubtitle(pick.subtitle)}",
+            title = stringResource(Res.string.top_pick_new_music_mix),
+            subtitle = pick.subtitle.ifBlank { stringResource(Res.string.top_pick_new_music_subtitle) },
         )
         TopPickKind.DISCOVERY_STATION -> CardText(
             eyebrow = stringResource(Res.string.top_pick_made_for_you),
@@ -316,6 +324,34 @@ private fun TopPickCard(
 ) {
     val text = cardText(pick, listenerName)
     val longPress = onLongPress?.let { { it(pick) } }
+
+    if (pick.kind == TopPickKind.FAVORITES_MIX) {
+        AnimatedHeroGradientCard(
+            title = text.title,
+            eyebrow = text.eyebrow,
+            subtitle = text.subtitle,
+            colors = FavoritesMixFluidPalette,
+            onClick = { onClick(pick, text.title) },
+            onLongClick = longPress,
+            eyebrowColor = Color(0xFFE2C9FF),
+            modifier = modifier,
+        )
+        return
+    }
+    if (pick.kind == TopPickKind.NEW_RELEASE_MIX) {
+        AnimatedHeroGradientCard(
+            title = text.title,
+            eyebrow = text.eyebrow,
+            subtitle = text.subtitle,
+            colors = NewMusicMixFluidPalette,
+            onClick = { onClick(pick, text.title) },
+            onLongClick = longPress,
+            eyebrowColor = Color(0xFFFFD2DA),
+            modifier = modifier,
+        )
+        return
+    }
+
     val artworkUrl = pick.images.firstOrNull()
     val palette = rememberArtworkPalette(artworkUrl)
     val dynamicBottomColor = palette.background.takeIf { it != Color.Unspecified } ?: Color(0xFF141414)
@@ -329,27 +365,32 @@ private fun TopPickCard(
             .longPressMenuClickable(onClick = { onClick(pick, text.title) }, onLongClick = longPress)
             .contextClick(longPress),
     ) {
-        val eyebrowColor: Color
-        when (pick.kind) {
+        val eyebrowColor: Color = when (pick.kind) {
+            TopPickKind.FAVORITES_MIX -> {
+                Color(0xFFE2C9FF)
+            }
+            TopPickKind.NEW_RELEASE_MIX -> {
+                Color(0xFFFFD2DA)
+            }
             TopPickKind.PERSONAL_STATION -> {
                 PersonalStationArt(Modifier.fillMaxSize())
-                eyebrowColor = Color(0xFFFFD2DA)
+                Color(0xFFFFD2DA)
             }
             TopPickKind.DISCOVERY_STATION -> {
                 DiscoveryStationArt(Modifier.fillMaxSize())
-                eyebrowColor = Color(0xFFCDBDFF)
+                Color(0xFFCDBDFF)
             }
             TopPickKind.MOOD -> {
                 val style = (pick.mood ?: TopPickMood.FEEL_GOOD).style()
                 MoodArt(pick.mood ?: TopPickMood.FEEL_GOOD, style, Modifier.fillMaxSize())
-                eyebrowColor = style.eyebrow
+                style.eyebrow
             }
             TopPickKind.ARTIST_AND_SIMILAR -> {
                 val p = collagePalette(pick.artistName.orEmpty())
                 ArtistCollageArt(pick.images, p, Modifier.fillMaxSize())
-                eyebrowColor = p.eyebrow
+                p.eyebrow
             }
-            TopPickKind.LATEST_RELEASE, TopPickKind.NEW_RELEASE_MIX -> {
+            TopPickKind.LATEST_RELEASE -> {
                 ReleaseArt(
                     artworkUrl,
                     Modifier.fillMaxSize(),
@@ -371,7 +412,7 @@ private fun TopPickCard(
                             ),
                         ),
                 )
-                eyebrowColor = Color.White
+                Color.White
             }
             TopPickKind.FEATURED_ARTIST -> {
                 AsyncImage(
@@ -393,7 +434,7 @@ private fun TopPickCard(
                             ),
                         ),
                 )
-                eyebrowColor = Color.White
+                Color.White
             }
             TopPickKind.EDITORIAL_PLAYLIST -> {
                 AsyncImage(
@@ -414,7 +455,7 @@ private fun TopPickCard(
                             ),
                         ),
                 )
-                eyebrowColor = Color.White
+                Color.White
             }
         }
 

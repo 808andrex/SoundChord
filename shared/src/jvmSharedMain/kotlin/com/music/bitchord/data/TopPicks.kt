@@ -10,6 +10,9 @@ import com.music.bitchord.data.model.TopPick
 import com.music.bitchord.data.model.TopPickKind
 import com.music.bitchord.data.model.TopPickMood
 import com.music.bitchord.data.model.WatchTarget
+import com.music.bitchord.data.canvas.AppleMusicTokenProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -18,6 +21,11 @@ import kotlinx.coroutines.sync.withPermit
 import com.music.bitchord.data.model.normalizedArtistName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.Request
 import java.time.LocalDateTime
 import java.util.Locale
 import kotlin.random.Random
@@ -95,30 +103,77 @@ object TopPicks {
         val mixes = mixesAsync.await()
         Log.d(TAG, "topPicks: history=${history.size} artists=${artists.map { it.name }} mixes=${mixes.keys}")
 
-        // The first card is always the new release when there is one, as on
-        // Apple Music; the rest come in a different order every build.
         val lead = latestRelease(artists)
-        val rest = buildList {
-            personalStation(mixes, history, local)?.let(::add)
-            add(moodPick(now, local))
+        val editorialPlaylist = featuredEditorialPlaylist(homeShelves, now)
+
+        val favoritesCard = favoritesMix(mixes, history, local, artists)
+        val newMusicCard = newMusicMix(mixes, artists, local, history)
+        val personalCard = personalStation(mixes, history, local)
+        val discoveryCard = discoveryStation(mixes, artists, history)
+        val moodCard = moodPick(now, local)
+
+        // Artist stations (should never be first in the carousel)
+        val artistPicks = buildList {
             artists.getOrNull(0)?.let { andSimilar(it, photos) }?.let(::add)
             artists.getOrNull(1)?.let { featured(it, photos) }?.let(::add)
-            mixes[Mix.NEW_RELEASE]?.let { mix ->
-                add(
-                    TopPick(
-                        kind = TopPickKind.NEW_RELEASE_MIX,
-                        title = mix.title,
-                        subtitle = mix.subtitle,
-                        images = listOfNotNull(mix.thumbnailUrl),
-                        watch = mix.watchTarget(),
-                    ),
-                )
-            }
             artists.getOrNull(2)?.let { andSimilar(it, photos) }?.let(::add)
-            discoveryStation(mixes, artists, history)?.let(::add)
-            featuredEditorialPlaylist(homeShelves)?.let(::add)
-        }.shuffled()
-        listOfNotNull(lead) + rest
+        }
+
+        // Rule 1: Every Friday until 10:00 PM (22:00), "Nueva música" MUST be the first card (#1).
+        val isFridayBefore10Pm = (now.dayOfWeek == java.time.DayOfWeek.FRIDAY && now.hour < 22)
+
+        val orderedPicks = if (isFridayBefore10Pm) {
+            val nonFirstCandidates = buildList {
+                lead?.let(::add)
+                personalCard?.let(::add)
+                add(favoritesCard)
+                add(moodCard)
+                editorialPlaylist?.let(::add)
+                discoveryCard?.let(::add)
+            }.shuffled(Random(now.dayOfYear + now.hour))
+
+            listOf(newMusicCard) + nonFirstCandidates + artistPicks
+        } else {
+            // Rule 2: Outside Friday before 22:00, periodic variation for the #1 spot every 2 hours:
+            // 2-hour slots: (now.hour / 2)
+            // Cycle through:
+            // 0 -> Favorites Mix (Tus favoritos)
+            // 1 -> Personal Station (Estación de [Usuario])
+            // 2 -> Latest Release / New Music Mix (Nuevo lanzamiento / Nueva música)
+            // 3 -> Featured Artist ("Con [Artista]" / Artist and similar)
+            // 4 -> Featured Editorial Playlist (Playlist destacada)
+            // 5 -> Discovery Station (Estación por descubrir)
+            val slot2Hours = (now.dayOfYear * 12 + (now.hour / 2))
+            val leadEligible = buildList {
+                add(favoritesCard) // Slot 0
+                personalCard?.let(::add) // Slot 1
+                (lead ?: newMusicCard).let(::add) // Slot 2
+                (artists.getOrNull(0)?.let { featured(it, photos) } ?: moodCard).let(::add) // Slot 3: "Con [Artista]"
+                editorialPlaylist?.let(::add) // Slot 4: Playlist destacada
+                discoveryCard?.let(::add) // Slot 5: Estación por descubrir
+            }
+
+            val headIndex = (slot2Hours % leadEligible.size.coerceAtLeast(1))
+            val head = leadEligible.getOrNull(headIndex) ?: leadEligible.first()
+
+            val otherLeadItems = leadEligible.filter { it != head }
+            val otherCandidates = buildList {
+                if (lead != null && head != lead) add(lead)
+                if (head != favoritesCard && favoritesCard !in otherLeadItems) add(favoritesCard)
+                if (head != newMusicCard && newMusicCard !in otherLeadItems) add(newMusicCard)
+                if (personalCard != null && head != personalCard && personalCard !in otherLeadItems) add(personalCard)
+                if (discoveryCard != null && head != discoveryCard && discoveryCard !in otherLeadItems) add(discoveryCard)
+                if (editorialPlaylist != null && head != editorialPlaylist && editorialPlaylist !in otherLeadItems) add(editorialPlaylist)
+                add(moodCard)
+            }
+
+            val remainingNonArtists = (otherLeadItems + otherCandidates).distinct()
+                .shuffled(Random(slot2Hours * 31))
+
+            listOf(head) + remainingNonArtists + artistPicks
+        }
+
+        orderedPicks
     }
 
     /**
@@ -141,6 +196,32 @@ object TopPicks {
     /** The queue a card starts. Never called for [TopPickKind.LATEST_RELEASE] or [TopPickKind.EDITORIAL_PLAYLIST], which open a page. */
     suspend fun queue(pick: TopPick): Result<List<Song>> {
         if (pick.kind == TopPickKind.MOOD) return moodQueue(pick)
+        if (pick.kind == TopPickKind.FAVORITES_MIX) {
+            val target = pick.watch
+            if (target != null) {
+                val stationResult = freshStation(pick, target)
+                if (stationResult.isSuccess && stationResult.getOrNull()?.isNotEmpty() == true) return stationResult
+            }
+            val history = YtMusicRepository.recentHistory().getOrNull().orEmpty()
+            val favorites = history.take(50).shuffled()
+            if (favorites.isNotEmpty()) return Result.success(favorites)
+            return Result.failure(IllegalStateException("No favorites available"))
+        }
+        if (pick.kind == TopPickKind.NEW_RELEASE_MIX) {
+            val target = pick.watch
+            if (target != null) {
+                val q = YtMusicRepository.watchQueue(target)
+                if (q.isSuccess && q.getOrNull()?.isNotEmpty() == true) return q
+            }
+            val history = YtMusicRepository.recentHistory().getOrNull().orEmpty()
+            val seeds = history.take(15).shuffled().take(3)
+            val radios = seeds.map { seed ->
+                YtMusicRepository.watchQueue(WatchTarget(playlistId = "RDAMVM${seed.videoId}", videoId = seed.videoId)).getOrNull().orEmpty()
+            }.flatten().distinctBy { it.videoId }.shuffled().take(40)
+            if (radios.isNotEmpty()) return Result.success(radios)
+            if (history.isNotEmpty()) return Result.success(history.take(30))
+            return Result.failure(IllegalStateException("No new release tracks available"))
+        }
         val target = pick.watch ?: return Result.failure(IllegalStateException("no queue behind ${pick.kind}"))
         if (pick.kind == TopPickKind.PERSONAL_STATION || pick.kind == TopPickKind.DISCOVERY_STATION) {
             return freshStation(pick, target)
@@ -356,7 +437,195 @@ object TopPicks {
         )
     }
 
-    private fun featuredEditorialPlaylist(homeShelves: List<HomeShelf>): TopPick? {
+    private fun favoritesMix(
+        mixes: Map<Mix, ShelfItem>,
+        history: List<Song>,
+        local: LocalTaste,
+        artists: List<ArtistCard>,
+    ): TopPick {
+        val watch = mixes[Mix.FAVORITES]?.watchTarget()
+            ?: mixes[Mix.SUPERMIX]?.watchTarget()
+            ?: (local.songs.firstOrNull() ?: history.firstOrNull())?.let { song ->
+                WatchTarget(playlistId = "RDAMVM${song.videoId}", videoId = song.videoId)
+            }
+            ?: artists.firstOrNull()?.page?.radio
+
+        val topArtistNames = (artists.map { it.name } + local.artists.map { it.name })
+            .filter { it.isNotBlank() }
+            .distinct()
+            .take(3)
+        val isSpanish = Locale.getDefault().language == "es"
+        val prefix = if (isSpanish) "Con" else "Featuring"
+        val subtitle = if (topArtistNames.isNotEmpty()) {
+            "$prefix ${topArtistNames.joinToString(", ")}"
+        } else {
+            ""
+        }
+
+        return TopPick(
+            kind = TopPickKind.FAVORITES_MIX,
+            title = "",
+            subtitle = subtitle,
+            watch = watch,
+        )
+    }
+
+    private fun newMusicMix(
+        mixes: Map<Mix, ShelfItem>,
+        artists: List<ArtistCard>,
+        local: LocalTaste,
+        history: List<Song>,
+    ): TopPick {
+        val watch = mixes[Mix.NEW_RELEASE]?.watchTarget()
+            ?: artists.firstOrNull()?.page?.radio
+            ?: (history.firstOrNull() ?: local.songs.firstOrNull())?.let { song ->
+                WatchTarget(playlistId = "RDAMVM${song.videoId}", videoId = song.videoId)
+            }
+
+        val recentArtists = artists.map { it.name }.filter { it.isNotBlank() }.distinct().take(3)
+        val isSpanish = Locale.getDefault().language == "es"
+        val prefix = if (isSpanish) "Con" else "Featuring"
+        val subtitle = if (mixes[Mix.NEW_RELEASE]?.subtitle?.isNotBlank() == true) {
+            mixes[Mix.NEW_RELEASE]!!.subtitle
+        } else if (recentArtists.isNotEmpty()) {
+            "$prefix ${recentArtists.joinToString(", ")}"
+        } else {
+            ""
+        }
+
+        return TopPick(
+            kind = TopPickKind.NEW_RELEASE_MIX,
+            title = "",
+            subtitle = subtitle,
+            watch = watch,
+        )
+    }
+
+    private data class AppleEditorialSeed(
+        val id: String,
+        val titleEs: String,
+        val titleEn: String,
+        val storefront: String = "us",
+    )
+
+    private val RotatingApplePlaylists = listOf(
+        AppleEditorialSeed("pl.8e05c879331846b48a04870f7cfcb257", "Éxitos de hoy", "Today's Hits", "es"),
+        AppleEditorialSeed("pl.2b0e6e332fdf4b7a91164da3162127b5", "New Music Daily", "New Music Daily", "us"),
+        AppleEditorialSeed("pl.b7ae3e0a28e84edd8e997a71e75ab620", "R&B Now", "R&B Now", "us"),
+        AppleEditorialSeed("pl.075f88440e6c40e5b7222aa894458f33", "¡Dale Play!", "Dale Play", "es"),
+        AppleEditorialSeed("pl.f4d106fed2bd41149aaacabb233eb5eb", "Today's Hits", "Today's Hits", "us"),
+        AppleEditorialSeed("pl.5ee8333dbe944d9f9151e97d92d123bf", "A-List Pop", "A-List Pop", "us"),
+        AppleEditorialSeed("pl.74cf97ae33394c868038abebc73299c8", "¡Viva Latino!", "Viva Latino", "us"),
+    )
+
+    private suspend fun fetchAppleEditorialPlaylist(now: LocalDateTime): TopPick? {
+        val slot2Hours = (now.dayOfYear * 12 + (now.hour / 2))
+        val seedIndex = slot2Hours % RotatingApplePlaylists.size
+        val seed = RotatingApplePlaylists[seedIndex]
+
+        val isSpanish = Locale.getDefault().language == "es"
+        val name = if (isSpanish) seed.titleEs else seed.titleEn
+        val fallbackCover = "https://is1-ssl.mzstatic.com/image/thumb/Features/v4/7c/49/a7/7c49a712-4029-4554-18ef-936c57f7da4e/U01TMDEwMjkxNC1OZXctTXVzaWMtRGFpbHktMjAyNC5wbmc.png/600x600bb.jpg"
+
+        val token = AppleMusicTokenProvider.token()
+        if (token == null) {
+            return TopPick(
+                kind = TopPickKind.EDITORIAL_PLAYLIST,
+                title = name,
+                subtitle = "Apple Music",
+                images = listOf(fallbackCover),
+                browseId = "apple:playlist:${seed.storefront}:${seed.id}",
+            )
+        }
+
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val url = "https://amp-api.music.apple.com/v1/catalog/${seed.storefront}/playlists/${seed.id}"
+                val req = Request.Builder()
+                    .url(url)
+                    .header("Authorization", "Bearer $token")
+                    .header("Origin", "https://music.apple.com")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .build()
+                val resp = Http.client.newCall(req).execute()
+                if (!resp.isSuccessful) {
+                    return@runCatching TopPick(
+                        kind = TopPickKind.EDITORIAL_PLAYLIST,
+                        title = name,
+                        subtitle = "Apple Music",
+                        images = listOf(fallbackCover),
+                        browseId = "apple:playlist:${seed.storefront}:${seed.id}",
+                    )
+                }
+                val body = resp.body?.string() ?: return@runCatching null
+                val root = json.parseToJsonElement(body).jsonObject
+                val data = root["data"]?.jsonArray?.firstOrNull()?.jsonObject ?: return@runCatching null
+                val attrs = data["attributes"]?.jsonObject ?: return@runCatching null
+                val apiName = attrs["name"]?.jsonPrimitive?.contentOrNull ?: name
+                val rawArt = attrs["artwork"]?.jsonObject?.get("url")?.jsonPrimitive?.contentOrNull
+                val artworkUrl = rawArt?.replace("{w}", "600")?.replace("{h}", "600")?.replace("{f}", "jpg")?.replace("{c}", "") ?: fallbackCover
+                TopPick(
+                    kind = TopPickKind.EDITORIAL_PLAYLIST,
+                    title = apiName,
+                    subtitle = "Apple Music",
+                    images = listOf(artworkUrl),
+                    browseId = "apple:playlist:${seed.storefront}:${seed.id}",
+                )
+            }.getOrNull() ?: TopPick(
+                kind = TopPickKind.EDITORIAL_PLAYLIST,
+                title = name,
+                subtitle = "Apple Music",
+                images = listOf(fallbackCover),
+                browseId = "apple:playlist:${seed.storefront}:${seed.id}",
+            )
+        }
+    }
+
+    private suspend fun userCreatedPlaylist(now: LocalDateTime): TopPick? {
+        val playlists = runCatching { YtMusicRepository.userPlaylists().getOrNull() }.getOrNull().orEmpty()
+        if (playlists.isEmpty()) return null
+        val slot2Hours = (now.dayOfYear * 12 + (now.hour / 2))
+        val index = slot2Hours % playlists.size
+        val chosen = playlists[index]
+        val art = chosen.thumbnailUrl ?: return null
+        val sub = chosen.subtitle.ifBlank { "Playlist" }
+        return TopPick(
+            kind = TopPickKind.EDITORIAL_PLAYLIST,
+            title = chosen.title,
+            subtitle = sub,
+            images = listOf(art),
+            browseId = chosen.browseId,
+        )
+    }
+
+    private suspend fun featuredEditorialPlaylist(homeShelves: List<HomeShelf>, now: LocalDateTime): TopPick? {
+        // Rotates strictly every 2 hours:
+        // Slot 0 -> Playlist del usuario (User's own Playlist)
+        // Slot 1 -> Playlist Apple Music (Éxitos de hoy, etc.)
+        // Slot 2 -> Otra playlist de Apple Music (New Music Daily, R&B Now, etc.)
+        // Slot 3 -> Playlist de YouTube Music (Community / Hits)
+        val slot2Hours = (now.dayOfYear * 12 + (now.hour / 2))
+        val mode = slot2Hours % 4
+        return when (mode) {
+            0 -> {
+                userCreatedPlaylist(now)
+                    ?: fetchAppleEditorialPlaylist(now)
+                    ?: ytEditorialPlaylist(homeShelves)
+            }
+            1, 2 -> {
+                fetchAppleEditorialPlaylist(now)
+                    ?: userCreatedPlaylist(now)
+                    ?: ytEditorialPlaylist(homeShelves)
+            }
+            else -> {
+                ytEditorialPlaylist(homeShelves)
+                    ?: fetchAppleEditorialPlaylist(now)
+                    ?: userCreatedPlaylist(now)
+            }
+        }
+    }
+
+    private fun ytEditorialPlaylist(homeShelves: List<HomeShelf>): TopPick? {
         val playlistShelves = homeShelves.filter { shelf ->
             val t = shelf.title.lowercase(Locale.ROOT)
             t.contains("playlist") || t.contains("featured") || t.contains("destacad") ||
@@ -418,7 +687,7 @@ object TopPicks {
 
     // ---- Mixes --------------------------------------------------------------
 
-    private enum class Mix { SUPERMIX, DISCOVER, NEW_RELEASE }
+    private enum class Mix { SUPERMIX, DISCOVER, NEW_RELEASE, FAVORITES }
 
     /**
      * The account's mixes. All of them are `RDTMAK…` playlists, so the id says
@@ -437,7 +706,8 @@ object TopPicks {
             val kind = when {
                 "supermix" in title -> Mix.SUPERMIX
                 "discover" in title -> Mix.DISCOVER
-                "new release" in title -> Mix.NEW_RELEASE
+                "new release" in title || "nueva música" in title || "novedades" in title -> Mix.NEW_RELEASE
+                "favorite" in title || "favorit" in title -> Mix.FAVORITES
                 else -> null
             }
             if (kind != null) found.putIfAbsent(kind, item)

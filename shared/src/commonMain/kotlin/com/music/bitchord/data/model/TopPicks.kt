@@ -44,6 +44,9 @@ enum class TopPickKind {
 
     /** Editorial featured playlist (e.g. Apple Music / YouTube Music featured editorial playlists). */
     EDITORIAL_PLAYLIST,
+
+    /** Animated Hero card for the user's favorite and most played music mix. */
+    FAVORITES_MIX,
 }
 
 /**
