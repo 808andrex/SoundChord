@@ -99,12 +99,15 @@ fun AnimatedHeroGradientCard(
     onLongClick: (() -> Unit)? = null,
     eyebrowColor: Color = Color.White.copy(alpha = 0.92f),
     animationSpeed: Float = 1.0f,
+    cardHeight: androidx.compose.ui.unit.Dp = HERO_CARD_HEIGHT,
+    cardShape: RoundedCornerShape = HeroCardShape,
+    compact: Boolean = false,
 ) {
     Box(
         modifier = modifier
-            .height(HERO_CARD_HEIGHT)
-            .clip(HeroCardShape)
-            .thumbnailBorder(HeroCardShape)
+            .height(cardHeight)
+            .clip(cardShape)
+            .thumbnailBorder(cardShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .longPressMenuClickable(onClick = onClick, onLongClick = onLongClick)
             .contextClick(onLongClick),
@@ -138,8 +141,11 @@ fun AnimatedHeroGradientCard(
             tint = Color.White.copy(alpha = 0.92f),
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 18.dp, end = 18.dp)
-                .height(18.dp)
+                .padding(
+                    top = if (compact) 14.dp else 18.dp,
+                    end = if (compact) 14.dp else 18.dp,
+                )
+                .height(if (compact) 15.dp else 18.dp)
                 .aspectRatio(730f / 484f),
         )
 
@@ -155,17 +161,17 @@ fun AnimatedHeroGradientCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 54.dp), // slightly above bottom captions
+                .padding(horizontal = if (compact) 14.dp else 24.dp)
+                .padding(bottom = if (compact) 44.dp else 54.dp), // slightly above bottom captions
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = formattedTitle,
                 style = MaterialTheme.typography.headlineLarge.copy(
-                    fontSize = 44.sp,
-                    lineHeight = 48.sp,
+                    fontSize = if (compact) 23.sp else 44.sp,
+                    lineHeight = if (compact) 27.sp else 48.sp,
                     fontWeight = FontWeight.Black,
-                    letterSpacing = (-0.5).sp,
+                    letterSpacing = if (compact) (-0.3).sp else (-0.5).sp,
                 ),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 color = Color.White,
@@ -179,13 +185,17 @@ fun AnimatedHeroGradientCard(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
+                .padding(
+                    start = if (compact) 14.dp else 20.dp,
+                    end = if (compact) 14.dp else 20.dp,
+                    bottom = if (compact) 14.dp else 20.dp,
+                ),
         ) {
             Text(
                 text = eyebrow,
                 style = MaterialTheme.typography.labelMedium.copy(
-                    fontSize = 13.sp,
-                    lineHeight = 16.sp,
+                    fontSize = if (compact) 11.sp else 13.sp,
+                    lineHeight = if (compact) 14.sp else 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = 0.2.sp,
                 ),
@@ -198,8 +208,8 @@ fun AnimatedHeroGradientCard(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 13.sp,
-                        lineHeight = 17.sp,
+                        fontSize = if (compact) 12.sp else 13.sp,
+                        lineHeight = if (compact) 15.sp else 17.sp,
                         fontWeight = FontWeight.Medium,
                     ),
                     color = Color.White.copy(alpha = 0.85f),

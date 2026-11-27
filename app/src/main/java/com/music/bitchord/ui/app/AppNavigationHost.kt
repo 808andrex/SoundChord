@@ -36,6 +36,7 @@ import com.soundchord.features.editorial.data.AlbumRelatedRepository
 import com.soundchord.features.daypart.data.DaypartRepository
 import com.soundchord.features.daypart.data.DaypartDatabaseCache
 import com.soundchord.features.stations.data.StationsForYouRepository
+import com.soundchord.features.playlists.data.PlaylistsForYouRepository
 import com.music.bitchord.ui.screens.NativeHomeShelvesHolder
 import com.music.bitchord.data.model.ArtistRef
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -668,6 +669,7 @@ internal fun AppNavigationHost(
     com.soundchord.features.editorial.data.AppleMusicEditorialRepository.init(context)
     DaypartRepository.init(context)
     StationsForYouRepository.init(context)
+    PlaylistsForYouRepository.init(context)
     val scope = rememberCoroutineScope()
     val radioSort = AppSettings.librarySort.collectAsStateWithLifecycle().value
     val radioListState = lists.radioListState ?: rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
@@ -684,14 +686,24 @@ internal fun AppNavigationHost(
             StationsForYouRepository.getCachedStations(identity = states.account?.name).orEmpty()
         )
     }
+    var playlistsForYou by remember {
+        mutableStateOf<List<TopPick>>(
+            PlaylistsForYouRepository.getCachedPlaylists(identity = states.account?.name).orEmpty()
+        )
+    }
     LaunchedEffect(Unit) {
         com.soundchord.features.editorial.data.AppleMusicEditorialRepository.init(context)
         DaypartRepository.init(context)
         StationsForYouRepository.init(context)
+        PlaylistsForYouRepository.init(context)
         homeEditorialShelves = com.soundchord.features.editorial.data.AppleMusicEditorialRepository.getHomeDiscoveryShelves()
         val cachedStations = StationsForYouRepository.getCachedStations(identity = states.account?.name)
         if (!cachedStations.isNullOrEmpty()) {
             stationsForYou = cachedStations
+        }
+        val cachedPlaylists = PlaylistsForYouRepository.getCachedPlaylists(identity = states.account?.name)
+        if (!cachedPlaylists.isNullOrEmpty()) {
+            playlistsForYou = cachedPlaylists
         }
         val cachedSongMixes = DaypartDatabaseCache.get("home_song_mixes_shelf")?.firstOrNull()?.takeIf { it.items.size >= 4 }
         if (cachedSongMixes != null) {
@@ -736,6 +748,16 @@ internal fun AppNavigationHost(
         )
         if (resolvedStations.isNotEmpty()) {
             stationsForYou = resolvedStations
+        }
+        val resolvedPlaylists = PlaylistsForYouRepository.getPlaylistsForYou(
+            homeShelves = homeShelves,
+            editorialShelves = homeEditorialShelves,
+            identity = states.account?.name,
+            topPicks = states.topPicks,
+            localArtists = AppSettings.onboardingArtists.value.map { ArtistRef(name = it.name, browseId = it.browseId) },
+        )
+        if (resolvedPlaylists.isNotEmpty()) {
+            playlistsForYou = resolvedPlaylists
         }
         val songMixesCandidate = homeShelves.firstOrNull { s ->
             s.layout == com.music.bitchord.data.model.ShelfLayout.LIST ||
@@ -1495,6 +1517,8 @@ internal fun AppNavigationHost(
                     personalizedEssentialsShelf = personalizedEssentialsShelf,
                     stationsForYou = stationsForYou,
                     onStationClick = actions.onOpenTopPick,
+                    playlistsForYou = playlistsForYou,
+                    onPlaylistClick = actions.onOpenTopPick,
                 )
                 TAB_EXPLORE -> states.selectedMoodGenre?.let { category ->
                     MoodGenrePlaylistsScreen(

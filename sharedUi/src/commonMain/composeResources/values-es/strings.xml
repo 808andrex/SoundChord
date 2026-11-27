@@ -361,4 +361,6 @@
     <string name="daypart_night_shelf_4_sub">Sonidos ambientales y melodías de descanso</string>
     <string name="stations_for_you">Emisoras para ti</string>
     <string name="radio_station_subtitle">Estación de radio</string>
+    <string name="playlists_for_you">Playlists para ti</string>
+    <string name="shelf_playlists_for_you">Playlists para ti</string>
 </resources>

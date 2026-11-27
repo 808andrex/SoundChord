@@ -1871,4 +1871,6 @@
     <string name="album_you_might_also_like">Quizás también te interese</string>
     <string name="stations_for_you">Emisoras para ti</string>
     <string name="radio_station_subtitle">Estación de radio</string>
+    <string name="playlists_for_you">Playlists para ti</string>
+    <string name="shelf_playlists_for_you">Playlists para ti</string>
 </resources>

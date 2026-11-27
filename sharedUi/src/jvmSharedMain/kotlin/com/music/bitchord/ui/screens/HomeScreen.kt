@@ -362,6 +362,8 @@ fun HomeScreen(
     personalizedEssentialsShelf: HomeShelf? = null,
     stationsForYou: List<TopPick>? = null,
     onStationClick: ((TopPick, String) -> Unit)? = onTopPickClick,
+    playlistsForYou: List<TopPick>? = null,
+    onPlaylistClick: ((TopPick, String) -> Unit)? = onTopPickClick,
 ) {
     // Top Picks' pictures and motion wait for the feed — see LocalArtworkImages.
     val feedReady = state !is UiState.Loading
@@ -742,6 +744,17 @@ fun HomeScreen(
                                 onItemLongPress = onItemLongPress,
                                 currentSong = currentSong,
                                 isPlaying = isPlaying,
+                            )
+                        }
+                    }
+
+                    // Ticket #62: Playlists para ti (carrusel vertical compacto con 12 playlists)
+                    if (!playlistsForYou.isNullOrEmpty() && onPlaylistClick != null) {
+                        item(key = "fixed-playlists-for-you", contentType = "playlists_for_you_shelf") {
+                            PlaylistsForYouShelf(
+                                playlists = playlistsForYou,
+                                onClick = onPlaylistClick,
+                                onLongPress = onTopPickLongPress,
                             )
                         }
                     }

@@ -378,4 +378,6 @@
     <string name="daypart_night_shelf_4_sub">Ambient sounds and tranquil melodies for rest</string>
     <string name="stations_for_you">Stations for You</string>
     <string name="radio_station_subtitle">Radio Station</string>
+    <string name="playlists_for_you">Playlists for You</string>
+    <string name="shelf_playlists_for_you">Playlists for You</string>
 </resources>
