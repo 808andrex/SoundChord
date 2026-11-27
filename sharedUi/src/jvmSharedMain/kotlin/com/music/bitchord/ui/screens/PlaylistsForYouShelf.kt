@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,13 +50,18 @@ private val MINI_HERO_WIDTH = 175.dp
 private val MINI_HERO_HEIGHT = 250.dp
 private val MiniHeroShape = RoundedCornerShape(22.dp)
 
+private val TALK_AND_PODCAST_BLOCKLIST = listOf(
+    "podcast", "episodio", "episode", "wild project", "quantum fm", "fisión", "fision",
+    "charla", "interview", "entrevista", "debate", "audiobook", "audiolibro",
+)
+
 /**
- * Reusable compact vertical Mini-Hero shelf: "Playlists para ti" (Ticket #62).
- * Displays exactly 12 compact vertical cards (width ~175.dp, height ~250.dp, corners 22.dp):
+ * Reusable compact vertical Mini-Hero shelf: "Playlists para ti" (Ticket #62 & Ticket #74).
+ * Displays exactly up to 12 compact vertical cards (width ~175.dp, height ~250.dp, corners 22.dp):
  * - Card #1 (Animated Anchor): "Tus favoritos" (Favorites Mix) with violet fluid gradient.
  * - Card #2 (Animated Anchor): "Nueva música" (New Music Mix) with coral fluid gradient.
- * - Cards #3 to #12: 10 dynamic editorial and personalized playlists with SoundChord logo,
- *   full-bleed artwork, bottom gradient, and descriptive subtitle.
+ * - Cards #3 to #12: Strictly Apple Music editorial and personalized playlists with SoundChord logo,
+ *   full-bleed artwork, bottom gradient, and descriptive subtitle (all YouTube Music playlists/podcasts excluded).
  */
 @Composable
 fun PlaylistsForYouShelf(
@@ -64,7 +70,29 @@ fun PlaylistsForYouShelf(
     onLongPress: ((TopPick) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    if (playlists.isEmpty()) return
+    val safePlaylists = remember(playlists) {
+        if (playlists.isEmpty()) return@remember emptyList()
+        val anchors = playlists.take(2).filter {
+            it.kind == TopPickKind.FAVORITES_MIX || it.kind == TopPickKind.NEW_RELEASE_MIX
+        }
+        val dynamicCards = playlists.drop(2).filter { pick ->
+            val bId = pick.browseId.orEmpty()
+            val isApple = bId.startsWith("apple:playlist:") || bId.startsWith("apple:") || bId.startsWith("am:") || bId.startsWith("pl.")
+            val isNotYt = !bId.startsWith("VL") && !bId.startsWith("RD") && !bId.startsWith("MP") && !bId.startsWith("PL") && !bId.startsWith("UC")
+            val hasValidArtwork = !pick.images.firstOrNull().isNullOrBlank() &&
+                pick.images.firstOrNull()?.startsWith("https://") == true &&
+                pick.images.firstOrNull()?.contains("{") == false &&
+                pick.images.firstOrNull()?.contains("}") == false
+            val t = pick.title.lowercase()
+            val s = pick.subtitle.lowercase()
+            val isNotPodcast = TALK_AND_PODCAST_BLOCKLIST.none { t.contains(it) || s.contains(it) }
+            isApple && isNotYt && hasValidArtwork && isNotPodcast && pick.kind == TopPickKind.EDITORIAL_PLAYLIST
+        }.take(10)
+
+        anchors + dynamicCards
+    }
+
+    if (safePlaylists.isEmpty()) return
 
     val favoritesTitle = stringResource(Res.string.top_pick_favorites_mix)
     val favoritesEyebrow = stringResource(Res.string.top_pick_made_for_you)
@@ -87,7 +115,7 @@ fun PlaylistsForYouShelf(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             itemsIndexed(
-                items = playlists.take(12),
+                items = safePlaylists.take(12),
                 key = { index, item -> "${index}_${item.kind}_${item.browseId ?: item.title}" },
             ) { index, pick ->
                 val longClick = onLongPress?.let { { it(pick) } }

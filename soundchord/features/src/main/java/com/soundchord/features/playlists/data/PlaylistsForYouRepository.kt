@@ -55,6 +55,8 @@ object PlaylistsForYouRepository {
      */
     private val PODCAST_AND_TALK_TERMS = listOf(
         "podcast", "podcasts", "episodio", "episodios", "episode", "episodes",
+        "the wild project", "wild project", "jordi wild",
+        "quantum fm", "quantum fracture", "quantumfracture",
         "ciencia", "científico", "científica", "cientifico", "fisión", "fision",
         "doctor fisión", "doctor fision", "dr. fisión", "dr fisión", "dr. fision",
         "pláticas", "platicas", "reflexiones", "otra ronda", "despejados",
@@ -68,7 +70,10 @@ object PlaylistsForYouRepository {
         "entrevista", "entrevistas", "interview", "interviews", "conversación", "conversacion",
         "meditación", "meditacion", "meditation", "mindfulness", "ruido blanco", "white noise",
         "sonidos de lluvia", "rain sounds", "dormir", "sleep sounds", "relaxing sounds",
-        "hablamos de", "en vivo", "programa de", "temporada", "season",
+        "hablamos de", "en vivo", "programa de", "programas", "temporada", "season",
+        "talk show", "talkshow", "radio show", "radioshow", "tertulia", "tertulias",
+        "monólogo", "monologo", "stand up", "stand-up", "comedia en vivo",
+        "audiodrama", "audiorelatos", "relatos", "audiocuento", "audiocuentos",
     )
 
     /**
@@ -96,7 +101,22 @@ object PlaylistsForYouRepository {
         time: LocalDateTime = LocalDateTime.now(),
     ): List<TopPick>? {
         val slot = PlaylistsDatabaseCache.getSlotKey(time)
-        return PlaylistsDatabaseCache.get(userKey(identity), slot)
+        val cached = PlaylistsDatabaseCache.get(userKey(identity), slot) ?: return null
+        if (cached.size < 12) return null
+        val anchorsValid = cached[0].kind == TopPickKind.FAVORITES_MIX && cached[1].kind == TopPickKind.NEW_RELEASE_MIX
+        if (!anchorsValid) return null
+        val dynamicValid = cached.drop(2).all { pick ->
+            val bId = pick.browseId.orEmpty()
+            val isApple = bId.startsWith(APPLE_MUSIC_PAGE_PREFIX) || bId.startsWith("apple:") || bId.startsWith("am:") || bId.startsWith("pl.")
+            val isNotYt = !bId.startsWith("VL") && !bId.startsWith("RD") && !bId.startsWith("MP") && !bId.startsWith("PL") && !bId.startsWith("UC")
+            val hasValidArtwork = !pick.images.firstOrNull().isNullOrBlank() &&
+                pick.images.firstOrNull()?.startsWith("https://") == true &&
+                pick.images.firstOrNull()?.contains("{") == false &&
+                pick.images.firstOrNull()?.contains("}") == false
+            val isNotPodcast = !isNonMusicOrPodcast(pick.title) && !isNonMusicOrPodcast(pick.subtitle)
+            isApple && isNotYt && hasValidArtwork && isNotPodcast && pick.kind == TopPickKind.EDITORIAL_PLAYLIST
+        }
+        return if (dynamicValid) cached else null
     }
 
     suspend fun getPlaylistsForYou(
@@ -106,6 +126,7 @@ object PlaylistsForYouRepository {
         topPicks: List<TopPick>? = null,
         localArtists: List<ArtistRef> = emptyList(),
         localSongs: List<Song> = emptyList(),
+        userArtists: List<String> = emptyList(),
         forceRefresh: Boolean = false,
         now: LocalDateTime = LocalDateTime.now(),
     ): List<TopPick> = withContext(Dispatchers.IO) {
@@ -113,7 +134,7 @@ object PlaylistsForYouRepository {
         val currentSlot = PlaylistsDatabaseCache.getSlotKey(now)
 
         if (!forceRefresh) {
-            val cached = PlaylistsDatabaseCache.get(key, currentSlot)
+            val cached = getCachedPlaylists(identity, now)
             if (!cached.isNullOrEmpty() && cached.size >= 12) {
                 return@withContext cached
             }
@@ -148,8 +169,11 @@ object PlaylistsForYouRepository {
                         !isUnwantedRegional(candidate) && !isNonMusicOrPodcast(candidate)
                 }.distinct()
 
-            // User's actual confirmed artists (no alien or hardcoded artists)
-            val userRealArtists = (historyArtists + libraryArtists).distinct()
+            // User's actual confirmed artists (incorporating userArtists resolved by UserArtistPoolResolver)
+            val userRealArtists = (userArtists + historyArtists + libraryArtists).filter { candidate ->
+                candidate.isNotBlank() && candidate.length > 1 &&
+                    !isUnwantedRegional(candidate) && !isNonMusicOrPodcast(candidate)
+            }.distinct()
 
             // Infer active listening genres from what the listener actually played
             val inferredGenres = userRealArtists.mapNotNull { UserGenre.fromArtist(it) }.distinct()
@@ -165,6 +189,7 @@ object PlaylistsForYouRepository {
             val dynamicPlaylists = resolveDynamicAppleMusicPlaylists(
                 editorialShelves = editorialShelves,
                 userGenre = primaryGenre,
+                inferredGenres = inferredGenres,
                 userRealArtists = userRealArtists,
                 now = now,
             )
@@ -247,6 +272,7 @@ object PlaylistsForYouRepository {
     private suspend fun resolveDynamicAppleMusicPlaylists(
         editorialShelves: List<HomeShelf>,
         userGenre: UserGenre,
+        inferredGenres: List<UserGenre>,
         userRealArtists: List<String>,
         now: LocalDateTime,
     ): List<TopPick> = coroutineScope {
@@ -266,6 +292,8 @@ object PlaylistsForYouRepository {
             UserGenre.HIPHOP -> listOf("Trap Kingz", "Rap Life", "New Music Daily", "Today's Hits")
             UserGenre.POP -> listOf("A-List Pop", "Éxitos de hoy", "New Music Daily", "Today's Hits")
             UserGenre.INDIE_ROCK -> listOf("Indie Anthems", "Alt CTRL", "New Music Daily", "Today's Hits")
+            UserGenre.ELECTRONIC -> listOf("danceXL", "Club Room", "New Music Daily", "Today's Hits")
+            UserGenre.LATIN -> listOf("¡Dale Play!", "Fuego", "Vibras", "Éxitos de hoy")
             else -> listOf("¡Dale Play!", "Éxitos de hoy", "New Music Daily", "Fuego")
         }
 
@@ -285,8 +313,8 @@ object PlaylistsForYouRepository {
         // --------------------------------------------------------------------
         // Group 1: Editorial Playlists of User's REAL Genres & Artists
         // --------------------------------------------------------------------
-        // Only query essentials for artists that ACTUALLY exist in the user's listening history
-        val topRealArtists = userRealArtists.take(3)
+        // Only query essentials for artists that ACTUALLY exist in the user's real listening history
+        val topRealArtists = userRealArtists.take(4)
         val artistDeferred = topRealArtists.map { artist ->
             async {
                 runCatching {
@@ -300,34 +328,37 @@ object PlaylistsForYouRepository {
             }
         }
 
-        val genreQuery = when (userGenre) {
-            UserGenre.URBANO -> "Urbano Latino"
-            UserGenre.RNB -> "R&B Soul"
-            UserGenre.HIPHOP -> "Hip-Hop"
-            UserGenre.POP -> "Pop Hits"
-            UserGenre.ELECTRONIC -> "Dance Electronic"
-            UserGenre.INDIE_ROCK -> "Indie Rock"
-            else -> "Pop"
-        }
-
-        val genreDeferred = async {
-            runCatching {
-                AppleMusicEditorialRepository.searchPlaylists(
-                    query = "$genreQuery playlist",
-                    limit = 6,
-                    storefront = storefront,
-                    excludeFitness = true,
-                )
-            }.getOrDefault(emptyList())
+        val activeGenres = (inferredGenres.take(2).ifEmpty { listOf(userGenre) }).distinct()
+        val genreDeferred = activeGenres.map { genre ->
+            val genreQuery = when (genre) {
+                UserGenre.URBANO -> "Urbano Latino"
+                UserGenre.RNB -> "R&B Soul"
+                UserGenre.HIPHOP -> "Hip-Hop"
+                UserGenre.POP -> "Pop Hits"
+                UserGenre.ELECTRONIC -> "Dance Electronic"
+                UserGenre.INDIE_ROCK -> "Indie Rock"
+                UserGenre.LATIN -> "Música Latina"
+                else -> "Pop Hits"
+            }
+            async {
+                runCatching {
+                    AppleMusicEditorialRepository.searchPlaylists(
+                        query = "$genreQuery playlist",
+                        limit = 6,
+                        storefront = storefront,
+                        excludeFitness = true,
+                    )
+                }.getOrDefault(emptyList())
+            }
         }
 
         val featuredResults = featuredDeferred.flatMap { it.await() }
         val artistResults = artistDeferred.flatMap { it.await() }
-        val genreResults = genreDeferred.await()
+        val genreResults = genreDeferred.flatMap { it.await() }
 
         // Process Group 2: Featured Playlists
         featuredResults.forEach { item ->
-            if (isStrictlyValidAppleMusicPlaylist(item.title, item.subtitle, item.id, item.thumbnailUrl, userRealArtists)) {
+            if (isStrictlyValidAppleMusicPlaylist(item.title, item.subtitle, item.id, item.thumbnailUrl, userRealArtists, curatorName = item.subtitle)) {
                 featuredPlaylists.add(
                     TopPick(
                         kind = TopPickKind.EDITORIAL_PLAYLIST,
@@ -340,12 +371,14 @@ object PlaylistsForYouRepository {
             }
         }
 
-        // Also add from pre-cached editorial shelves if matching criteria
+        // Also add from pre-cached editorial shelves if matching strict criteria
         editorialShelves.flatMap { it.items }.forEach { item ->
             val bId = item.browseId ?: return@forEach
-            if (bId.startsWith("apple:") || bId.startsWith("am:")) {
-                if (isStrictlyValidAppleMusicPlaylist(item.title, item.subtitle, bId, item.thumbnailUrl, userRealArtists)) {
-                    val normalizedId = if (bId.startsWith("apple:") || bId.startsWith("am:")) bId else "$APPLE_MUSIC_PAGE_PREFIX$bId"
+            val isAppleId = bId.startsWith("apple:") || bId.startsWith("am:") || bId.startsWith("pl.")
+            val isNotYt = !bId.startsWith("VL") && !bId.startsWith("RD") && !bId.startsWith("MP") && !bId.startsWith("PL") && !bId.startsWith("UC")
+            if (isAppleId && isNotYt) {
+                if (isStrictlyValidAppleMusicPlaylist(item.title, item.subtitle, bId, item.thumbnailUrl, userRealArtists, curatorName = item.subtitle)) {
+                    val normalizedId = if (bId.startsWith(APPLE_MUSIC_PAGE_PREFIX)) bId else if (bId.startsWith("apple:")) bId else "$APPLE_MUSIC_PAGE_PREFIX$bId"
                     featuredPlaylists.add(
                         TopPick(
                             kind = TopPickKind.EDITORIAL_PLAYLIST,
@@ -361,11 +394,10 @@ object PlaylistsForYouRepository {
 
         // Process Group 1: User's Real Artists (must match real artist name)
         artistResults.forEach { item ->
-            // Ensure this artist playlist belongs to one of the user's real artists
             val matchesRealArtist = topRealArtists.any { real ->
                 item.title.contains(real, ignoreCase = true) || item.subtitle.contains(real, ignoreCase = true)
             }
-            if (matchesRealArtist && isStrictlyValidAppleMusicPlaylist(item.title, item.subtitle, item.id, item.thumbnailUrl, userRealArtists)) {
+            if (matchesRealArtist && isStrictlyValidAppleMusicPlaylist(item.title, item.subtitle, item.id, item.thumbnailUrl, userRealArtists, curatorName = item.subtitle)) {
                 userTastePlaylists.add(
                     TopPick(
                         kind = TopPickKind.EDITORIAL_PLAYLIST,
@@ -380,7 +412,7 @@ object PlaylistsForYouRepository {
 
         // Process Group 1: User's Real Genres
         genreResults.forEach { item ->
-            if (isStrictlyValidAppleMusicPlaylist(item.title, item.subtitle, item.id, item.thumbnailUrl, userRealArtists)) {
+            if (isStrictlyValidAppleMusicPlaylist(item.title, item.subtitle, item.id, item.thumbnailUrl, userRealArtists, curatorName = item.subtitle)) {
                 userTastePlaylists.add(
                     TopPick(
                         kind = TopPickKind.EDITORIAL_PLAYLIST,
@@ -419,13 +451,38 @@ object PlaylistsForYouRepository {
             step++
         }
 
-        // If shortfall, fill from remaining
+        // If shortfall, fill from remaining verified Apple Music items
         if (final10.size < TOTAL_DYNAMIC_PLAYLISTS) {
             val remaining = (rotatedFeatured + rotatedUserTaste).distinctBy { it.browseId ?: it.title }
             for (candidate in remaining) {
                 if (final10.none { it.browseId == candidate.browseId }) {
                     final10.add(candidate)
                     if (final10.size >= TOTAL_DYNAMIC_PLAYLISTS) break
+                }
+            }
+        }
+
+        // If still shortfall (rare: fresh install / network glitch), pull from pre-cached Apple Music Discovery items
+        if (final10.size < TOTAL_DYNAMIC_PLAYLISTS) {
+            val discoveryShelves = AppleMusicEditorialRepository.getHomeDiscoveryShelves()
+            discoveryShelves.flatMap { it.items }.forEach { item ->
+                if (final10.size >= TOTAL_DYNAMIC_PLAYLISTS) return@forEach
+                val bId = item.browseId ?: return@forEach
+                val isApple = bId.startsWith("apple:") || bId.startsWith("am:") || bId.startsWith("pl.")
+                val isNotYt = !bId.startsWith("VL") && !bId.startsWith("RD") && !bId.startsWith("MP") && !bId.startsWith("PL")
+                if (isApple && isNotYt && isStrictlyValidAppleMusicPlaylist(item.title, item.subtitle, bId, item.thumbnailUrl, userRealArtists, curatorName = item.subtitle)) {
+                    val normalizedId = if (bId.startsWith(APPLE_MUSIC_PAGE_PREFIX)) bId else if (bId.startsWith("apple:")) bId else "$APPLE_MUSIC_PAGE_PREFIX$bId"
+                    if (final10.none { it.browseId == normalizedId }) {
+                        final10.add(
+                            TopPick(
+                                kind = TopPickKind.EDITORIAL_PLAYLIST,
+                                title = item.title,
+                                subtitle = featuredBadge,
+                                images = listOfNotNull(item.thumbnailUrl),
+                                browseId = normalizedId,
+                            ),
+                        )
+                    }
                 }
             }
         }
@@ -451,9 +508,12 @@ object PlaylistsForYouRepository {
     }
 
     /**
-     * Strict filter ensuring cards are EXCLUSIVELY musical Apple Music playlists.
+     * Strict filter ensuring cards are EXCLUSIVELY musical Apple Music editorial playlists.
      * Excludes:
-     * - Any podcast, spoken program, or science talk
+     * - Any non-Apple Music ID (rejects YouTube VL..., RD..., PL..., MP..., UC...)
+     * - Any podcast, spoken program, or science talk (e.g. The Wild Project, Quantum FM, Doctor Fisión)
+     * - Invalid or unverified curatorName (must be official Apple Music editorial curator)
+     * - Invalid, missing, or template artworkUrl
      * - Indian / Bollywood / Punjabi playlists
      * - Apple Music Fitness playlists
      * - Artist Essentials playlists where the artist is NOT in the user's real listening history
@@ -465,31 +525,46 @@ object PlaylistsForYouRepository {
         idOrBrowseId: String?,
         thumbnailUrl: String?,
         userRealArtists: List<String>,
+        curatorName: String? = null,
     ): Boolean {
-        if (thumbnailUrl.isNullOrBlank() || !thumbnailUrl.startsWith("https://") || thumbnailUrl.contains("{")) return false
+        // 1. Strict artwork validation: must be secure https and without unresolved template braces
+        if (thumbnailUrl.isNullOrBlank() || !thumbnailUrl.startsWith("https://") || thumbnailUrl.contains("{") || thumbnailUrl.contains("}")) return false
+
+        // 2. Strict ID validation: Reject any YouTube Music origin and require Apple Music prefix/format
+        val rawId = idOrBrowseId?.trim().orEmpty()
+        if (rawId.isBlank()) return false
+        if (rawId.startsWith("VL") || rawId.startsWith("RD") || rawId.startsWith("PL") || rawId.startsWith("MP") || rawId.startsWith("UC") || rawId.startsWith("OLAK")) {
+            return false
+        }
+        val isAppleId = rawId.startsWith(APPLE_MUSIC_PAGE_PREFIX) || rawId.startsWith("apple:") || rawId.startsWith("am:") || rawId.startsWith("pl.")
+        if (!isAppleId) return false
 
         val t = title.lowercase(Locale.ROOT)
         val s = subtitle.lowercase(Locale.ROOT)
+        val c = (curatorName ?: subtitle).lowercase(Locale.ROOT)
 
-        // 1. Exclude podcasts, talk shows, science talks, spoken audio
-        if (isNonMusicOrPodcast(t) || isNonMusicOrPodcast(s)) return false
-        if (s.contains("podcast") || t.contains("podcast")) return false
+        // 3. Exclude podcasts, talk shows, science channels, educational talks, interviews, and spoken audio
+        if (isNonMusicOrPodcast(t) || isNonMusicOrPodcast(s) || isNonMusicOrPodcast(c)) return false
 
-        // 2. Exclude unwanted Indian / Bollywood content
-        if (isUnwantedRegional(t) || isUnwantedRegional(s)) return false
+        // 4. Strict curator validation: Must be verified Apple Music editorial catalog
+        val isAppleCurator = c.contains("apple music") || c == "apple" || c.startsWith("apple")
+        if (!isAppleCurator) return false
 
-        // 3. Exclude fitness
-        if (FITNESS_TERMS.any { t.contains(it) || s.contains(it) }) return false
+        // 5. Exclude unwanted Indian / Bollywood content
+        if (isUnwantedRegional(t) || isUnwantedRegional(s) || isUnwantedRegional(c)) return false
 
-        // 4. Exclude singles, albums, EPs
+        // 6. Exclude fitness
+        if (FITNESS_TERMS.any { t.contains(it) || s.contains(it) || c.contains(it) }) return false
+
+        // 7. Exclude singles, albums, EPs
         if (t.contains("single") || t.contains("sencillo") || s.contains("single") || s.contains("sencillo")) return false
         if (t.contains("album") || t.contains("álbum") || s.contains("album") || s.contains("álbum")) return false
         if (t.contains(" ep") || s.contains(" ep") || t.endsWith("ep") || s.endsWith("ep")) return false
 
-        // 5. Exclude junk terms
-        if (JUNK_TERMS.any { t.contains(it) || s.contains(it) }) return false
+        // 8. Exclude junk terms
+        if (JUNK_TERMS.any { t.contains(it) || s.contains(it) || c.contains(it) }) return false
 
-        // 6. Exclude artist essentials of artists that the user has NEVER listened to
+        // 9. Exclude artist essentials of artists that the user has NEVER listened to
         val isArtistEssentials = t.contains("essentials") || t.contains("imprescindibles") || t.contains("next steps")
         if (isArtistEssentials) {
             val matchesUserHistory = userRealArtists.any { real ->

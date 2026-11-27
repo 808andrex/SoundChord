@@ -752,6 +752,7 @@ internal fun AppNavigationHost(
             identity = states.account?.name,
             topPicks = states.topPicks,
             localArtists = AppSettings.onboardingArtists.value.map { ArtistRef(name = it.name, browseId = it.browseId) },
+            userArtists = userRealArtists,
         )
         if (resolvedPlaylists.isNotEmpty()) {
             playlistsForYou = resolvedPlaylists
