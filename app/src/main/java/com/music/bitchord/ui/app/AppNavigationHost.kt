@@ -678,7 +678,10 @@ internal fun AppNavigationHost(
     var homeEditorialShelves by remember { mutableStateOf<List<HomeShelf>>(emptyList()) }
     var daypartShelves by remember {
         mutableStateOf<List<HomeShelf>>(
-            DaypartRepository.getCachedShelves(com.soundchord.features.daypart.model.Daypart.current()).orEmpty()
+            DaypartRepository.getCachedShelves(
+                daypart = com.soundchord.features.daypart.model.Daypart.current(),
+                accountHash = DaypartRepository.resolveAccountHash(states.account?.name),
+            ).orEmpty()
         )
     }
     var personalizedEssentialsShelf by remember { mutableStateOf<HomeShelf?>(null) }
@@ -728,11 +731,18 @@ internal fun AppNavigationHost(
             topPicks = states.topPicks,
             homeShelves = homeShelves,
         )
+        val userGenreKeywords = UserArtistPoolResolver.resolveUserGenreKeywords(
+            historyState = states.historyState,
+            libraryState = states.libraryState,
+            homeShelves = homeShelves,
+        )
         val resolved = DaypartRepository.getDaypartShelves(
             homeShelves = homeShelves,
             editorialShelves = homeEditorialShelves,
             daypart = currentDaypart,
             userArtists = userRealArtists,
+            userGenreKeywords = userGenreKeywords,
+            identity = states.account?.name,
         )
         if (resolved.isNotEmpty()) {
             daypartShelves = resolved
@@ -741,6 +751,8 @@ internal fun AppNavigationHost(
             homeShelves = homeShelves,
             editorialShelves = homeEditorialShelves,
             userArtists = userRealArtists,
+            userGenreKeywords = userGenreKeywords,
+            identity = states.account?.name,
         )
         if (resolvedEssentials != null) {
             personalizedEssentialsShelf = resolvedEssentials

@@ -475,18 +475,20 @@ object AppleMusicEditorialRepository {
 
         // 3. Imprescindibles (Essentials - Solo artistas oficiales)
         val targetArtists = listOf(
-            "Bad Bunny", "The Weeknd", "Karol G", "Feid", "Mora", "Myke Towers", "Maná", "Luis Miguel",
-            "Rauw Alejandro", "Drake", "Taylor Swift", "Peso Pluma", "J Balvin", "Shakira", "Rosalía",
-            "Coldplay", "Dua Lipa", "Billie Eilish"
+            "Bad Bunny", "Karol G", "Feid", "Mora", "Myke Towers", "Luis Miguel",
+            "Rauw Alejandro", "Peso Pluma", "J Balvin", "Shakira", "Rosalía",
+            "Marc Anthony", "Juan Luis Guerra", "Carlos Vives", "Los Ángeles Azules",
+            "Gilberto Santa Rosa", "Romeo Santos", "Rubén Blades", "Joe Arroyo", "Celia Cruz",
+            "The Weeknd", "Drake", "Taylor Swift",
         )
         val essentialsQueries = targetArtists.map { "${it.replace(" ", "+")}+Essentials" }
         val essentialsCandidates = mutableListOf<AppleMusicEditorialItem>()
         val excludedGenreKeywords = listOf(
-            "rock", "pop ", "pop:", "reggaetón", "reggaeton", "bachata", "merengue", "salsa", "urbano", "latin",
-            "navidad", "canciones de", "música", "musica", "hits", "motown", "80", "90", "2000", "2010", "70", "60",
-            "década", "decada", "soundtrack", "canción", "cancion", "romántic", "romantic", "balada", "fiesta", "club",
-            "r&b", "hip-hop", "hip hop", "trap", "cumbia", "indie", "electronic", "electrónica", "electronica", "metal",
-            "punk", "country", "jazz", "blues", "clásica", "clasica", "acústico", "acustico"
+            "rock", "pop ", "pop:", "navidad", "canciones de", "música", "musica", "hits",
+            "motown", "80", "90", "2000", "2010", "70", "60", "década", "decada", "soundtrack",
+            "canción", "cancion", "romántic", "romantic", "club", "r&b", "hip-hop", "hip hop",
+            "trap", "indie", "electronic", "electrónica", "electronica", "metal", "punk",
+            "country", "jazz", "blues", "clásica", "clasica", "acústico", "acustico"
         )
         for (sf in sfCandidates) {
             for (query in essentialsQueries) {

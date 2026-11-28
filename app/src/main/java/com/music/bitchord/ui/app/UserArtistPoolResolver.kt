@@ -99,4 +99,39 @@ object UserArtistPoolResolver {
         // Sanitize and extract Top 25 real artists
         UserTasteDaypartEngine.extractUserArtists(homeShelves, rawArtists, limit = 25)
     }
+
+    suspend fun resolveUserGenreKeywords(
+        historyState: UiState<List<Song>>,
+        libraryState: UiState<LibraryPage>,
+        homeShelves: List<HomeShelf>,
+    ): List<String> = withContext(Dispatchers.IO) {
+        val keywords = mutableSetOf<String>()
+
+        // 1. Historial de reproducción (canciones y álbumes)
+        (historyState as? UiState.Success)?.data?.forEach { song ->
+            if (song.title.isNotBlank()) keywords.add(song.title)
+            song.albumName?.takeIf { it.isNotBlank() }?.let { keywords.add(it) }
+        }
+
+        // 2. Canciones de biblioteca y me gusta
+        val libraryData = (libraryState as? UiState.Success)?.data
+        libraryData?.likedSongs?.forEach { song ->
+            if (song.title.isNotBlank()) keywords.add(song.title)
+            song.albumName?.takeIf { it.isNotBlank() }?.let { keywords.add(it) }
+        }
+        libraryData?.librarySongs?.forEach { song ->
+            if (song.title.isNotBlank()) keywords.add(song.title)
+            song.albumName?.takeIf { it.isNotBlank() }?.let { keywords.add(it) }
+        }
+
+        // 3. Estantes dinámicos de Inicio (ej. "Mix de Cumbia", "Mix de Salsa")
+        homeShelves.forEach { shelf ->
+            if (shelf.title.isNotBlank()) keywords.add(shelf.title)
+            shelf.items.forEach { item ->
+                if (item.title.isNotBlank()) keywords.add(item.title)
+            }
+        }
+
+        keywords.toList()
+    }
 }

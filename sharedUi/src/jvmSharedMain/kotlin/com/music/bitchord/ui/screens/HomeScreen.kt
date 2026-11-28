@@ -605,6 +605,7 @@ fun HomeScreen(
                         item(key = "fixed-essentials", contentType = "shelf_cards") {
                             val shelf = essentialsShelf.copy(
                                 title = essentialsTitle,
+                                subtitle = "",
                                 layout = ShelfLayout.CARDS,
                             )
                             Shelf(

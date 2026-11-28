@@ -351,6 +351,13 @@ object PlaylistsForYouRepository {
         // Group 2: Featured Apple Music Editorial Playlists of the Day/Week
         // --------------------------------------------------------------------
         val flagshipTerms = when (userGenre) {
+            UserGenre.CUMBIA -> listOf("Cumbia colombiana", "Fiesta Tropical", "¡Dale Play!", "Éxitos de hoy")
+            UserGenre.SALSA -> listOf("Salsa clásica", "Salsa sensual", "¡Dale Play!", "Éxitos de hoy")
+            UserGenre.VALLENATO -> listOf("Vallenato clásico", "Vallenato de oro", "¡Dale Play!", "Éxitos de hoy")
+            UserGenre.REGIONAL_POPULAR -> listOf("Música Popular", "Éxitos de cantina", "Despecho", "Éxitos de hoy")
+            UserGenre.BOLERO_BALADA -> listOf("Boleros del recuerdo", "Baladas románticas", "Éxitos del recuerdo", "Éxitos de hoy")
+            UserGenre.ROCK_EN_ESPANOL -> listOf("Rock en español", "Rock en tu idioma", "Rock latino", "Éxitos de hoy")
+            UserGenre.LATIN_POP -> listOf("Pop latino", "Baladas pop", "¡Dale Play!", "Éxitos de hoy")
             UserGenre.URBANO -> listOf("Fuego", "Dale Reggaetón", "¡Dale Play!", "Éxitos de hoy")
             UserGenre.RNB -> listOf("R&B Now", "After Hours", "New Music Daily", "Today's Hits")
             UserGenre.HIPHOP -> listOf("Trap Kingz", "Rap Life", "New Music Daily", "Today's Hits")
@@ -395,6 +402,13 @@ object PlaylistsForYouRepository {
         val activeGenres = (inferredGenres.take(2).ifEmpty { listOf(userGenre) }).distinct()
         val genreDeferred = activeGenres.map { genre ->
             val genreQuery = when (genre) {
+                UserGenre.CUMBIA -> "Cumbia"
+                UserGenre.SALSA -> "Salsa"
+                UserGenre.VALLENATO -> "Vallenato"
+                UserGenre.REGIONAL_POPULAR -> "Música Popular"
+                UserGenre.BOLERO_BALADA -> "Boleros"
+                UserGenre.ROCK_EN_ESPANOL -> "Rock en Español"
+                UserGenre.LATIN_POP -> "Pop Latino"
                 UserGenre.URBANO -> "Urbano Latino"
                 UserGenre.RNB -> "R&B Soul"
                 UserGenre.HIPHOP -> "Hip-Hop"
