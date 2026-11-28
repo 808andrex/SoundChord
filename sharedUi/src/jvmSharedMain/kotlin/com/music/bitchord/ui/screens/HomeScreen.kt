@@ -235,48 +235,6 @@ private fun HomeShelf.isHomeExcluded(): Boolean {
     return isPrograms || isRecents
 }
 
-private val VideoJunkTerms = listOf(
-    "karaoke", "sing king", "instrumental", "8d audio", "sped up", "slowed",
-    "lyrics", "letra", "nightcore", "bass boosted", "tribute",
-    "mix", "playlist", "recopilacion", "recopilación", "compilation",
-    "serenata", "serenatas",
-    "concierto", "conciertos", "concert", "en vivo", "live at", "live from", "live in",
-    "festival", "festival.", "tour", "world tour", "en directo", "full show",
-    "full set", "set live", "liveset", "live session", "live performance",
-    "dj set", "boiler room", "tomorrowland", "coachella", "rolling loud",
-    "lollapalooza", "astroworld", "primavera sound", "rock in rio",
-)
-
-private fun isCleanOfficialMusicVideo(item: ShelfItem): Boolean {
-    // 1. Debe ser un video individual válido con videoId
-    if (item.videoId.isNullOrBlank()) return false
-
-    // 2. No debe ser una lista de reproducción ni colección
-    val bId = item.browseId
-    if (bId != null) {
-        val bLower = bId.lowercase(Locale.ROOT)
-        if (bLower.startsWith("vl") || bLower.startsWith("rd") || bLower.startsWith("mp") || bLower.startsWith("uc")) {
-            return false
-        }
-    }
-
-    // 3. Chequeo de términos no deseados (mixes, playlists, serenatas, conciertos, festivales, etc.)
-    val t = item.title.lowercase(Locale.ROOT)
-    val s = item.subtitle.lowercase(Locale.ROOT)
-
-    if (VideoJunkTerms.any { t.contains(it) || s.contains(it) }) return false
-    if (isKidsOrNurseryTrack(item.title, item.subtitle)) return false
-
-    // 4. Excluir si el subtítulo indica playlist, álbum, mix o radio
-    if (s.contains("playlist") || s.contains("lista de reproducción") ||
-        s.contains("álbum") || s.contains("album") || s.contains("mix") ||
-        s.contains("radio") || s.contains("recopilación") || s.contains("recopilacion")) {
-        return false
-    }
-
-    return true
-}
-
 internal fun HomeShelf.isListenAgainShelf(): Boolean {
     val label = title.trim().lowercase()
     return label == "listen again" || label == "vuelve a escuchar" ||
@@ -386,39 +344,11 @@ fun HomeScreen(
         }
     }
     val musicVideosShelf = remember(visibleShelves) {
-        val found = visibleShelves.firstOrNull { s ->
+        visibleShelves.firstOrNull { s ->
             val t = s.title.trim().lowercase(Locale.ROOT)
             s.layout == ShelfLayout.VIDEO ||
                 t.contains("music video") || t.contains("vídeo") || t.contains("video") ||
                 s.items.all { it.isVideo }
-        }
-        val cleanItems = found?.items?.filter { isCleanOfficialMusicVideo(it) }.orEmpty()
-        if (cleanItems.size >= 10) {
-            found
-        } else {
-            // Pool official music videos from all visible shelves (history, recommendations, artist sections)
-            val pooledVideos = mutableListOf<ShelfItem>()
-            pooledVideos.addAll(cleanItems)
-
-            visibleShelves.forEach { shelf ->
-                shelf.items.forEach { item ->
-                    if (isCleanOfficialMusicVideo(item) && pooledVideos.none { it.videoId == item.videoId }) {
-                        pooledVideos.add(item)
-                    }
-                }
-            }
-
-            if (pooledVideos.isNotEmpty()) {
-                val base = found ?: HomeShelf(
-                    title = "Videos musicales",
-                    items = emptyList(),
-                    subtitle = "",
-                    layout = ShelfLayout.VIDEO,
-                )
-                base.copy(items = pooledVideos.take(12), layout = ShelfLayout.VIDEO)
-            } else {
-                found
-            }
         }
     }
     val essentialsShelf = personalizedEssentialsShelf ?: remember(visibleShelves, editorialShelves) {
@@ -653,24 +583,20 @@ fun HomeScreen(
                         }
                     }
 
-                    // 6. Videos musicales (tarjetas panorámicas 16:9 con filtro estricto: solo videos oficiales de artistas, no mixes/conciertos/serenatas)
+                    // 6. Videos musicales nuevos (tarjetas panorámicas 16:9 de YouTube Music)
                     if (musicVideosShelf != null && musicVideosShelf.items.isNotEmpty()) {
-                        val cleanItems = musicVideosShelf.items.filter { isCleanOfficialMusicVideo(it) }
-                        if (cleanItems.isNotEmpty()) {
-                            item(key = "fixed-music-videos", contentType = "shelf_videos") {
-                                val shelf = musicVideosShelf.copy(
-                                    title = musicVideosTitle,
-                                    items = cleanItems,
-                                    layout = ShelfLayout.VIDEO,
-                                )
-                                Shelf(
-                                    shelf = shelf,
-                                    onItemClick = { item -> onItemClick(item, shelf.title) },
-                                    onItemLongPress = onItemLongPress,
-                                    currentSong = currentSong,
-                                    isPlaying = isPlaying,
-                                )
-                            }
+                        item(key = "fixed-music-videos", contentType = "shelf_videos") {
+                            val shelf = musicVideosShelf.copy(
+                                title = musicVideosShelf.title.ifBlank { musicVideosTitle },
+                                layout = ShelfLayout.VIDEO,
+                            )
+                            Shelf(
+                                shelf = shelf,
+                                onItemClick = { item -> onItemClick(item, shelf.title) },
+                                onItemLongPress = onItemLongPress,
+                                currentSong = currentSong,
+                                isPlaying = isPlaying,
+                            )
                         }
                     }
 
