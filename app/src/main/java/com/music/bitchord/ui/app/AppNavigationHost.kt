@@ -678,7 +678,7 @@ internal fun AppNavigationHost(
     var homeEditorialShelves by remember { mutableStateOf<List<HomeShelf>>(emptyList()) }
     var daypartShelves by remember {
         mutableStateOf<List<HomeShelf>>(
-            DaypartRepository.getCachedShelves(
+            if (hideHomeEditorial) emptyList() else DaypartRepository.getCachedShelves(
                 daypart = com.soundchord.features.daypart.model.Daypart.current(),
                 accountHash = DaypartRepository.resolveAccountHash(states.account?.name),
             ).orEmpty()
@@ -687,15 +687,30 @@ internal fun AppNavigationHost(
     var personalizedEssentialsShelf by remember { mutableStateOf<HomeShelf?>(null) }
     var stationsForYou by remember {
         mutableStateOf<List<TopPick>>(
-            StationsForYouRepository.getCachedStations(identity = states.account?.name).orEmpty()
+            if (hideHomeEditorial) emptyList() else StationsForYouRepository.getCachedStations(identity = states.account?.name).orEmpty()
         )
     }
     var playlistsForYou by remember {
         mutableStateOf<List<TopPick>>(
-            PlaylistsForYouRepository.getCachedPlaylists(identity = states.account?.name).orEmpty()
+            if (hideHomeEditorial) emptyList() else PlaylistsForYouRepository.getCachedPlaylists(identity = states.account?.name).orEmpty()
         )
     }
     LaunchedEffect(Unit) {
+        val cachedSongMixes = DaypartDatabaseCache.get("home_song_mixes_shelf")?.firstOrNull()?.takeIf { it.items.size >= 4 }
+        if (cachedSongMixes != null) {
+            NativeHomeShelvesHolder.lastValidSongMixes = cachedSongMixes
+        }
+    }
+    LaunchedEffect(hideHomeEditorial) {
+        if (hideHomeEditorial) {
+            homeEditorialShelves = emptyList()
+            daypartShelves = emptyList()
+            personalizedEssentialsShelf = null
+            stationsForYou = emptyList()
+            playlistsForYou = emptyList()
+            TopPicks.editorialHeroResolver = { _, _ -> emptyList() }
+            return@LaunchedEffect
+        }
         com.soundchord.features.editorial.data.AppleMusicEditorialRepository.init(context)
         DaypartRepository.init(context)
         StationsForYouRepository.init(context)
@@ -716,13 +731,28 @@ internal fun AppNavigationHost(
         if (!cachedPlaylists.isNullOrEmpty()) {
             playlistsForYou = cachedPlaylists
         }
-        val cachedSongMixes = DaypartDatabaseCache.get("home_song_mixes_shelf")?.firstOrNull()?.takeIf { it.items.size >= 4 }
-        if (cachedSongMixes != null) {
-            NativeHomeShelvesHolder.lastValidSongMixes = cachedSongMixes
-        }
     }
-    LaunchedEffect(states.visibleHomeState, homeEditorialShelves, states.topPicks, states.account, states.historyState, states.libraryState) {
+    LaunchedEffect(states.visibleHomeState, homeEditorialShelves, states.topPicks, states.account, states.historyState, states.libraryState, hideHomeEditorial) {
         val homeShelves = (states.visibleHomeState as? UiState.Success)?.data.orEmpty()
+        val songMixesCandidate = homeShelves.firstOrNull { s ->
+            s.layout == com.music.bitchord.data.model.ShelfLayout.LIST ||
+                s.title.contains("mix", ignoreCase = true) ||
+                s.title.contains("picks", ignoreCase = true)
+        }?.let { raw ->
+            val clean = raw.items.filter { !it.isVideo && it.videoId != null }
+            if (clean.size >= 4) raw.copy(items = clean) else null
+        }
+        if (songMixesCandidate != null) {
+            DaypartDatabaseCache.put("home_song_mixes_shelf", listOf(songMixesCandidate))
+            NativeHomeShelvesHolder.lastValidSongMixes = songMixesCandidate
+        }
+        if (hideHomeEditorial) {
+            daypartShelves = emptyList()
+            personalizedEssentialsShelf = null
+            stationsForYou = emptyList()
+            playlistsForYou = emptyList()
+            return@LaunchedEffect
+        }
         val currentDaypart = com.soundchord.features.daypart.model.Daypart.current()
         val userRealArtists = UserArtistPoolResolver.resolveUserRealArtists(
             historyState = states.historyState,
@@ -776,18 +806,6 @@ internal fun AppNavigationHost(
         )
         if (resolvedPlaylists.isNotEmpty()) {
             playlistsForYou = resolvedPlaylists
-        }
-        val songMixesCandidate = homeShelves.firstOrNull { s ->
-            s.layout == com.music.bitchord.data.model.ShelfLayout.LIST ||
-                s.title.contains("mix", ignoreCase = true) ||
-                s.title.contains("picks", ignoreCase = true)
-        }?.let { raw ->
-            val clean = raw.items.filter { !it.isVideo && it.videoId != null }
-            if (clean.size >= 4) raw.copy(items = clean) else null
-        }
-        if (songMixesCandidate != null) {
-            DaypartDatabaseCache.put("home_song_mixes_shelf", listOf(songMixesCandidate))
-            NativeHomeShelvesHolder.lastValidSongMixes = songMixesCandidate
         }
     }
 
@@ -1531,12 +1549,13 @@ internal fun AppNavigationHost(
                     artworkMotion = states.artworkMotion && !states.showDiwali,
                     onTopPickLongPress = onHomeTopPickLongPress,
                     editorialShelves = if (hideHomeEditorial) emptyList() else homeEditorialShelves,
-                    daypartShelves = daypartShelves,
-                    personalizedEssentialsShelf = personalizedEssentialsShelf,
-                    stationsForYou = stationsForYou,
-                    onStationClick = actions.onOpenTopPick,
-                    playlistsForYou = playlistsForYou,
-                    onPlaylistClick = actions.onOpenTopPick,
+                    daypartShelves = if (hideHomeEditorial) emptyList() else daypartShelves,
+                    personalizedEssentialsShelf = if (hideHomeEditorial) null else personalizedEssentialsShelf,
+                    stationsForYou = if (hideHomeEditorial) null else stationsForYou,
+                    onStationClick = actions.onOpenTopPick.takeUnless { hideHomeEditorial },
+                    playlistsForYou = if (hideHomeEditorial) null else playlistsForYou,
+                    onPlaylistClick = actions.onOpenTopPick.takeUnless { hideHomeEditorial },
+                    editorialEnabled = !hideHomeEditorial,
                 )
                 TAB_EXPLORE -> states.selectedMoodGenre?.let { category ->
                     MoodGenrePlaylistsScreen(

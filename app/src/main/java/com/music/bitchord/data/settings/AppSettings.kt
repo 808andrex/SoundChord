@@ -582,6 +582,9 @@ object AppSettings {
     /** Apple Music editorial shelves on Home (Updated Playlists and Daily Top 100). */
     val hideHomeEditorial = MutableStateFlow(false)
 
+    /** Whether Apple Music editorial sections are enabled on Home (Ticket #66). Default: true. */
+    val homeEditorialEnabled = MutableStateFlow(true)
+
     /** Music videos are square wherever they show — see [com.music.bitchord.ui.components.VideoThumbnails]. */
     val squareVideoThumbnails = MutableStateFlow(false)
 
@@ -1220,6 +1223,7 @@ object AppSettings {
         hideTopPicks.value = prefs.getBoolean(KEY_HIDE_TOP_PICKS, false)
         hideHomeMoods.value = prefs.getBoolean(KEY_HIDE_HOME_MOODS, false)
         hideHomeEditorial.value = prefs.getBoolean(KEY_HIDE_HOME_EDITORIAL, false)
+        homeEditorialEnabled.value = !hideHomeEditorial.value
         squareVideoThumbnails.value = prefs.getBoolean(KEY_SQUARE_VIDEO_THUMBNAILS, false)
         VideoThumbnails.square = squareVideoThumbnails.value
         autoUpdateCheck.value = prefs.getBoolean(KEY_AUTO_UPDATE_CHECK, true)
@@ -1764,7 +1768,12 @@ object AppSettings {
 
     fun setHideHomeEditorial(value: Boolean) {
         hideHomeEditorial.value = value
+        homeEditorialEnabled.value = !value
         prefs.edit().putBoolean(KEY_HIDE_HOME_EDITORIAL, value).apply()
+    }
+
+    fun setHomeEditorialEnabled(enabled: Boolean) {
+        setHideHomeEditorial(!enabled)
     }
 
     fun setSquareVideoThumbnails(value: Boolean) {

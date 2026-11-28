@@ -12,6 +12,8 @@ import com.music.bitchord.data.model.TopPickMood
 import com.music.bitchord.data.model.WatchTarget
 import com.music.bitchord.data.canvas.AppleMusicTokenProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -93,6 +95,11 @@ object TopPicks {
     @Volatile
     var currentTaste: LocalTaste? = null
 
+    @Volatile
+    var editorialEnabled: Boolean = true
+
+    val editorialEnabledFlow: MutableStateFlow<Boolean> = MutableStateFlow(true)
+
     suspend fun build(
         homeShelves: List<HomeShelf>,
         local: LocalTaste,
@@ -122,7 +129,7 @@ object TopPicks {
         Log.d(TAG, "topPicks: history=${history.size} artists=${artists.map { it.name }} mixes=${mixes.keys}")
 
         val lead = latestRelease(artists)
-        val applePlaylists = fetchAppleEditorialPlaylists(now, local, limit = 2)
+        val applePlaylists = if (editorialEnabled) fetchAppleEditorialPlaylists(now, local, limit = 2) else emptyList()
         val applePlaylist1 = applePlaylists.getOrNull(0)
         val applePlaylist2 = applePlaylists.getOrNull(1)?.takeIf { it.browseId != applePlaylist1?.browseId }
 
@@ -580,6 +587,7 @@ object TopPicks {
     }
 
     private suspend fun fetchAppleEditorialPlaylist(now: LocalDateTime, userGenres: List<String> = emptyList()): TopPick? {
+        if (!editorialEnabled) return null
         // 1. Delegate to editorialHeroResolver (backed by AppleMusicEditorialRepository & Room database cache)
         editorialHeroResolver?.let { resolver ->
             val resolved = runCatching { resolver(now, userGenres) }.getOrNull()?.firstOrNull()
@@ -708,6 +716,7 @@ object TopPicks {
         local: LocalTaste,
         limit: Int = 2,
     ): List<TopPick> {
+        if (!editorialEnabled) return emptyList()
         // Resolve strictly through editorialHeroResolver (backed by PlaylistsForYouRepository, AppleMusicEditorialRepository & SQLite)
         val resolvedFromRepo = runCatching {
             editorialHeroResolver?.invoke(now, local.genres)
@@ -742,7 +751,7 @@ object TopPicks {
         now: LocalDateTime,
         local: LocalTaste,
     ): List<TopPick> {
-        val applePicks = fetchAppleEditorialPlaylists(now, local, limit = 2)
+        val applePicks = if (editorialEnabled) fetchAppleEditorialPlaylists(now, local, limit = 2) else emptyList()
         val userPl = userCreatedPlaylist(now)
         val ytPl = ytEditorialPlaylist(homeShelves)
 
@@ -751,6 +760,9 @@ object TopPicks {
     }
 
     private suspend fun featuredEditorialPlaylist(homeShelves: List<HomeShelf>, now: LocalDateTime): TopPick? {
+        if (!editorialEnabled) {
+            return userCreatedPlaylist(now) ?: ytEditorialPlaylist(homeShelves)
+        }
         // Rotates strictly every 2 hours:
         // Slot 0 -> Playlist del usuario (User's own Playlist)
         // Slot 1 -> Playlist Apple Music (Éxitos de hoy, etc.)

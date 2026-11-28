@@ -2188,6 +2188,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 AppleMusicEditorialRepository.resolveHeroTopPicks(now, genres)
             }
         }
+        val initialEditorialActive = !AppSettings.hideHomeEditorial.value
+        TopPicks.editorialEnabled = initialEditorialActive
+        TopPicks.editorialEnabledFlow.value = initialEditorialActive
+        viewModelScope.launch {
+            AppSettings.hideHomeEditorial.collect { hide ->
+                val active = !hide
+                if (TopPicks.editorialEnabled != active) {
+                    TopPicks.editorialEnabled = active
+                    TopPicks.editorialEnabledFlow.value = active
+                    loadTopPicks(listenerKey(), rebuild = true)
+                }
+            }
+        }
         TopPicks.onEditorialHeroUpdated = {
             viewModelScope.launch {
                 loadTopPicks(listenerKey(), rebuild = true)
@@ -2499,15 +2512,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 runCatching { file.takeIf { it.exists() }?.readText() }.getOrNull()?.let(TopPicks::decode)
             }?.takeIf { it.listener == identity && it.picks.isNotEmpty() }
             stored?.let { AppleArtistPhotos.seed(it.photos) }
+            val editorialActive = !AppSettings.hideHomeEditorial.value
             if (stored != null) {
-                _topPicks.value = stored.picks
+                _topPicks.value = if (editorialActive) {
+                    stored.picks
+                } else {
+                    stored.picks.filter { it.kind != TopPickKind.EDITORIAL_PLAYLIST && it.browseId?.startsWith("apple:") != true }
+                }
                 topPicksSlotShown = stored.day
             } else if (!rebuild) {
                 _topPicks.value = null
             }
-            val editorialActive = !AppSettings.hideHomeEditorial.value
-            val storedHasEditorial = stored?.picks?.any { it.kind == TopPickKind.EDITORIAL_PLAYLIST } == true
-            if (!rebuild && stored?.day == slot && (!editorialActive || storedHasEditorial)) {
+            val storedHasEditorial = stored?.picks?.any { it.kind == TopPickKind.EDITORIAL_PLAYLIST || it.browseId?.startsWith("apple:") == true } == true
+            if (!rebuild && stored?.day == slot && (editorialActive == storedHasEditorial)) {
                 _topPicksLoading.value = false
                 return@launch
             }
@@ -2519,11 +2536,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (_topPicks.value == null) _topPicks.value = emptyList()
                 return@launch
             }
-            _topPicks.value = picks
+            val effectivePicks = if (editorialActive) {
+                picks
+            } else {
+                picks.filter { it.kind != TopPickKind.EDITORIAL_PLAYLIST && it.browseId?.startsWith("apple:") != true }
+            }
+            _topPicks.value = effectivePicks
             topPicksSlotShown = slot
             withContext(Dispatchers.IO) {
                 runCatching {
-                    file.writeText(TopPicks.encode(TopPicks.Stored(identity, slot, picks, AppleArtistPhotos.snapshot())))
+                    file.writeText(TopPicks.encode(TopPicks.Stored(identity, slot, effectivePicks, AppleArtistPhotos.snapshot())))
                 }
             }
         }

@@ -79,6 +79,7 @@ import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.ShelfLayout
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.TopPick
+import com.music.bitchord.data.model.TopPickKind
 import com.music.bitchord.data.model.TopPickMood
 import com.music.bitchord.data.model.UiState
 import java.util.Locale
@@ -131,6 +132,7 @@ object NativeHomeShelvesHolder {
     var lastValidDiscoveriesFavorites: HomeShelf? = null
     var lastValidDailyDiscovery: HomeShelf? = null
     var lastValidSongMixes: HomeShelf? = null
+    var lastValidForgottenFavorites: HomeShelf? = null
 }
 
 private val KidsJunkTerms = listOf(
@@ -322,6 +324,7 @@ fun HomeScreen(
     onStationClick: ((TopPick, String) -> Unit)? = onTopPickClick,
     playlistsForYou: List<TopPick>? = null,
     onPlaylistClick: ((TopPick, String) -> Unit)? = onTopPickClick,
+    editorialEnabled: Boolean = true,
 ) {
     // Top Picks' pictures and motion wait for the feed — see LocalArtworkImages.
     val feedReady = state !is UiState.Loading
@@ -395,10 +398,10 @@ fun HomeScreen(
             if (s.layout == ShelfLayout.VIDEO) return@firstOrNull false
             val t = s.title.trim().lowercase(Locale.ROOT)
             if (t.contains("video") || t.contains("vídeo") || t.contains("podcast") || t.contains("programa")) return@firstOrNull false
-            val isMixShelf = t.contains("forgotten") || t.contains("olvidados") || t.contains("quen thuộc") ||
-                t.contains("archive") || t.contains("archivo") || t.contains("favoritos de siempre") ||
+            val isMixShelf = t.contains("archive") || t.contains("archivo") || t.contains("favoritos de siempre") ||
                 t.contains("temas escuchados") || t.contains("replay mix") || t.contains("deep cuts") ||
-                t.contains("música que me gusta")
+                t.contains("música que me gusta") || t.contains("descubrimientos y favoritos") ||
+                t.contains("nuevos descubrimientos")
             isMixShelf && s.items.any { !it.isVideo && !isViewCountSubtitle(it.subtitle) }
         }?.let { raw ->
             val cleanItems = raw.items.filter { !it.isVideo && !isViewCountSubtitle(it.subtitle) && !isVideoTitle(it.title) }
@@ -406,6 +409,20 @@ fun HomeScreen(
         }
         found?.also { NativeHomeShelvesHolder.lastValidDiscoveriesFavorites = it }
             ?: NativeHomeShelvesHolder.lastValidDiscoveriesFavorites
+    }
+    val forgottenFavoritesShelf = remember(visibleShelves, discoveriesAndFavoritesShelf) {
+        val found = visibleShelves.firstOrNull { s ->
+            if (s.layout == ShelfLayout.VIDEO || s == discoveriesAndFavoritesShelf) return@firstOrNull false
+            val t = s.title.trim().lowercase(Locale.ROOT)
+            if (t.contains("video") || t.contains("vídeo") || t.contains("podcast") || t.contains("programa")) return@firstOrNull false
+            val isForgotten = t.contains("forgotten") || t.contains("olvidados") || t.contains("quen thuộc")
+            isForgotten && s.items.any { !it.isVideo && !isViewCountSubtitle(it.subtitle) }
+        }?.let { raw ->
+            val cleanItems = raw.items.filter { !it.isVideo && !isViewCountSubtitle(it.subtitle) && !isVideoTitle(it.title) }
+            if (cleanItems.isNotEmpty()) raw.copy(items = cleanItems) else null
+        }
+        found?.also { NativeHomeShelvesHolder.lastValidForgottenFavorites = it }
+            ?: NativeHomeShelvesHolder.lastValidForgottenFavorites
     }
     val dailyDiscoveryShelf = remember(visibleShelves, songMixesShelf, albumsAndSinglesShelf, musicVideosShelf, listenAgainShelf, discoveriesAndFavoritesShelf) {
         val found = visibleShelves.firstOrNull { s ->
@@ -454,6 +471,17 @@ fun HomeScreen(
     val discoveriesAndFavoritesTitle = stringResource(Res.string.shelf_discoveries_and_favorites)
     val dailyDiscoveryTitle = stringResource(Res.string.shelf_daily_discovery)
     val customMixesTitle = stringResource(Res.string.shelf_custom_mixes)
+    val forgottenFavoritesTitle = stringResource(Res.string.shelf_forgotten_favorites)
+    val effectiveTopPicks = remember(topPicks, editorialEnabled) {
+        if (editorialEnabled) {
+            topPicks
+        } else {
+            topPicks?.filter { pick ->
+                pick.kind != TopPickKind.EDITORIAL_PLAYLIST &&
+                    pick.browseId?.startsWith("apple:") != true
+            }
+        }
+    }
     CompositionLocalProvider(
         LocalArtworkMotion provides (artworkMotion && feedReady),
         LocalArtworkImages provides feedReady,
@@ -499,15 +527,15 @@ fun HomeScreen(
             // 1. Zona Superior Fija: Carrusel Hero superior ("Top selecciones para ti")
             if (onTopPickClick != null) {
                 when {
-                    !topPicks.isNullOrEmpty() -> item(key = "top-picks") {
+                    !effectiveTopPicks.isNullOrEmpty() -> item(key = "top-picks") {
                         TopPicksShelf(
-                            picks = topPicks,
+                            picks = effectiveTopPicks,
                             listenerName = listenerName,
                             onClick = onTopPickClick,
                             onLongPress = onTopPickLongPress,
                         )
                     }
-                    topPicks == null && topPicksLoading -> topPicksSkeleton()
+                    effectiveTopPicks == null && topPicksLoading -> topPicksSkeleton()
                 }
             }
             when (state) {
@@ -533,14 +561,14 @@ fun HomeScreen(
                     }
 
                     // 3. Zona Superior Fija: Sección fija "Estado de ánimo" ("Find Your Mood")
-                    if (onMoodClick != null) {
+                    if (onMoodClick != null && editorialEnabled) {
                         item(key = "find-your-mood", contentType = "find_your_mood") {
                             FindYourMoodShelf(onMoodClick, onMoodsShowAll)
                         }
                     }
 
                     // Dinámico #1 (Género + Hora del día): Justo debajo de Estado de ánimo
-                    if (dynamicShelf1 != null && dynamicShelf1.items.isNotEmpty()) {
+                    if (editorialEnabled && dynamicShelf1 != null && dynamicShelf1.items.isNotEmpty()) {
                         item(
                             key = "daypart-shelf-1-${dynamicShelf1.title}",
                             contentType = "shelf_cards",
@@ -573,7 +601,7 @@ fun HomeScreen(
                     }
 
                     // 5.1 Emisoras para ti (Ticket #60: carrusel fijo de 10 a 12 tarjetas cuadradas personalizadas desde YouTube Music)
-                    if (!stationsForYou.isNullOrEmpty() && onStationClick != null) {
+                    if (editorialEnabled && !stationsForYou.isNullOrEmpty() && onStationClick != null) {
                         item(key = "fixed-stations-for-you", contentType = "shelf_stations") {
                             StationsForYouShelf(
                                 stations = stationsForYou,
@@ -601,7 +629,7 @@ fun HomeScreen(
                     }
 
                     // 7. Imprescindibles (sección fija dedicada con playlists Essentials / Imprescindibles)
-                    if (essentialsShelf != null && essentialsShelf.items.isNotEmpty()) {
+                    if (editorialEnabled && essentialsShelf != null && essentialsShelf.items.isNotEmpty()) {
                         item(key = "fixed-essentials", contentType = "shelf_cards") {
                             val shelf = essentialsShelf.copy(
                                 title = essentialsTitle,
@@ -643,7 +671,7 @@ fun HomeScreen(
                     }
 
                     // Dinámico #2 ("Porque escuchas a [Artista]"): Entre Mixes de canciones y De tu biblioteca
-                    if (dynamicShelf2 != null && dynamicShelf2.items.isNotEmpty()) {
+                    if (editorialEnabled && dynamicShelf2 != null && dynamicShelf2.items.isNotEmpty()) {
                         item(
                             key = "daypart-shelf-2-${dynamicShelf2.title}",
                             contentType = "shelf_cards",
@@ -676,7 +704,7 @@ fun HomeScreen(
                     }
 
                     // Ticket #62: Playlists para ti (carrusel vertical compacto con 12 playlists)
-                    if (!playlistsForYou.isNullOrEmpty() && onPlaylistClick != null) {
+                    if (editorialEnabled && !playlistsForYou.isNullOrEmpty() && onPlaylistClick != null) {
                         item(key = "fixed-playlists-for-you", contentType = "playlists_for_you_shelf") {
                             PlaylistsForYouShelf(
                                 playlists = playlistsForYou,
@@ -704,7 +732,7 @@ fun HomeScreen(
                     }
 
                     // Dinámico #3 ("Para concentrarte" / "Tardeo y chill" / "Para relajarte" / "Sesión de madrugada"): Entre Nuevos descubrimientos y Tu descubrimiento diario
-                    if (dynamicShelf3 != null && dynamicShelf3.items.isNotEmpty()) {
+                    if (editorialEnabled && dynamicShelf3 != null && dynamicShelf3.items.isNotEmpty()) {
                         item(
                             key = "daypart-shelf-3-${dynamicShelf3.title}",
                             contentType = "shelf_cards",
@@ -720,7 +748,7 @@ fun HomeScreen(
                     }
 
                     // Dinámico #4 ("Para empezar con ritmo" / "Tendencias en tu estilo" / "Para bajar el ritmo"): Antes de Tu descubrimiento diario
-                    if (dynamicShelf4 != null && dynamicShelf4.items.isNotEmpty()) {
+                    if (editorialEnabled && dynamicShelf4 != null && dynamicShelf4.items.isNotEmpty()) {
                         item(
                             key = "daypart-shelf-4-${dynamicShelf4.title}",
                             contentType = "shelf_cards",
@@ -757,6 +785,23 @@ fun HomeScreen(
                         item(key = "fixed-custom-mixes", contentType = "shelf_cards") {
                             val shelf = customMixesShelf.copy(
                                 title = customMixesTitle,
+                                layout = ShelfLayout.CARDS,
+                            )
+                            Shelf(
+                                shelf = shelf,
+                                onItemClick = { item -> onItemClick(item, shelf.title) },
+                                onItemLongPress = onItemLongPress,
+                                currentSong = currentSong,
+                                isPlaying = isPlaying,
+                            )
+                        }
+                    }
+
+                    // 14. Favoritos olvidados (carrusel horizontal con favoritos olvidados)
+                    if (forgottenFavoritesShelf != null && forgottenFavoritesShelf.items.isNotEmpty()) {
+                        item(key = "fixed-forgotten-favorites", contentType = "shelf_cards") {
+                            val shelf = forgottenFavoritesShelf.copy(
+                                title = forgottenFavoritesTitle,
                                 layout = ShelfLayout.CARDS,
                             )
                             Shelf(
