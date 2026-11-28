@@ -123,52 +123,63 @@ object AppleMusicEditorialRepository {
         return isValidArtworkUrl(song.thumbnailUrl)
     }
 
+    private fun getDailyEpochDay(): Long = java.time.LocalDate.now().toEpochDay()
+
     /**
      * Synchronous access to the active in-memory cache or disk cache.
      * Guaranteed instant (0ms) return on the main thread so UI never composes with dummy grey cards.
      */
     fun getCachedFeedOrSeed(storefront: String = defaultStorefront()): AppleMusicEditorialFeed {
-        return inMemoryCache ?: readDiskCache() ?: AppleMusicEditorialFeed()
+        val epochDay = getDailyEpochDay()
+        return inMemoryCache ?: readDiskCache(storefront, epochDay) ?: readDiskCache(storefront, epochDay - 1) ?: AppleMusicEditorialFeed()
     }
 
     /**
-     * Retrieves the editorial feed with 2-hour in-memory and disk caching.
+     * Retrieves the editorial feed with 2-hour in-memory and disk caching rotated daily by epochDay.
      */
     suspend fun getEditorialFeed(
         storefront: String = defaultStorefront(),
         forceRefresh: Boolean = false,
     ): AppleMusicEditorialFeed = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
+        val epochDay = getDailyEpochDay()
 
         // 1. Check in-memory cache
         if (!forceRefresh) {
             inMemoryCache?.let { cached ->
-                if (now - inMemoryTimestamp < CACHE_TTL_MS && (cached.heroItems.isNotEmpty() || cached.newSongs.isNotEmpty())) {
+                val cachedEpochDay = java.time.Instant.ofEpochMilli(inMemoryTimestamp)
+                    .atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay()
+                if (cachedEpochDay == epochDay && now - inMemoryTimestamp < CACHE_TTL_MS && (cached.heroItems.isNotEmpty() || cached.newSongs.isNotEmpty())) {
                     return@withContext cached
                 }
             }
 
             // 2. Check disk cache
-            val diskFeed = readDiskCache()
+            val diskFeed = readDiskCache(storefront, epochDay)
             if (diskFeed != null && now - diskFeed.timestamp < CACHE_TTL_MS && (diskFeed.heroItems.isNotEmpty() || diskFeed.newSongs.isNotEmpty())) {
-                inMemoryCache = diskFeed
-                inMemoryTimestamp = diskFeed.timestamp
-                return@withContext diskFeed
+                val diskEpochDay = java.time.Instant.ofEpochMilli(diskFeed.timestamp)
+                    .atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay()
+                if (diskEpochDay == epochDay) {
+                    inMemoryCache = diskFeed
+                    inMemoryTimestamp = diskFeed.timestamp
+                    return@withContext diskFeed
+                }
             }
         }
 
         // 3. Fetch from remote Apple Music API
-        val remoteFeed = runCatching { fetchRemoteFeed(storefront) }.getOrNull()
+        val remoteFeed = runCatching { fetchRemoteFeed(storefront, epochDay) }.getOrNull()
         if (remoteFeed != null && (remoteFeed.heroItems.isNotEmpty() || remoteFeed.newSongs.isNotEmpty())) {
             val feedWithTimestamp = remoteFeed.copy(timestamp = now)
             inMemoryCache = feedWithTimestamp
             inMemoryTimestamp = now
-            writeDiskCache(feedWithTimestamp)
+            writeDiskCache(feedWithTimestamp, storefront, epochDay)
             return@withContext feedWithTimestamp
         }
 
         // 4. Fallback to existing disk cache if available
-        readDiskCache()?.let { return@withContext it }
+        readDiskCache(storefront, epochDay)?.let { return@withContext it }
+        readDiskCache(storefront, epochDay - 1)?.let { return@withContext it }
 
         AppleMusicEditorialFeed()
     }
@@ -625,24 +636,27 @@ object AppleMusicEditorialRepository {
         return AppleMusicHomeDiscoveryFeed()
     }
 
-    private fun readDiskCache(): AppleMusicEditorialFeed? {
+    private fun readDiskCache(storefront: String = defaultStorefront(), epochDay: Long = getDailyEpochDay()): AppleMusicEditorialFeed? {
         val dir = cacheDir ?: return null
-        val file = File(dir, CACHE_FILE_NAME)
+        val dailyFile = File(dir, "apple_music_editorial_${storefront}_${epochDay}.json")
+        val file = if (dailyFile.exists() && dailyFile.canRead()) dailyFile else File(dir, CACHE_FILE_NAME)
         if (!file.exists() || !file.canRead()) return null
         return runCatching {
             json.decodeFromString<AppleMusicEditorialFeed>(file.readText())
         }.getOrNull()
     }
 
-    private fun writeDiskCache(feed: AppleMusicEditorialFeed) {
+    private fun writeDiskCache(feed: AppleMusicEditorialFeed, storefront: String = defaultStorefront(), epochDay: Long = getDailyEpochDay()) {
         val dir = cacheDir ?: return
         runCatching {
-            val file = File(dir, CACHE_FILE_NAME)
-            file.writeText(json.encodeToString(feed))
+            val dailyFile = File(dir, "apple_music_editorial_${storefront}_${epochDay}.json")
+            dailyFile.writeText(json.encodeToString(feed))
+            val legacyFile = File(dir, CACHE_FILE_NAME)
+            legacyFile.writeText(json.encodeToString(feed))
         }
     }
 
-    private suspend fun fetchRemoteFeed(storefront: String): AppleMusicEditorialFeed = withContext(Dispatchers.IO) {
+    private suspend fun fetchRemoteFeed(storefront: String, epochDay: Long = getDailyEpochDay()): AppleMusicEditorialFeed = withContext(Dispatchers.IO) {
         var bearer = AppleMusicTokenProvider.token()
             ?: error("Could not obtain Apple Music authorization token")
 
@@ -1135,11 +1149,15 @@ object AppleMusicEditorialRepository {
             .take(12)
 
         // Apply diversity rule to DJ Mixes: max 2 items per curatorName, round-robin interleaved
-        // Strictly filter to ensure no item without valid https artwork is ever added, and do not append broken seed items
-        val candidateDjPool = djCandidates.filter { isValidItem(it) && isRealDjMix(it) }
+        // Rotate candidate pool daily using epochDay seed so featured mixes rotate each day
+        val djMixesDailyRandom = kotlin.random.Random(epochDay + 303)
+        val candidateDjPool = djCandidates
+            .filter { isValidItem(it) && isRealDjMix(it) }
+            .distinctBy { it.id }
+            .shuffled(djMixesDailyRandom)
 
         val djByCurator = mutableMapOf<String, MutableList<AppleMusicEditorialItem>>()
-        for (item in candidateDjPool.distinctBy { it.id }) {
+        for (item in candidateDjPool) {
             val curatorKey = item.subtitle.ifBlank { "Apple Music" }.lowercase().trim()
             val list = djByCurator.getOrPut(curatorKey) { mutableListOf() }
             if (list.size < 2) {
@@ -1147,18 +1165,23 @@ object AppleMusicEditorialRepository {
             }
         }
 
-        val djMixes = mutableListOf<AppleMusicEditorialItem>()
+        val rawDjMixes = mutableListOf<AppleMusicEditorialItem>()
         var djRound = 0
         var addedInRound = true
-        while (djMixes.size < 15 && addedInRound) {
+        while (rawDjMixes.size < 15 && addedInRound) {
             addedInRound = false
             for (list in djByCurator.values) {
-                if (djRound < list.size && djMixes.size < 15) {
-                    djMixes.add(list[djRound])
+                if (djRound < list.size && rawDjMixes.size < 15) {
+                    rawDjMixes.add(list[djRound])
                     addedInRound = true
                 }
             }
             djRound++
+        }
+
+        val djMixes = rawDjMixes.distinctBy { it.id }.take(15)
+        djMixes.forEachIndexed { idx, item ->
+            EditorialDatabaseCache.putEditorialItem("explore_djmixes_${activeStorefront}_${epochDay}_$idx", item)
         }
 
         // Fetch Trending Songs (Global / US Apple Music Top Song Charts: GET /v1/catalog/us/charts?types=songs&limit=20)
@@ -1216,10 +1239,16 @@ object AppleMusicEditorialRepository {
             }
         }
 
+        val trendingDailyRandom = kotlin.random.Random(epochDay + 505)
         val trendingSongs = trendingSongsList
             .filter { isValidSong(it) }
             .distinctBy { it.id }
+            .shuffled(trendingDailyRandom)
             .take(20)
+
+        trendingSongs.forEachIndexed { idx, song ->
+            EditorialDatabaseCache.putEditorialSong("explore_trending_${activeStorefront}_${epochDay}_$idx", song)
+        }
 
         val newSongs = newSongsList
             .filter { isValidSong(it) }
@@ -1263,7 +1292,7 @@ object AppleMusicEditorialRepository {
             .distinctBy { "${it.title.lowercase()}:${it.artist.lowercase()}" }
             .take(16)
 
-        // Fetch Decade Hits (Éxitos por década)
+        // Fetch Decade Hits (Éxitos por década) rotated with daily epochDay seed
         val decadeQueries = listOf("Hits+2000", "Hits+2010", "90s+Hits", "80s+Hits", "70s+Hits", "2000s+Hits", "2010s+Hits")
         val decadeRawList = mutableListOf<AppleMusicEditorialItem>()
         for (sf in candidateStorefronts) {
@@ -1288,12 +1317,18 @@ object AppleMusicEditorialRepository {
             }
             if (decadeRawList.size >= 15) break
         }
+        val decadeHitsDailyRandom = kotlin.random.Random(epochDay + 404)
         val decadeHits = decadeRawList
             .filter { isValidItem(it) }
             .distinctBy { it.id.lowercase() }
+            .shuffled(decadeHitsDailyRandom)
             .take(15)
 
-        // Fetch Road Trip / Para el camino
+        decadeHits.forEachIndexed { idx, item ->
+            EditorialDatabaseCache.putEditorialItem("explore_decade_${activeStorefront}_${epochDay}_$idx", item)
+        }
+
+        // Fetch Road Trip / Para el camino rotated with daily epochDay seed
         val roadTripQueries = listOf("Long+Haul", "Road+Trip", "Car+Audio", "Carretera", "Driving")
         val roadTripRawList = mutableListOf<AppleMusicEditorialItem>()
         val roadTripExcluded = listOf("infantil", "kids", "disney", "cocomelon", "essentials", "imprescindibles")
@@ -1319,10 +1354,75 @@ object AppleMusicEditorialRepository {
             }
             if (roadTripRawList.size >= 15) break
         }
+        val roadTripDailyRandom = kotlin.random.Random(epochDay + 202)
         val roadTrip = roadTripRawList
             .filter { isValidItem(it) && !roadTripExcluded.any { ex -> it.title.lowercase().contains(ex) } }
             .distinctBy { it.id.lowercase() }
+            .shuffled(roadTripDailyRandom)
             .take(15)
+
+        roadTrip.forEachIndexed { idx, item ->
+            EditorialDatabaseCache.putEditorialItem("explore_roadtrip_${activeStorefront}_${epochDay}_$idx", item)
+        }
+
+        val everyoneIsListeningRaw = mutableListOf<AppleMusicEditorialItem>()
+        val maxCharts = maxOf(chartPlaylistList.size, albumList.size)
+        for (i in 0 until maxCharts) {
+            if (i < chartPlaylistList.size) {
+                val p = chartPlaylistList[i]
+                if (isValidItem(p) && !isOfficialCityChart(p.title)) {
+                    everyoneIsListeningRaw.add(p)
+                }
+            }
+            if (i < albumList.size) {
+                val a = albumList[i]
+                if (isValidItem(a)) {
+                    everyoneIsListeningRaw.add(a)
+                }
+            }
+        }
+        val everyoneDailyRandom = kotlin.random.Random(epochDay + 101)
+        val everyoneIsListening = everyoneIsListeningRaw
+            .filter { isValidItem(it) }
+            .distinctBy { it.id.lowercase() }
+            .shuffled(everyoneDailyRandom)
+            .take(20)
+
+        everyoneIsListening.forEachIndexed { idx, item ->
+            EditorialDatabaseCache.putEditorialItem("explore_everyone_${activeStorefront}_${epochDay}_$idx", item)
+        }
+
+        // Resilient fallbacks from Room using daily seeds if network query returned empty
+        val resolvedEveryone = if (everyoneIsListening.isNotEmpty()) everyoneIsListening else {
+            (0 until 20).mapNotNull { idx ->
+                EditorialDatabaseCache.getEditorialItem("explore_everyone_${activeStorefront}_${epochDay}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialItem("explore_everyone_${activeStorefront}_${epochDay - 1}_$idx")
+            }
+        }
+        val resolvedRoadTrip = if (roadTrip.isNotEmpty()) roadTrip else {
+            (0 until 15).mapNotNull { idx ->
+                EditorialDatabaseCache.getEditorialItem("explore_roadtrip_${activeStorefront}_${epochDay}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialItem("explore_roadtrip_${activeStorefront}_${epochDay - 1}_$idx")
+            }
+        }
+        val resolvedDjMixes = if (djMixes.isNotEmpty()) djMixes else {
+            (0 until 15).mapNotNull { idx ->
+                EditorialDatabaseCache.getEditorialItem("explore_djmixes_${activeStorefront}_${epochDay}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialItem("explore_djmixes_${activeStorefront}_${epochDay - 1}_$idx")
+            }
+        }
+        val resolvedDecade = if (decadeHits.isNotEmpty()) decadeHits else {
+            (0 until 15).mapNotNull { idx ->
+                EditorialDatabaseCache.getEditorialItem("explore_decade_${activeStorefront}_${epochDay}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialItem("explore_decade_${activeStorefront}_${epochDay - 1}_$idx")
+            }
+        }
+        val resolvedTrending = if (trendingSongs.isNotEmpty()) trendingSongs else {
+            (0 until 20).mapNotNull { idx ->
+                EditorialDatabaseCache.getEditorialSong("explore_trending_${activeStorefront}_${epochDay}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialSong("explore_trending_${activeStorefront}_${epochDay - 1}_$idx")
+            }
+        }
 
         AppleMusicEditorialFeed(
             heroItems = heroItems.filter { isValidItem(it) },
@@ -1330,12 +1430,13 @@ object AppleMusicEditorialRepository {
             updatedPlaylists = updatedPlaylists.filter { isValidItem(it) },
             dailyTop100 = dailyTop100.filter { isValidItem(it) },
             cityCharts = cityCharts.filter { isValidItem(it) },
-            djMixes = djMixes.filter { isValidItem(it) },
+            djMixes = resolvedDjMixes.filter { isValidItem(it) },
             comingSoon = comingSoon.filter { isValidItem(it) },
-            trendingSongs = trendingSongs.filter { isValidSong(it) },
+            trendingSongs = resolvedTrending.filter { isValidSong(it) },
             momentSongs = momentSongs.filter { isValidSong(it) },
-            decadeHits = decadeHits.filter { isValidItem(it) },
-            roadTrip = roadTrip.filter { isValidItem(it) },
+            decadeHits = resolvedDecade.filter { isValidItem(it) },
+            roadTrip = resolvedRoadTrip.filter { isValidItem(it) },
+            everyoneIsListening = resolvedEveryone.filter { isValidItem(it) },
         )
     }
 

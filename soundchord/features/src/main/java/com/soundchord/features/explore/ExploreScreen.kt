@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -92,6 +93,80 @@ object ExploreScrollStateHolder {
     }
 }
 
+@kotlinx.serialization.Serializable
+private data class CachedMusicVideoItem(
+    val title: String,
+    val subtitle: String,
+    val thumbnailUrl: String?,
+    val videoId: String?,
+    val browseId: String?,
+    val isVideo: Boolean,
+)
+
+@kotlinx.serialization.Serializable
+private data class CachedMusicVideoShelf(
+    val title: String,
+    val subtitle: String,
+    val items: List<CachedMusicVideoItem>,
+)
+
+internal object ExploreMusicVideosCache {
+    private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    var cachedShelves: List<HomeShelf> = emptyList()
+
+    fun getOrRestore(): List<HomeShelf> {
+        if (cachedShelves.isNotEmpty()) return cachedShelves
+        val rawJson = com.soundchord.features.editorial.data.EditorialDatabaseCache.getVideoShelvesJson() ?: return emptyList()
+        return runCatching {
+            val decoded = json.decodeFromString<List<CachedMusicVideoShelf>>(rawJson)
+            val shelves = decoded.map { shelf ->
+                HomeShelf(
+                    title = shelf.title,
+                    subtitle = shelf.subtitle,
+                    layout = ShelfLayout.VIDEO,
+                    items = shelf.items.map { item ->
+                        ShelfItem(
+                            title = item.title,
+                            subtitle = item.subtitle,
+                            thumbnailUrl = item.thumbnailUrl,
+                            videoId = item.videoId,
+                            browseId = item.browseId,
+                            isVideo = item.isVideo,
+                        )
+                    }
+                )
+            }
+            cachedShelves = shelves
+            shelves
+        }.getOrDefault(emptyList())
+    }
+
+    fun updateIfNotEmpty(newShelves: List<HomeShelf>) {
+        if (newShelves.isNotEmpty() && newShelves.any { it.items.isNotEmpty() }) {
+            cachedShelves = newShelves
+            runCatching {
+                val toSave = newShelves.map { shelf ->
+                    CachedMusicVideoShelf(
+                        title = shelf.title,
+                        subtitle = shelf.subtitle,
+                        items = shelf.items.map { item ->
+                            CachedMusicVideoItem(
+                                title = item.title,
+                                subtitle = item.subtitle,
+                                thumbnailUrl = item.thumbnailUrl,
+                                videoId = item.videoId,
+                                browseId = item.browseId,
+                                isVideo = item.isVideo,
+                            )
+                        }
+                    )
+                }
+                com.soundchord.features.editorial.data.EditorialDatabaseCache.putVideoShelves(json.encodeToString(toSave))
+            }
+        }
+    }
+}
+
 class ExploreRowScrollController(
     val getScroll: (String) -> Pair<Int, Int> = { ExploreScrollStateHolder.getRowScroll(it) },
     val saveScroll: (String, Int, Int) -> Unit = { key, index, offset ->
@@ -150,6 +225,9 @@ fun ExploreScreen(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     showTitle: Boolean = true,
+    editorialEnabled: Boolean = true,
+    onOpenMoodsGenres: () -> Unit = {},
+    onOpenCharts: () -> Unit = {},
     onPlaySong: ((Song) -> Unit)? = null,
     onSongMenu: ((Song) -> Unit)? = null,
     getRowScrollPosition: ((String) -> Pair<Int, Int>)? = null,
@@ -192,10 +270,12 @@ fun ExploreScreen(
     var resolvingSongId by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
-        val freshFeed = AppleMusicEditorialRepository.getEditorialFeed()
-        if (freshFeed.heroItems.isNotEmpty() || freshFeed.newSongs.isNotEmpty()) {
-            editorialFeed = freshFeed
+    LaunchedEffect(editorialEnabled) {
+        if (editorialEnabled) {
+            val freshFeed = AppleMusicEditorialRepository.getEditorialFeed()
+            if (freshFeed.heroItems.isNotEmpty() || freshFeed.newSongs.isNotEmpty()) {
+                editorialFeed = freshFeed
+            }
         }
     }
 
@@ -204,15 +284,53 @@ fun ExploreScreen(
     }
     val categoryShelvesMap = remember(filteredShelves) {
         ExploreShelfCategory.entries
-            .filter { it != ExploreShelfCategory.FROM_YOUR_LIBRARY && it != ExploreShelfCategory.TRENDING }
+            .filter {
+                it != ExploreShelfCategory.FROM_YOUR_LIBRARY &&
+                    it != ExploreShelfCategory.TRENDING &&
+                    it != ExploreShelfCategory.PROGRAMS_FOR_YOU
+            }
             .associateWith { category ->
                 filteredShelves.filter { it.exploreCategory() == category }
             }
             .filterValues { it.isNotEmpty() }
     }
 
-    val roadTripItems = remember(editorialFeed?.roadTrip) {
-        val raw = editorialFeed?.roadTrip.orEmpty()
+    val rawVideoShelves = categoryShelvesMap[ExploreShelfCategory.MUSIC_VIDEOS]
+    LaunchedEffect(rawVideoShelves) {
+        if (!rawVideoShelves.isNullOrEmpty()) {
+            ExploreMusicVideosCache.updateIfNotEmpty(rawVideoShelves)
+        }
+    }
+    val videoShelves = remember(rawVideoShelves, editorialFeed) {
+        val fromLive = rawVideoShelves?.takeIf { it.isNotEmpty() }
+        val fromCache = fromLive ?: ExploreMusicVideosCache.getOrRestore().takeIf { it.isNotEmpty() }
+        fromCache ?: run {
+            // Resilient fallback from editorial songs / artist tracks so section is ALWAYS visible
+            val fallbackCandidates = (editorialFeed.momentSongs + editorialFeed.trendingSongs).take(12)
+            if (fallbackCandidates.isNotEmpty()) {
+                listOf(
+                    HomeShelf(
+                        title = "Vídeos musicales para ti",
+                        subtitle = "",
+                        layout = ShelfLayout.VIDEO,
+                        items = fallbackCandidates.map { song ->
+                            ShelfItem(
+                                title = song.title,
+                                subtitle = song.artist,
+                                thumbnailUrl = song.thumbnailUrl,
+                                videoId = song.id,
+                                browseId = null,
+                                isVideo = true,
+                            )
+                        }
+                    )
+                )
+            } else emptyList()
+        }
+    }
+
+    val roadTripItems = remember(editorialFeed.roadTrip) {
+        val raw = editorialFeed.roadTrip
         val excluded = listOf("infantil", "kids", "disney", "cocomelon", "essentials", "imprescindibles")
         raw.filter { item ->
             val t = item.title.lowercase()
@@ -225,8 +343,10 @@ fun ExploreScreen(
         refreshing = refreshing,
         onRefresh = {
             onRefresh()
-            scope.launch {
-                editorialFeed = AppleMusicEditorialRepository.getEditorialFeed(forceRefresh = true)
+            if (editorialEnabled) {
+                scope.launch {
+                    editorialFeed = AppleMusicEditorialRepository.getEditorialFeed(forceRefresh = true)
+                }
             }
         },
         state = pullState,
@@ -253,17 +373,270 @@ fun ExploreScreen(
                 }
             }
 
-            // 1. Destacado (Hero Cards estilo Apple Music o YouTube Music)
-            val heroCards = editorialFeed?.heroItems.orEmpty()
-            if (heroCards.isNotEmpty()) {
-                item(key = "explore-editorial-hero") {
-                    AppleMusicEditorialHeroCarousel(
-                        items = heroCards,
-                        onItemClick = onEditorialItemClick,
-                        sectionKey = "hero_featured",
+            if (editorialEnabled) {
+                // --- INICIO / EXPLORAR v1.4 (APPLE MUSIC EDITORIAL) ---
+
+                // 1. Destacado (Hero Cards estilo Apple Music)
+                val heroCards = editorialFeed.heroItems
+                if (heroCards.isNotEmpty()) {
+                    item(key = "explore-editorial-hero") {
+                        AppleMusicEditorialHeroCarousel(
+                            items = heroCards,
+                            onItemClick = onEditorialItemClick,
+                            sectionKey = "hero_featured",
+                        )
+                    }
+                } else {
+                    // Skeleton placeholder para evitar parpadeo al cargar en frío
+                    item(key = "explore-editorial-hero-skeleton") {
+                        EditorialHeroSkeleton()
+                    }
+                }
+
+                val handleSongClick: (AppleMusicEditorialSong) -> Unit = { song ->
+                    scope.launch {
+                        resolvingSongId = song.id
+                        val track = AppleMusicTrack(
+                            id = song.id,
+                            title = song.title,
+                            artist = song.artist,
+                            album = song.album,
+                            durationMs = song.durationMs,
+                            isrc = song.isrc,
+                            coverUrl = song.thumbnailUrl,
+                        )
+                        val resolved = AppleMusicPlaylistRepository.resolveTrack(track)
+                        resolvingSongId = null
+                        if (resolved != null) {
+                            onPlaySong?.invoke(resolved) ?: onShelfItemClick(
+                                HomeShelf(title = "Editorial", items = emptyList()),
+                                ShelfItem(
+                                    title = resolved.title,
+                                    subtitle = resolved.artist,
+                                    thumbnailUrl = resolved.thumbnailUrl,
+                                    videoId = resolved.videoId,
+                                    browseId = null,
+                                ),
+                            )
+                        }
+                    }
+                }
+
+                val handleSongMenuClick: (AppleMusicEditorialSong) -> Unit = { song ->
+                    scope.launch {
+                        val track = AppleMusicTrack(
+                            id = song.id,
+                            title = song.title,
+                            artist = song.artist,
+                            album = song.album,
+                            durationMs = song.durationMs,
+                            isrc = song.isrc,
+                            coverUrl = song.thumbnailUrl,
+                        )
+                        val resolved = AppleMusicPlaylistRepository.resolveTrack(track)
+                        if (resolved != null) {
+                            onSongMenu?.invoke(resolved)
+                        }
+                    }
+                }
+
+                // 2. Canciones nuevas destacadas (4 canciones por columna)
+                val newSongs = editorialFeed.newSongs
+                if (newSongs.isNotEmpty()) {
+                    item(key = "explore-editorial-new-songs") {
+                        AppleMusicEditorialSongsSection(
+                            title = stringResource(R.string.editorial_section_new_songs),
+                            songs = newSongs,
+                            resolvingSongId = resolvingSongId,
+                            onSongClick = handleSongClick,
+                            onSongMenuClick = handleSongMenuClick,
+                            sectionKey = "featured_new_songs",
+                        )
+                    }
+                }
+
+                // 3. Playlists actualizadas
+                val updatedPlaylists = editorialFeed.updatedPlaylists
+                if (updatedPlaylists.isNotEmpty()) {
+                    item(key = "explore-editorial-updated-playlists") {
+                        AppleMusicEditorialShelfSection(
+                            title = stringResource(R.string.editorial_section_updated_playlists),
+                            items = updatedPlaylists,
+                            onItemClick = onEditorialItemClick,
+                            sectionKey = "updated_playlists",
+                        )
+                    }
+                }
+
+                // 4. Últimos lanzamientos (categoría NEW_RELEASES, inmediatamente debajo de Playlists actualizadas)
+                categoryShelvesMap[ExploreShelfCategory.NEW_RELEASES]?.let { releaseShelves ->
+                    val filteredReleases = releaseShelves.filter { shelf ->
+                        val l = shelf.title.lowercase()
+                        !l.contains("para ti") && !l.contains("for you")
+                    }
+                    if (filteredReleases.isNotEmpty()) {
+                        item(key = "explore-shelf-group-NEW_RELEASES") {
+                            ExploreShelfSection(
+                                title = stringResource(ExploreShelfCategory.NEW_RELEASES.titleRes),
+                                shelves = filteredReleases,
+                                onItemClick = onShelfItemClick,
+                                onMore = onShelfMore,
+                                sectionKey = "cat_NEW_RELEASES",
+                            )
+                        }
+                    }
+                }
+
+                // 5. Éxitos por década
+                val decadeHits = editorialFeed.decadeHits
+                if (decadeHits.isNotEmpty()) {
+                    item(key = "explore-editorial-decade-hits") {
+                        AppleMusicEditorialShelfSection(
+                            title = stringResource(R.string.editorial_section_decade_hits),
+                            items = decadeHits,
+                            onItemClick = onEditorialItemClick,
+                            sectionKey = "decade_hits",
+                        )
+                    }
+                }
+
+                // 6. Últimos DJ Mixes
+                val djMixes = editorialFeed.djMixes
+                if (djMixes.isNotEmpty()) {
+                    item(key = "explore-editorial-dj-mixes") {
+                        AppleMusicEditorialShelfSection(
+                            title = stringResource(R.string.editorial_section_dj_mixes),
+                            items = djMixes,
+                            onItemClick = onEditorialItemClick,
+                            sectionKey = "latest_dj_mixes",
+                        )
+                    }
+                }
+
+                // 7. Toda la gente está escuchando... > (inmediatamente debajo de Últimos DJ Mixes)
+                val everyoneListening = editorialFeed.everyoneIsListening
+                if (everyoneListening.isNotEmpty()) {
+                    item(key = "explore-editorial-everyone-listening") {
+                        AppleMusicEditorialShelfSection(
+                            title = stringResource(R.string.editorial_section_everyone_listening),
+                            items = everyoneListening,
+                            onItemClick = onEditorialItemClick,
+                            onHeaderClick = {
+                                val shelfTitle = "Toda la gente está escuchando..."
+                                val shelfItems = everyoneListening.map { item ->
+                                    val storefront = item.storefront.ifBlank { "us" }
+                                    val browseId = if (item.id.startsWith("MPREb") || item.id.startsWith("VL") || item.id.startsWith("PL") || item.id.startsWith("UC") || item.id.startsWith("apple:")) {
+                                        item.id
+                                    } else {
+                                        when (item.kind) {
+                                            EditorialItemKind.PLAYLIST -> "apple:playlist:$storefront:${item.id}"
+                                            EditorialItemKind.ALBUM -> "apple:album:$storefront:${item.id}"
+                                        }
+                                    }
+                                    ShelfItem(
+                                        title = item.title,
+                                        subtitle = item.subtitle,
+                                        thumbnailUrl = item.thumbnailUrl ?: item.wideImageUrl,
+                                        videoId = null,
+                                        browseId = browseId,
+                                    )
+                                }
+                                onShelfMore(HomeShelf(title = shelfTitle, items = shelfItems))
+                            },
+                            sectionKey = "everyone_listening",
+                        )
+                    }
+                }
+
+                // 8. Para el camino
+                if (roadTripItems.isNotEmpty()) {
+                    item(key = "explore-editorial-road-trip") {
+                        AppleMusicEditorialShelfSection(
+                            title = stringResource(R.string.editorial_section_road_trip),
+                            items = roadTripItems,
+                            onItemClick = onEditorialItemClick,
+                            sectionKey = "road_trip",
+                        )
+                    }
+                }
+
+                // 9. Canciones del momento (4 canciones por columna)
+                val momentSongs = editorialFeed.momentSongs
+                if (momentSongs.isNotEmpty()) {
+                    item(key = "explore-editorial-moment-songs") {
+                        AppleMusicEditorialSongsSection(
+                            title = stringResource(R.string.editorial_section_moment_songs),
+                            songs = momentSongs,
+                            resolvingSongId = resolvingSongId,
+                            onSongClick = handleSongClick,
+                            onSongMenuClick = handleSongMenuClick,
+                            sectionKey = "songs_of_the_moment",
+                        )
+                    }
+                }
+
+                // 10. Top 100 diario
+                val top100 = editorialFeed.dailyTop100
+                if (top100.isNotEmpty()) {
+                    item(key = "explore-editorial-top-100") {
+                        AppleMusicEditorialShelfSection(
+                            title = stringResource(R.string.editorial_section_daily_top_100),
+                            items = top100,
+                            onItemClick = onEditorialItemClick,
+                            sectionKey = "daily_top_100",
+                        )
+                    }
+                }
+
+                // 11. Éxitos por ciudad
+                val cityCharts = editorialFeed.cityCharts
+                if (cityCharts.isNotEmpty()) {
+                    item(key = "explore-editorial-city-charts") {
+                        AppleMusicEditorialShelfSection(
+                            title = stringResource(R.string.editorial_section_city_charts),
+                            items = cityCharts,
+                            onItemClick = onEditorialItemClick,
+                            sectionKey = "city_charts",
+                        )
+                    }
+                }
+
+                // 12. Vídeos musicales (categoría MUSIC_VIDEOS - siempre visible con respaldo)
+                if (videoShelves.isNotEmpty()) {
+                    item(key = "explore-shelf-group-MUSIC_VIDEOS") {
+                        ExploreShelfSection(
+                            title = stringResource(ExploreShelfCategory.MUSIC_VIDEOS.titleRes),
+                            shelves = videoShelves,
+                            onItemClick = onShelfItemClick,
+                            onMore = onShelfMore,
+                            sectionKey = "cat_MUSIC_VIDEOS",
+                        )
+                    }
+                }
+
+                // 13. Canciones en tendencia (Trending Songs)
+                val trendingSongs = editorialFeed.trendingSongs
+                if (trendingSongs.isNotEmpty()) {
+                    item(key = "explore-editorial-trending-songs") {
+                        AppleMusicTrendingSongsSection(
+                            title = stringResource(R.string.editorial_section_trending_songs),
+                            songs = trendingSongs,
+                            resolvingSongId = resolvingSongId,
+                            onSongClick = handleSongClick,
+                            sectionKey = "trending_songs",
+                        )
+                    }
+                }
+
+                // 15. Más para explorar (Al final estilo Apple Music)
+                item(key = "explore-more-to-explore") {
+                    ExploreMoreToExploreSection(
+                        onOpenMoodsGenres = onOpenMoodsGenres,
+                        onOpenCharts = onOpenCharts,
                     )
                 }
             } else {
+                // --- EXPLORAR CLÁSICO v1.3 (YOUTUBE MUSIC) ---
                 val heroShelves = filteredShelves
                 if (heroShelves.any { shelf -> shelf.items.any { it.browseId != null && it.thumbnailUrl != null } }) {
                     item(key = "explore-hero") {
@@ -274,232 +647,152 @@ fun ExploreScreen(
                         )
                     }
                 }
-            }
 
-            val handleSongClick: (AppleMusicEditorialSong) -> Unit = { song ->
-                scope.launch {
-                    resolvingSongId = song.id
-                    val track = AppleMusicTrack(
-                        id = song.id,
-                        title = song.title,
-                        artist = song.artist,
-                        album = song.album,
-                        durationMs = song.durationMs,
-                        isrc = song.isrc,
-                        coverUrl = song.thumbnailUrl,
-                    )
-                    val resolved = AppleMusicPlaylistRepository.resolveTrack(track)
-                    resolvingSongId = null
-                    if (resolved != null) {
-                        onPlaySong?.invoke(resolved) ?: onShelfItemClick(
-                            HomeShelf(title = "Editorial", items = emptyList()),
-                            ShelfItem(
-                                title = resolved.title,
-                                subtitle = resolved.artist,
-                                thumbnailUrl = resolved.thumbnailUrl,
-                                videoId = resolved.videoId,
-                                browseId = null,
-                            ),
-                        )
-                    }
-                }
-            }
-
-            val handleSongMenuClick: (AppleMusicEditorialSong) -> Unit = { song ->
-                scope.launch {
-                    val track = AppleMusicTrack(
-                        id = song.id,
-                        title = song.title,
-                        artist = song.artist,
-                        album = song.album,
-                        durationMs = song.durationMs,
-                        isrc = song.isrc,
-                        coverUrl = song.thumbnailUrl,
-                    )
-                    val resolved = AppleMusicPlaylistRepository.resolveTrack(track)
-                    if (resolved != null) {
-                        onSongMenu?.invoke(resolved)
-                    }
-                }
-            }
-
-            // 2. Canciones nuevas destacadas (4 canciones por columna)
-            val newSongs = editorialFeed?.newSongs.orEmpty()
-            if (newSongs.isNotEmpty()) {
-                item(key = "explore-editorial-new-songs") {
-                    AppleMusicEditorialSongsSection(
-                        title = stringResource(R.string.editorial_section_new_songs),
-                        songs = newSongs,
-                        resolvingSongId = resolvingSongId,
-                        onSongClick = handleSongClick,
-                        onSongMenuClick = handleSongMenuClick,
-                        sectionKey = "featured_new_songs",
+                // Estado de ánimo y géneros arriba en v1.3
+                item(key = "explore-moods") {
+                    MoodGenreSection(
+                        state = moodState,
+                        onCategoryClick = onCategoryClick,
+                        onRetry = onRetry,
+                        sectionKey = "moods_and_genres",
                     )
                 }
-            }
 
-            // 3. Playlists actualizadas
-            val updatedPlaylists = editorialFeed?.updatedPlaylists.orEmpty()
-            if (updatedPlaylists.isNotEmpty()) {
-                item(key = "explore-editorial-updated-playlists") {
-                    AppleMusicEditorialShelfSection(
-                        title = stringResource(R.string.editorial_section_updated_playlists),
-                        items = updatedPlaylists,
-                        onItemClick = onEditorialItemClick,
-                        sectionKey = "updated_playlists",
-                    )
-                }
-            }
-
-            // 4. Estado de ánimo y géneros
-            item(key = "explore-moods") {
-                MoodGenreSection(
-                    state = moodState,
-                    onCategoryClick = onCategoryClick,
-                    onRetry = onRetry,
-                    sectionKey = "moods_and_genres",
-                )
-            }
-
-            // 5. Éxitos por década
-            val decadeHits = editorialFeed?.decadeHits.orEmpty()
-            if (decadeHits.isNotEmpty()) {
-                item(key = "explore-editorial-decade-hits") {
-                    AppleMusicEditorialShelfSection(
-                        title = stringResource(R.string.editorial_section_decade_hits),
-                        items = decadeHits,
-                        onItemClick = onEditorialItemClick,
-                        sectionKey = "decade_hits",
-                    )
-                }
-            }
-
-            // 6. Últimos DJ Mixes
-            val djMixes = editorialFeed?.djMixes.orEmpty()
-            if (djMixes.isNotEmpty()) {
-                item(key = "explore-editorial-dj-mixes") {
-                    AppleMusicEditorialShelfSection(
-                        title = stringResource(R.string.editorial_section_dj_mixes),
-                        items = djMixes,
-                        onItemClick = onEditorialItemClick,
-                        sectionKey = "latest_dj_mixes",
-                    )
-                }
-            }
-
-            // 7. Últimos lanzamientos (categoría NEW_RELEASES, solo Álbumes y singles)
-            categoryShelvesMap[ExploreShelfCategory.NEW_RELEASES]?.let { releaseShelves ->
-                val filteredReleases = releaseShelves.filter { shelf ->
-                    val l = shelf.title.lowercase()
-                    !l.contains("para ti") && !l.contains("for you")
-                }
-                if (filteredReleases.isNotEmpty()) {
-                    item(key = "explore-shelf-group-NEW_RELEASES") {
+                // Todas las categorías clásicas de YouTube Music
+                categoryShelvesMap.forEach { (category, catShelves) ->
+                    item(key = "explore-shelf-group-${category.name}") {
                         ExploreShelfSection(
-                            title = stringResource(ExploreShelfCategory.NEW_RELEASES.titleRes),
-                            shelves = filteredReleases,
+                            title = stringResource(category.titleRes),
+                            shelves = catShelves,
                             onItemClick = onShelfItemClick,
                             onMore = onShelfMore,
-                            sectionKey = "cat_NEW_RELEASES",
+                            sectionKey = "cat_${category.name}",
                         )
                     }
-                }
-            }
-
-            // 8. Para el camino
-            if (roadTripItems.isNotEmpty()) {
-                item(key = "explore-editorial-road-trip") {
-                    AppleMusicEditorialShelfSection(
-                        title = stringResource(R.string.editorial_section_road_trip),
-                        items = roadTripItems,
-                        onItemClick = onEditorialItemClick,
-                        sectionKey = "road_trip",
-                    )
-                }
-            }
-
-            // 9. Canciones del momento (4 canciones por columna)
-            val momentSongs = editorialFeed?.momentSongs.orEmpty()
-            if (momentSongs.isNotEmpty()) {
-                item(key = "explore-editorial-moment-songs") {
-                    AppleMusicEditorialSongsSection(
-                        title = stringResource(R.string.editorial_section_moment_songs),
-                        songs = momentSongs,
-                        resolvingSongId = resolvingSongId,
-                        onSongClick = handleSongClick,
-                        onSongMenuClick = handleSongMenuClick,
-                        sectionKey = "songs_of_the_moment",
-                    )
-                }
-            }
-
-            // 10. Top 100 diario
-            val top100 = editorialFeed?.dailyTop100.orEmpty()
-            if (top100.isNotEmpty()) {
-                item(key = "explore-editorial-top-100") {
-                    AppleMusicEditorialShelfSection(
-                        title = stringResource(R.string.editorial_section_daily_top_100),
-                        items = top100,
-                        onItemClick = onEditorialItemClick,
-                        sectionKey = "daily_top_100",
-                    )
-                }
-            }
-
-            // 11. Éxitos por ciudad
-            val cityCharts = editorialFeed?.cityCharts.orEmpty()
-            if (cityCharts.isNotEmpty()) {
-                item(key = "explore-editorial-city-charts") {
-                    AppleMusicEditorialShelfSection(
-                        title = stringResource(R.string.editorial_section_city_charts),
-                        items = cityCharts,
-                        onItemClick = onEditorialItemClick,
-                        sectionKey = "city_charts",
-                    )
-                }
-            }
-
-            // 12. Vídeos musicales (categoría MUSIC_VIDEOS)
-            categoryShelvesMap[ExploreShelfCategory.MUSIC_VIDEOS]?.let { videoShelves ->
-                item(key = "explore-shelf-group-MUSIC_VIDEOS") {
-                    ExploreShelfSection(
-                        title = stringResource(ExploreShelfCategory.MUSIC_VIDEOS.titleRes),
-                        shelves = videoShelves,
-                        onItemClick = onShelfItemClick,
-                        onMore = onShelfMore,
-                        sectionKey = "cat_MUSIC_VIDEOS",
-                    )
-                }
-            }
-
-            // 13. Canciones en tendencia (Trending Songs)
-            val trendingSongs = editorialFeed?.trendingSongs.orEmpty()
-            if (trendingSongs.isNotEmpty()) {
-                item(key = "explore-editorial-trending-songs") {
-                    AppleMusicTrendingSongsSection(
-                        title = stringResource(R.string.editorial_section_trending_songs),
-                        songs = trendingSongs,
-                        resolvingSongId = resolvingSongId,
-                        onSongClick = handleSongClick,
-                        sectionKey = "trending_songs",
-                    )
-                }
-            }
-
-            // 14. Programas (categoría PROGRAMS_FOR_YOU / Podcasts / Shows)
-            categoryShelvesMap[ExploreShelfCategory.PROGRAMS_FOR_YOU]?.let { programShelves ->
-                item(key = "explore-shelf-group-PROGRAMS_FOR_YOU") {
-                    ExploreShelfSection(
-                        title = stringResource(ExploreShelfCategory.PROGRAMS_FOR_YOU.titleRes),
-                        shelves = programShelves,
-                        onItemClick = onShelfItemClick,
-                        onMore = onShelfMore,
-                        sectionKey = "cat_PROGRAMS_FOR_YOU",
-                    )
                 }
             }
         }
     }
+    }
+}
+
+/**
+ * Dark skeleton placeholder for the editorial hero carousel to prevent layout jumps on cold start.
+ */
+@Composable
+fun EditorialHeroSkeleton() {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.padding(bottom = 28.dp),
+        userScrollEnabled = false,
+    ) {
+        items(2) {
+            Column(
+                modifier = Modifier.width(320.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9.5f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
+                )
+                Spacer(Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .width(180.dp)
+                        .height(18.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
+                )
+                Spacer(Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .width(120.dp)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Apple Music style "Más para explorar" bottom list.
+ */
+@Composable
+private fun ExploreMoreToExploreSection(
+    onOpenMoodsGenres: () -> Unit,
+    onOpenCharts: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = PAGE_GUTTER, vertical = 24.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.explore_more_to_explore),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(bottom = 12.dp),
+        )
+
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+            thickness = 0.5.dp,
+        )
+
+        MoreToExploreRow(
+            title = stringResource(R.string.explore_moods_genres),
+            onClick = onOpenMoodsGenres,
+        )
+
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+            thickness = 0.5.dp,
+        )
+
+        MoreToExploreRow(
+            title = stringResource(R.string.explore_charts_rankings),
+            onClick = onOpenCharts,
+        )
+
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+            thickness = 0.5.dp,
+        )
+    }
+}
+
+@Composable
+private fun MoreToExploreRow(
+    title: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 15.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -784,6 +1077,7 @@ fun AppleMusicEditorialShelfSection(
     items: List<AppleMusicEditorialItem>,
     onItemClick: (AppleMusicEditorialItem) -> Unit,
     modifier: Modifier = Modifier,
+    onHeaderClick: (() -> Unit)? = null,
     sectionKey: String = title,
 ) {
     val validItems = remember(items) {
@@ -794,13 +1088,37 @@ fun AppleMusicEditorialShelfSection(
     val rowState = rememberPersistentRowState(sectionKey)
 
     Column(modifier = modifier.padding(bottom = 26.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
-        )
+        if (onHeaderClick != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onHeaderClick)
+                    .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        } else {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
+            )
+        }
 
         LazyRow(
             state = rowState,
@@ -1222,11 +1540,12 @@ fun ExploreShelfSection(
             }
         }
         shelves.forEachIndexed { shelfIndex, shelf ->
-            if (shelves.size > 1 && shelf.title != title) {
+            if (shelf.title.isNotBlank() && shelf.title != title) {
                 Text(
                     text = shelf.title,
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 8.dp),
                 )
             }
@@ -1341,6 +1660,10 @@ private fun HomeShelf.exploreCategory(): ExploreShelfCategory? {
 
 private fun HomeShelf.isExploreExcluded(): Boolean {
     val label = title.trim().lowercase()
+    val isProgramOrPodcast = label.contains("programa") || label.contains("programas") ||
+        label.contains("podcast") || label.contains("podcasts") ||
+        label.contains("episodio") || label.contains("episode") ||
+        label.contains("show") || label.contains("shows")
     val isExcludedTitle = label in setOf(
         "recents", "recientes", "recently played", "recently played songs", "vuelve a escucharlo", "listen again",
         "favoritos olvidados", "forgotten favorites", "mixes personalizados", "mix personalizado", "mi mix",
@@ -1350,11 +1673,13 @@ private fun HomeShelf.isExploreExcluded(): Boolean {
       || label.contains("comunidad") || label.contains("community")
       || label.contains("nuevos descubrimientos") || label.contains("new discoveries")
       || label.contains("descubrimiento diario") || label.contains("daily discovery")
+      || isProgramOrPodcast
     val cat = exploreCategory()
     val isExcludedCat = cat == ExploreShelfCategory.FROM_YOUR_LIBRARY ||
         cat == ExploreShelfCategory.TRENDING ||
         cat == ExploreShelfCategory.COMMUNITY ||
         cat == ExploreShelfCategory.NEW_DISCOVERIES ||
-        cat == ExploreShelfCategory.DAILY_DISCOVERY
+        cat == ExploreShelfCategory.DAILY_DISCOVERY ||
+        cat == ExploreShelfCategory.PROGRAMS_FOR_YOU
     return isExcludedTitle || isExcludedCat
 }

@@ -1102,6 +1102,47 @@ internal fun AppNavigationHost(
                     onClick = actions.onPlayMood,
                     contentPadding = states.listPadding,
                 )
+            } else if (pageRoute == AppRoute.ExploreMoodsGenres) {
+                com.soundchord.features.explore.MoodGenresScreen(
+                    moodState = states.exploreState,
+                    onBack = { navigator.pop() },
+                    onCategoryClick = { mood ->
+                        navigator.pop()
+                        viewModel.openMoodGenre(mood)
+                    },
+                    onRetry = viewModel::loadExplore,
+                    onAccountClick = actions.onShowAccountSelector,
+                    accountPhotoUrl = null,
+                    contentPadding = states.listPadding,
+                )
+            } else if (pageRoute == AppRoute.ExploreCharts) {
+                val editorialFeed = remember { com.soundchord.features.editorial.data.AppleMusicEditorialRepository.getCachedFeedOrSeed() }
+                com.soundchord.features.explore.ExploreChartsScreen(
+                    feed = editorialFeed,
+                    onBack = { navigator.pop() },
+                    onEditorialItemClick = { item ->
+                        val storefront = item.storefront.ifBlank { "us" }
+                        val browseId = if (item.id.startsWith("MPREb") || item.id.startsWith("VL") || item.id.startsWith("PL") || item.id.startsWith("UC") || item.id.startsWith("apple:")) {
+                            item.id
+                        } else {
+                            when (item.kind) {
+                                com.soundchord.features.editorial.data.EditorialItemKind.PLAYLIST -> "apple:playlist:$storefront:${item.id}"
+                                com.soundchord.features.editorial.data.EditorialItemKind.ALBUM -> "apple:album:$storefront:${item.id}"
+                            }
+                        }
+                        onExploreShelfItemClick(
+                            HomeShelf(title = "Charts", items = emptyList()),
+                            ShelfItem(
+                                title = item.title,
+                                subtitle = item.subtitle,
+                                thumbnailUrl = item.thumbnailUrl ?: item.wideImageUrl,
+                                videoId = null,
+                                browseId = browseId,
+                            ),
+                        )
+                    },
+                    contentPadding = states.listPadding,
+                )
             } else if (pageRoute == AppRoute.Replay) {
                 ReplayScreen(
                     state = states.replay,
@@ -1602,6 +1643,9 @@ internal fun AppNavigationHost(
                     onRefresh = { viewModel.refresh(MainViewModel.Feed.EXPLORE) },
                     pullState = lists.explorePull,
                     contentPadding = states.listPadding,
+                    editorialEnabled = !hideHomeEditorial,
+                    onOpenMoodsGenres = { navigator.push(AppRoute.ExploreMoodsGenres) },
+                    onOpenCharts = { navigator.push(AppRoute.ExploreCharts) },
                     onPlaySong = { song ->
                         actions.onPlayRadio(
                             song,

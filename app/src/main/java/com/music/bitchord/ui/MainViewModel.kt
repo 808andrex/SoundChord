@@ -2207,6 +2207,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         AppleMusicEditorialRepository.init(appContext)
+        viewModelScope.launch(Dispatchers.IO) {
+            if (!AppSettings.hideHomeEditorial.value) {
+                runCatching { AppleMusicEditorialRepository.getEditorialFeed() }
+            }
+        }
         com.music.bitchord.data.PlaylistCovers.init(appContext)
         AlbumRelatedDatabaseCache.init(appContext)
         viewModelScope.launch {

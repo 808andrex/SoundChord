@@ -1851,6 +1851,10 @@
     <string name="editorial_section_moment_songs">Canciones del momento</string>
     <string name="editorial_section_decade_hits">Éxitos por década</string>
     <string name="editorial_section_road_trip">Para el camino</string>
+    <string name="editorial_section_everyone_listening">Toda la gente está escuchando...</string>
+    <string name="explore_more_to_explore">Más para explorar</string>
+    <string name="explore_charts_rankings">Charts</string>
+    <string name="explore_moods_genres">Estado de ánimo y géneros</string>
     <string name="explore_new_releases">Últimos lanzamientos</string>
     <string name="explore_programs_for_you">Programas</string>
     <string name="explore_programs">Programas</string>

@@ -12,6 +12,10 @@
     <string name="editorial_section_moment_songs">Hot Tracks</string>
     <string name="editorial_section_decade_hits">Decade Hits</string>
     <string name="editorial_section_road_trip">For a Long Haul</string>
+    <string name="back">Back</string>
+    <string name="editorial_section_everyone_listening">Everyone is listening to...</string>
+    <string name="explore_more_to_explore">More to explore</string>
+    <string name="explore_charts_rankings">Charts</string>
     <string name="editorial_hero_badge_new">NEW</string>
     <string name="editorial_hero_badge_featured">FEATURED</string>
     <string name="editorial_hero_badge_soundtrack">SOUNDTRACK</string>

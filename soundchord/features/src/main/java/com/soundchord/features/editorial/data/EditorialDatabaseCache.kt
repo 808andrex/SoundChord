@@ -221,6 +221,82 @@ class EditorialDatabaseCache private constructor(context: Context) :
             }.getOrNull()
         }
 
+        fun putEditorialSong(cacheKey: String, song: AppleMusicEditorialSong) {
+            val dbHelper = instance ?: return
+            val encoded = runCatching { json.encodeToString(AppleMusicEditorialSong.serializer(), song) }.getOrNull() ?: return
+            runCatching {
+                val db = dbHelper.writableDatabase
+                val values = ContentValues().apply {
+                    put(COL_KEY, cacheKey)
+                    put(COL_JSON_DATA, encoded)
+                    put(COL_STOREFRONT, "us")
+                    put(COL_TIMESTAMP, System.currentTimeMillis())
+                }
+                db.insertWithOnConflict(TABLE_NAME, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            }
+        }
+
+        fun getEditorialSong(cacheKey: String, maxAgeMs: Long = TTL_MS): AppleMusicEditorialSong? {
+            val dbHelper = instance ?: return null
+            return runCatching {
+                val db = dbHelper.readableDatabase
+                val cursor = db.query(
+                    TABLE_NAME,
+                    arrayOf(COL_JSON_DATA, COL_TIMESTAMP),
+                    "$COL_KEY = ?",
+                    arrayOf(cacheKey),
+                    null,
+                    null,
+                    null,
+                )
+                cursor.use { c ->
+                    if (c.moveToFirst()) {
+                        val jsonData = c.getString(c.getColumnIndexOrThrow(COL_JSON_DATA))
+                        val timestamp = c.getLong(c.getColumnIndexOrThrow(COL_TIMESTAMP))
+                        val now = System.currentTimeMillis()
+                        if (now - timestamp < maxAgeMs) {
+                            json.decodeFromString<AppleMusicEditorialSong>(jsonData)
+                        } else null
+                    } else null
+                }
+            }.getOrNull()
+        }
+
+        fun putVideoShelves(shelvesJson: String) {
+            val dbHelper = instance ?: return
+            runCatching {
+                val db = dbHelper.writableDatabase
+                val values = ContentValues().apply {
+                    put(COL_KEY, "explore_music_videos_shelves")
+                    put(COL_JSON_DATA, shelvesJson)
+                    put(COL_STOREFRONT, "us")
+                    put(COL_TIMESTAMP, System.currentTimeMillis())
+                }
+                db.insertWithOnConflict(TABLE_NAME, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            }
+        }
+
+        fun getVideoShelvesJson(): String? {
+            val dbHelper = instance ?: return null
+            return runCatching {
+                val db = dbHelper.readableDatabase
+                val cursor = db.query(
+                    TABLE_NAME,
+                    arrayOf(COL_JSON_DATA),
+                    "$COL_KEY = ?",
+                    arrayOf("explore_music_videos_shelves"),
+                    null,
+                    null,
+                    null,
+                )
+                cursor.use { c ->
+                    if (c.moveToFirst()) {
+                        c.getString(c.getColumnIndexOrThrow(COL_JSON_DATA))
+                    } else null
+                }
+            }.getOrNull()
+        }
+
         fun putHeroTopPick(cacheKey: String, pick: TopPick, storefront: String = "us") {
             val dbHelper = instance ?: return
             val cached = CachedHeroPlaylist.from(pick, storefront) ?: return

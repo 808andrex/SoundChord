@@ -55,6 +55,12 @@ sealed interface AppRoute {
 
     /** The Equalizer's list of preset curves. */
     data object EqualizerPresets : AppRoute
+
+    /** Dedicated moods and genres subscreen. */
+    data object ExploreMoodsGenres : AppRoute
+
+    /** Apple Music Charts and rankings subscreen. */
+    data object ExploreCharts : AppRoute
 }
 
 /**

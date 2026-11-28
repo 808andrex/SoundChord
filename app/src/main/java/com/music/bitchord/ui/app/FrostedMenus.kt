@@ -588,6 +588,8 @@ internal fun BitChordChrome(
                 is AppRoute.SettingsChoice -> stringResource(r.choice.title)
                 AppRoute.EqualizerPresets -> stringResource(R.string.equalizer_preset)
                 AppRoute.Replay -> stringResource(R.string.replay)
+                AppRoute.ExploreMoodsGenres -> stringResource(R.string.explore_moods_genres)
+                AppRoute.ExploreCharts -> stringResource(R.string.explore_charts_rankings)
                 null -> when {
                     state.detail != null && state.detailActiveShelf != null -> state.detailActiveShelf.title
                     state.detail != null -> state.detail.title
