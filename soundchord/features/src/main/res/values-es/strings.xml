@@ -16,6 +16,15 @@
     <string name="editorial_section_everyone_listening">Toda la gente está escuchando...</string>
     <string name="explore_more_to_explore">Más para explorar</string>
     <string name="explore_charts_rankings">Charts</string>
+    <string name="editorial_section_top_songs">Top canciones</string>
+    <string name="editorial_section_city_charts_title">Lista por ciudad</string>
+    <string name="editorial_section_daily_top_100_title">Top 100 de hoy</string>
+    <string name="editorial_section_top_albums">Top álbumes</string>
+    <string name="editorial_section_top_videos">Top videos</string>
+    <string name="explore_charts_type_playlist">Playlist</string>
+    <string name="explore_charts_type_album">Álbum</string>
+    <string name="explore_charts_type_video">Video musical</string>
+    <string name="explore_charts_type_song">Canción</string>
     <string name="editorial_hero_badge_new">NOVEDAD</string>
     <string name="editorial_hero_badge_featured">DESTACADO</string>
     <string name="editorial_hero_badge_soundtrack">BANDA SONORA</string>

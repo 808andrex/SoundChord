@@ -338,6 +338,16 @@ fun ExploreScreen(
         }
     }
 
+    val momentSongs = remember(editorialFeed.momentSongs) {
+        val raw = editorialFeed.momentSongs
+        if (raw.isEmpty()) emptyList()
+        else {
+            val epochDay = java.time.LocalDate.now().toEpochDay()
+            val dailyRandom = kotlin.random.Random(epochDay + 707)
+            raw.shuffled(dailyRandom)
+        }
+    }
+
     CompositionLocalProvider(LocalExploreRowScrollController provides scrollController) {
         PullToRefresh(
         refreshing = refreshing,
@@ -560,8 +570,7 @@ fun ExploreScreen(
                     }
                 }
 
-                // 9. Canciones del momento (4 canciones por columna)
-                val momentSongs = editorialFeed.momentSongs
+                // 9. Canciones del momento (4 canciones por columna, con rotación diaria por semilla epochDay)
                 if (momentSongs.isNotEmpty()) {
                     item(key = "explore-editorial-moment-songs") {
                         AppleMusicEditorialSongsSection(
@@ -575,27 +584,71 @@ fun ExploreScreen(
                     }
                 }
 
-                // 10. Top 100 diario
+                // 10. Top 100 diario > (encabezado clicable con vista completa)
                 val top100 = editorialFeed.dailyTop100
                 if (top100.isNotEmpty()) {
                     item(key = "explore-editorial-top-100") {
+                        val sectionTitle = stringResource(R.string.editorial_section_daily_top_100)
                         AppleMusicEditorialShelfSection(
-                            title = stringResource(R.string.editorial_section_daily_top_100),
+                            title = sectionTitle,
                             items = top100,
                             onItemClick = onEditorialItemClick,
+                            onHeaderClick = {
+                                val shelfItems = top100.map { item ->
+                                    val storefront = item.storefront.ifBlank { "us" }
+                                    val browseId = if (item.id.startsWith("MPREb") || item.id.startsWith("VL") || item.id.startsWith("PL") || item.id.startsWith("UC") || item.id.startsWith("apple:")) {
+                                        item.id
+                                    } else {
+                                        when (item.kind) {
+                                            EditorialItemKind.PLAYLIST -> "apple:playlist:$storefront:${item.id}"
+                                            EditorialItemKind.ALBUM -> "apple:album:$storefront:${item.id}"
+                                        }
+                                    }
+                                    ShelfItem(
+                                        title = item.title,
+                                        subtitle = item.subtitle,
+                                        thumbnailUrl = item.thumbnailUrl ?: item.wideImageUrl,
+                                        videoId = null,
+                                        browseId = browseId,
+                                    )
+                                }
+                                onShelfMore(HomeShelf(title = sectionTitle, items = shelfItems))
+                            },
                             sectionKey = "daily_top_100",
                         )
                     }
                 }
 
-                // 11. Éxitos por ciudad
+                // 11. Éxitos por ciudad > (encabezado clicable con vista completa)
                 val cityCharts = editorialFeed.cityCharts
                 if (cityCharts.isNotEmpty()) {
                     item(key = "explore-editorial-city-charts") {
+                        val sectionTitle = stringResource(R.string.editorial_section_city_charts)
                         AppleMusicEditorialShelfSection(
-                            title = stringResource(R.string.editorial_section_city_charts),
+                            title = sectionTitle,
                             items = cityCharts,
                             onItemClick = onEditorialItemClick,
+                            onHeaderClick = {
+                                val shelfItems = cityCharts.map { item ->
+                                    val storefront = item.storefront.ifBlank { "us" }
+                                    val browseId = if (item.id.startsWith("MPREb") || item.id.startsWith("VL") || item.id.startsWith("PL") || item.id.startsWith("UC") || item.id.startsWith("apple:")) {
+                                        item.id
+                                    } else {
+                                        when (item.kind) {
+                                            EditorialItemKind.PLAYLIST -> "apple:playlist:$storefront:${item.id}"
+                                            EditorialItemKind.ALBUM -> "apple:album:$storefront:${item.id}"
+                                        }
+                                    }
+                                    ShelfItem(
+                                        title = item.title,
+                                        subtitle = item.subtitle,
+                                        thumbnailUrl = item.thumbnailUrl ?: item.wideImageUrl,
+                                        videoId = null,
+                                        browseId = browseId,
+                                    )
+                                }
+                                onShelfMore(HomeShelf(title = sectionTitle, items = shelfItems))
+                            },
                             sectionKey = "city_charts",
                         )
                     }

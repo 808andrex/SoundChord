@@ -16,6 +16,15 @@
     <string name="editorial_section_everyone_listening">Everyone is listening to...</string>
     <string name="explore_more_to_explore">More to explore</string>
     <string name="explore_charts_rankings">Charts</string>
+    <string name="editorial_section_top_songs">Top Songs</string>
+    <string name="editorial_section_city_charts_title">City Charts</string>
+    <string name="editorial_section_daily_top_100_title">Today\'s Top 100</string>
+    <string name="editorial_section_top_albums">Top Albums</string>
+    <string name="editorial_section_top_videos">Top Videos</string>
+    <string name="explore_charts_type_playlist">Playlist</string>
+    <string name="explore_charts_type_album">Album</string>
+    <string name="explore_charts_type_video">Music Video</string>
+    <string name="explore_charts_type_song">Song</string>
     <string name="editorial_hero_badge_new">NEW</string>
     <string name="editorial_hero_badge_featured">FEATURED</string>
     <string name="editorial_hero_badge_soundtrack">SOUNDTRACK</string>

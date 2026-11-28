@@ -1120,6 +1120,8 @@ internal fun AppNavigationHost(
                 com.soundchord.features.explore.ExploreChartsScreen(
                     feed = editorialFeed,
                     onBack = { navigator.pop() },
+                    onAccountClick = actions.onShowAccountSelector,
+                    accountPhotoUrl = states.account?.thumbnailUrl,
                     onEditorialItemClick = { item ->
                         val storefront = item.storefront.ifBlank { "us" }
                         val browseId = if (item.id.startsWith("MPREb") || item.id.startsWith("VL") || item.id.startsWith("PL") || item.id.startsWith("UC") || item.id.startsWith("apple:")) {
@@ -1136,11 +1138,19 @@ internal fun AppNavigationHost(
                                 title = item.title,
                                 subtitle = item.subtitle,
                                 thumbnailUrl = item.thumbnailUrl ?: item.wideImageUrl,
-                                videoId = null,
+                                videoId = if (item.badge?.contains("VÍDEO", ignoreCase = true) == true || item.badge?.contains("VIDEO", ignoreCase = true) == true) item.id else null,
                                 browseId = browseId,
+                                isVideo = item.badge?.contains("VÍDEO", ignoreCase = true) == true || item.badge?.contains("VIDEO", ignoreCase = true) == true,
                             ),
                         )
                     },
+                    onPlaySong = { song ->
+                        actions.onPlayRadio(
+                            song,
+                            QueueSource("Charts", PlaybackSourceType.EXPLORE),
+                        )
+                    },
+                    onSongMenu = actions.onOpenSongMenu,
                     contentPadding = states.listPadding,
                 )
             } else if (pageRoute == AppRoute.Replay) {

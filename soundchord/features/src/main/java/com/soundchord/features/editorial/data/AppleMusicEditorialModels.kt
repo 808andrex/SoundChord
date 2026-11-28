@@ -48,6 +48,9 @@ data class AppleMusicEditorialFeed(
     val decadeHits: List<AppleMusicEditorialItem> = emptyList(),
     val roadTrip: List<AppleMusicEditorialItem> = emptyList(),
     val everyoneIsListening: List<AppleMusicEditorialItem> = emptyList(),
+    val topSongs: List<AppleMusicEditorialSong> = emptyList(),
+    val topAlbums: List<AppleMusicEditorialItem> = emptyList(),
+    val topVideos: List<AppleMusicEditorialItem> = emptyList(),
     val timestamp: Long = System.currentTimeMillis(),
 )
 

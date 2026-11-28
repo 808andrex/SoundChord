@@ -131,7 +131,44 @@ object AppleMusicEditorialRepository {
      */
     fun getCachedFeedOrSeed(storefront: String = defaultStorefront()): AppleMusicEditorialFeed {
         val epochDay = getDailyEpochDay()
-        return inMemoryCache ?: readDiskCache(storefront, epochDay) ?: readDiskCache(storefront, epochDay - 1) ?: AppleMusicEditorialFeed()
+        val seed = inMemoryCache ?: readDiskCache(storefront, epochDay) ?: readDiskCache(storefront, epochDay - 1) ?: AppleMusicEditorialFeed()
+        if (seed.momentSongs.isEmpty() || seed.topSongs.isEmpty() || seed.topAlbums.isEmpty()) {
+            val roomMoment = (0 until 16).mapNotNull { idx ->
+                EditorialDatabaseCache.getEditorialSong("explore_moment_${storefront}_${epochDay}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialSong("explore_moment_${storefront}_${epochDay - 1}_$idx")
+            }
+            val roomTopSongs = (0 until 50).mapNotNull { idx ->
+                EditorialDatabaseCache.getEditorialSong("explore_charts_top_song_${storefront}_${epochDay}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialSong("explore_charts_top_song_${storefront}_${epochDay - 1}_$idx")
+            }.ifEmpty { (seed.momentSongs + seed.trendingSongs + seed.newSongs).take(50) }
+
+            val fallbackSeedAlbums = (
+                seed.heroItems.filter { it.kind == EditorialItemKind.ALBUM } +
+                seed.comingSoon.filter { it.kind == EditorialItemKind.ALBUM } +
+                seed.everyoneIsListening.filter { it.kind == EditorialItemKind.ALBUM }
+            ).filter { isValidItem(it) }.distinctBy { it.id }.take(30)
+
+            val roomTopAlbums = (0 until 30).mapNotNull { idx ->
+                EditorialDatabaseCache.getEditorialItem("explore_charts_top_album_${storefront}_${epochDay}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialItem("explore_charts_top_album_${storefront}_${epochDay - 1}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialItem("explore_charts_top_album_us_${epochDay}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialItem("explore_charts_top_album_us_${epochDay - 1}_$idx")
+            }.ifEmpty { fallbackSeedAlbums }.ifEmpty { getCuratedTopAlbumsSeed(storefront) }
+
+            val roomTopVideos = (0 until 30).mapNotNull { idx ->
+                EditorialDatabaseCache.getEditorialItem("explore_charts_top_video_${storefront}_${epochDay}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialItem("explore_charts_top_video_${storefront}_${epochDay - 1}_$idx")
+            }
+            if (roomMoment.isNotEmpty() || roomTopSongs.isNotEmpty() || roomTopAlbums.isNotEmpty() || roomTopVideos.isNotEmpty()) {
+                return seed.copy(
+                    momentSongs = if (seed.momentSongs.isNotEmpty()) seed.momentSongs else roomMoment,
+                    topSongs = if (seed.topSongs.isNotEmpty()) seed.topSongs else roomTopSongs,
+                    topAlbums = if (seed.topAlbums.isNotEmpty()) seed.topAlbums else roomTopAlbums,
+                    topVideos = if (seed.topVideos.isNotEmpty()) seed.topVideos else roomTopVideos,
+                )
+            }
+        }
+        return seed
     }
 
     /**
@@ -149,14 +186,14 @@ object AppleMusicEditorialRepository {
             inMemoryCache?.let { cached ->
                 val cachedEpochDay = java.time.Instant.ofEpochMilli(inMemoryTimestamp)
                     .atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay()
-                if (cachedEpochDay == epochDay && now - inMemoryTimestamp < CACHE_TTL_MS && (cached.heroItems.isNotEmpty() || cached.newSongs.isNotEmpty())) {
+                if (cachedEpochDay == epochDay && now - inMemoryTimestamp < CACHE_TTL_MS && (cached.heroItems.isNotEmpty() || cached.newSongs.isNotEmpty()) && cached.topAlbums.isNotEmpty() && cached.topSongs.isNotEmpty()) {
                     return@withContext cached
                 }
             }
 
             // 2. Check disk cache
             val diskFeed = readDiskCache(storefront, epochDay)
-            if (diskFeed != null && now - diskFeed.timestamp < CACHE_TTL_MS && (diskFeed.heroItems.isNotEmpty() || diskFeed.newSongs.isNotEmpty())) {
+            if (diskFeed != null && now - diskFeed.timestamp < CACHE_TTL_MS && (diskFeed.heroItems.isNotEmpty() || diskFeed.newSongs.isNotEmpty()) && diskFeed.topAlbums.isNotEmpty() && diskFeed.topSongs.isNotEmpty()) {
                 val diskEpochDay = java.time.Instant.ofEpochMilli(diskFeed.timestamp)
                     .atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay()
                 if (diskEpochDay == epochDay) {
@@ -665,7 +702,7 @@ object AppleMusicEditorialRepository {
         var activeStorefront = storefront
 
         for (sf in candidateStorefronts) {
-            val chartsUrl = "$API_BASE/$sf/charts?types=playlists,albums,songs&limit=30&extend=editorialArtwork,editorialVideo"
+            val chartsUrl = "$API_BASE/$sf/charts?types=playlists,albums,songs,music-videos&limit=50&extend=editorialArtwork,editorialVideo"
             val res = executeGet(chartsUrl, bearer)
             if (res != null) {
                 chartsJson = res
@@ -679,7 +716,7 @@ object AppleMusicEditorialRepository {
             bearer = AppleMusicTokenProvider.token()
                 ?: error("Could not refresh Apple Music authorization token")
             for (sf in candidateStorefronts) {
-                val chartsUrl = "$API_BASE/$sf/charts?types=playlists,albums,songs&limit=30&extend=editorialArtwork,editorialVideo"
+                val chartsUrl = "$API_BASE/$sf/charts?types=playlists,albums,songs,music-videos&limit=50&extend=editorialArtwork,editorialVideo"
                 val res = executeGet(chartsUrl, bearer)
                 if (res != null) {
                     chartsJson = res
@@ -764,7 +801,54 @@ object AppleMusicEditorialRepository {
             ?.get("data")?.jsonArray ?: JsonArray(emptyList())
         for (elem in albumsArray) {
             parseEditorialItem(elem.jsonObject, activeStorefront, defaultKind = EditorialItemKind.ALBUM)
-                ?.let { albumList.add(it) }
+                ?.let { if (isValidItem(it)) albumList.add(it) }
+        }
+
+        // If local storefront has no local albums chart (e.g. smaller storefronts like ec), query US/MX charts
+        if (albumList.size < 20) {
+            val fallbackSfList = listOf("us", "mx", "es")
+            for (sf in fallbackSfList) {
+                if (sf == activeStorefront) continue
+                val albumsChartUrl = "$API_BASE/$sf/charts?types=albums&limit=50&extend=editorialArtwork"
+                val res = executeGet(albumsChartUrl, bearer) ?: continue
+                val rootObj = runCatching { json.parseToJsonElement(res).jsonObject }.getOrNull()
+                val aArray = rootObj?.get("results")?.jsonObject?.get("albums")?.jsonArray?.firstOrNull()?.jsonObject
+                    ?.get("data")?.jsonArray ?: JsonArray(emptyList())
+                for (elem in aArray) {
+                    parseEditorialItem(elem.jsonObject, sf, defaultKind = EditorialItemKind.ALBUM)
+                        ?.let { if (isValidItem(it)) albumList.add(it) }
+                }
+                if (albumList.size >= 30) break
+            }
+        }
+        if (albumList.size < 15) {
+            val albumSearchUrl = "$API_BASE/$activeStorefront/search?term=Top+Albums&types=albums&limit=30&extend=editorialArtwork"
+            val res = executeGet(albumSearchUrl, bearer)
+            if (res != null) {
+                val rootObj = runCatching { json.parseToJsonElement(res).jsonObject }.getOrNull()
+                val aArray = rootObj?.get("results")?.jsonObject?.get("albums")?.jsonObject?.get("data")?.jsonArray ?: JsonArray(emptyList())
+                for (elem in aArray) {
+                    parseEditorialItem(elem.jsonObject, activeStorefront, defaultKind = EditorialItemKind.ALBUM)
+                        ?.let { if (isValidItem(it)) albumList.add(it) }
+                }
+            }
+        }
+
+        // Extract songs from charts (Top Songs up to 50)
+        val chartSongsRaw = mutableListOf<AppleMusicEditorialSong>()
+        val songsArray = results["songs"]?.jsonArray?.firstOrNull()?.jsonObject
+            ?.get("data")?.jsonArray ?: JsonArray(emptyList())
+        for (elem in songsArray) {
+            parseEditorialSong(elem.jsonObject)?.let { chartSongsRaw.add(it) }
+        }
+
+        // Extract music videos from charts
+        val chartVideosRaw = mutableListOf<AppleMusicEditorialItem>()
+        val videosArray = results["music-videos"]?.jsonArray?.firstOrNull()?.jsonObject
+            ?.get("data")?.jsonArray ?: JsonArray(emptyList())
+        for (elem in videosArray) {
+            parseEditorialItem(elem.jsonObject, activeStorefront, defaultKind = EditorialItemKind.PLAYLIST, defaultBadge = if (isSpanish) "VÍDEO MUSICAL" else "MUSIC VIDEO")
+                ?.let { if (isValidItem(it)) chartVideosRaw.add(it) }
         }
 
         // Extract REAL NEW RELEASES for "Canciones nuevas destacadas" (New Music Daily + Dale Play + fresh album tracks)
@@ -1035,9 +1119,12 @@ object AppleMusicEditorialRepository {
             .take(12)
             .map { it.copy(badge = if (isSpanish) "ACTUALIZADA" else "UPDATED") }
 
-        // Build Daily Top 100 (purified: ONLY official Apple Music curator, normalized title deduplication, no empty/grey cards)
+        // Build Daily Top 100 (purified: ONLY official Apple Music curator, normalized title deduplication, 30-35 playlists)
         val top100List = mutableListOf<AppleMusicEditorialItem>()
-        val top100Storefronts = listOf(activeStorefront, "us", "mx", "es", "gb", "fr", "de", "jp", "co", "ar", "ca", "au", "it", "kr", "br", "ec", "cl", "pe").distinct()
+        val top100Storefronts = listOf(
+            activeStorefront, "us", "mx", "es", "gb", "fr", "de", "jp", "co", "ar",
+            "ca", "au", "it", "kr", "br", "ec", "cl", "pe", "nl", "se", "no", "ch", "at", "za", "in", "nz", "ie", "pt"
+        ).distinct()
 
         for (sf in top100Storefronts) {
             val top100SearchUrl = "$API_BASE/$sf/search?term=Top+100%3A&types=playlists&limit=25&extend=editorialArtwork,editorialVideo"
@@ -1055,7 +1142,7 @@ object AppleMusicEditorialRepository {
                     top100List.add(parsed)
                 }
             }
-            if (top100List.map { normalizeTop100Title(it.title) }.distinct().size >= 30) break
+            if (top100List.map { normalizeTop100Title(it.title) }.distinct().size >= 35) break
         }
 
         val dailyTop100 = top100List
@@ -1064,11 +1151,14 @@ object AppleMusicEditorialRepository {
                     isValidItem(it)
             }
             .distinctBy { normalizeTop100Title(it.title) }
-            .take(30)
+            .take(35)
 
-        // Build City Charts (purified: only official Apple Music "Top 25: [City]" playlists)
+        // Build City Charts (purified: only official Apple Music "Top 25: [City]" playlists, 30-35 playlists)
         val cityList = mutableListOf<AppleMusicEditorialItem>()
-        val cityStorefronts = listOf(activeStorefront, "us", "mx", "es", "gb", "fr", "de", "co").distinct()
+        val cityStorefronts = listOf(
+            activeStorefront, "us", "mx", "es", "gb", "fr", "de", "co", "it", "jp",
+            "ca", "au", "br", "ar", "kr", "nl", "za", "at", "ch", "ie"
+        ).distinct()
 
         for (sf in cityStorefronts) {
             val citySearchUrl = "$API_BASE/$sf/search?term=Top+25&types=playlists&limit=25&extend=editorialArtwork,editorialVideo"
@@ -1082,13 +1172,13 @@ object AppleMusicEditorialRepository {
                     cityList.add(parsed)
                 }
             }
-            if (cityList.distinctBy { it.id }.size >= 25) break
+            if (cityList.distinctBy { it.id }.size >= 35) break
         }
 
         val cityCharts = cityList
             .filter { isOfficialCityChart(it.title) && isValidItem(it) }
             .distinctBy { it.id }
-            .take(25)
+            .take(35)
 
         // Build Coming Soon (albums with releaseDate > today or pre-add/coming soon editorial collections)
         val upcomingSearchTerms = if (isSpanish) {
@@ -1255,7 +1345,7 @@ object AppleMusicEditorialRepository {
             .distinctBy { "${it.title.lowercase()}:${it.artist.lowercase()}" }
             .take(24)
 
-        // Fetch Canciones del momento (16 premier tracks from hit playlists, excluding newSongs)
+        // Fetch Canciones del momento (16 premier tracks from hit playlists, rotated with daily epochDay seed)
         val momentPlaylistIds = if (isSpanish) {
             listOf(
                 "pl.8e05c879331846b48a04870f7cfcb257", // Éxitos de hoy
@@ -1280,17 +1370,23 @@ object AppleMusicEditorialRepository {
             for (elem in tracksArr) {
                 parseEditorialSong(elem.jsonObject)?.let { momentRawTracks.add(it) }
             }
-            if (momentRawTracks.size >= 30) break
+            if (momentRawTracks.size >= 60) break
         }
 
         val newSongKeys = newSongs.map { "${it.title.lowercase()}:${it.artist.lowercase()}" }.toSet()
+        val momentDailyRandom = kotlin.random.Random(epochDay + 707)
         val momentSongs = momentRawTracks
             .filter { song ->
                 isValidSong(song) &&
                     "${song.title.lowercase()}:${song.artist.lowercase()}" !in newSongKeys
             }
             .distinctBy { "${it.title.lowercase()}:${it.artist.lowercase()}" }
+            .shuffled(momentDailyRandom)
             .take(16)
+
+        momentSongs.forEachIndexed { idx, song ->
+            EditorialDatabaseCache.putEditorialSong("explore_moment_${activeStorefront}_${epochDay}_$idx", song)
+        }
 
         // Fetch Decade Hits (Éxitos por década) rotated with daily epochDay seed
         val decadeQueries = listOf("Hits+2000", "Hits+2010", "90s+Hits", "80s+Hits", "70s+Hits", "2000s+Hits", "2010s+Hits")
@@ -1392,6 +1488,61 @@ object AppleMusicEditorialRepository {
             EditorialDatabaseCache.putEditorialItem("explore_everyone_${activeStorefront}_${epochDay}_$idx", item)
         }
 
+        // Build Top Songs (up to 50 tracks from charts + moment tracks + trending)
+        val topSongsCombined = (chartSongsRaw + momentRawTracks + trendingSongs)
+            .filter { isValidSong(it) }
+            .distinctBy { "${it.title.lowercase()}:${it.artist.lowercase()}" }
+            .take(50)
+        topSongsCombined.forEachIndexed { idx, song ->
+            EditorialDatabaseCache.putEditorialSong("explore_charts_top_song_${activeStorefront}_${epochDay}_$idx", song)
+        }
+
+        // Build Top Albums (up to 30 albums from charts)
+        val rawCandidates = (albumList + getCuratedTopAlbumsSeed(activeStorefront))
+            .filter { isValidItem(it) }
+        val topAlbumsList = deduplicateAlbumsKeepExplicit(rawCandidates).take(30)
+        topAlbumsList.forEachIndexed { idx, album ->
+            EditorialDatabaseCache.putEditorialItem("explore_charts_top_album_${activeStorefront}_${epochDay}_$idx", album)
+        }
+
+        // Build Top Videos (up to 30 music videos)
+        val videoRawList = mutableListOf<AppleMusicEditorialItem>()
+        videoRawList.addAll(chartVideosRaw)
+        if (videoRawList.size < 15) {
+            val videoSearchUrl = "$API_BASE/$activeStorefront/search?term=Top+Music+Videos&types=music-videos&limit=30&extend=editorialArtwork,editorialVideo"
+            val res = executeGet(videoSearchUrl, bearer)
+            if (res != null) {
+                val rootObj = runCatching { json.parseToJsonElement(res).jsonObject }.getOrNull()
+                val data = rootObj?.get("results")?.jsonObject?.get("music-videos")?.jsonObject?.get("data")?.jsonArray
+                    ?: JsonArray(emptyList())
+                for (elem in data) {
+                    parseEditorialItem(elem.jsonObject, activeStorefront, defaultKind = EditorialItemKind.PLAYLIST, defaultBadge = if (isSpanish) "VÍDEO MUSICAL" else "MUSIC VIDEO")
+                        ?.let { if (isValidItem(it)) videoRawList.add(it) }
+                }
+            }
+        }
+        val fallbackVideoItems = if (videoRawList.size < 10) {
+            (momentRawTracks + trendingSongs).map { song ->
+                AppleMusicEditorialItem(
+                    id = song.id,
+                    title = song.title,
+                    subtitle = song.artist,
+                    thumbnailUrl = song.thumbnailUrl,
+                    wideImageUrl = song.thumbnailUrl,
+                    badge = if (isSpanish) "VÍDEO MUSICAL" else "MUSIC VIDEO",
+                    kind = EditorialItemKind.PLAYLIST,
+                    storefront = activeStorefront,
+                )
+            }
+        } else emptyList()
+        val topVideosList = (videoRawList + fallbackVideoItems)
+            .filter { isValidItem(it) }
+            .distinctBy { it.id }
+            .take(30)
+        topVideosList.forEachIndexed { idx, video ->
+            EditorialDatabaseCache.putEditorialItem("explore_charts_top_video_${activeStorefront}_${epochDay}_$idx", video)
+        }
+
         // Resilient fallbacks from Room using daily seeds if network query returned empty
         val resolvedEveryone = if (everyoneIsListening.isNotEmpty()) everyoneIsListening else {
             (0 until 20).mapNotNull { idx ->
@@ -1423,6 +1574,30 @@ object AppleMusicEditorialRepository {
                     ?: EditorialDatabaseCache.getEditorialSong("explore_trending_${activeStorefront}_${epochDay - 1}_$idx")
             }
         }
+        val resolvedMoment = if (momentSongs.isNotEmpty()) momentSongs else {
+            (0 until 16).mapNotNull { idx ->
+                EditorialDatabaseCache.getEditorialSong("explore_moment_${activeStorefront}_${epochDay}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialSong("explore_moment_${activeStorefront}_${epochDay - 1}_$idx")
+            }
+        }
+        val resolvedTopSongs = if (topSongsCombined.isNotEmpty()) topSongsCombined else {
+            (0 until 50).mapNotNull { idx ->
+                EditorialDatabaseCache.getEditorialSong("explore_charts_top_song_${activeStorefront}_${epochDay}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialSong("explore_charts_top_song_${activeStorefront}_${epochDay - 1}_$idx")
+            }.ifEmpty { (resolvedMoment + resolvedTrending).take(50) }
+        }
+        val resolvedTopAlbums = if (topAlbumsList.isNotEmpty()) topAlbumsList else {
+            (0 until 30).mapNotNull { idx ->
+                EditorialDatabaseCache.getEditorialItem("explore_charts_top_album_${activeStorefront}_${epochDay}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialItem("explore_charts_top_album_${activeStorefront}_${epochDay - 1}_$idx")
+            }
+        }
+        val resolvedTopVideos = if (topVideosList.isNotEmpty()) topVideosList else {
+            (0 until 30).mapNotNull { idx ->
+                EditorialDatabaseCache.getEditorialItem("explore_charts_top_video_${activeStorefront}_${epochDay}_$idx")
+                    ?: EditorialDatabaseCache.getEditorialItem("explore_charts_top_video_${activeStorefront}_${epochDay - 1}_$idx")
+            }
+        }
 
         AppleMusicEditorialFeed(
             heroItems = heroItems.filter { isValidItem(it) },
@@ -1433,10 +1608,13 @@ object AppleMusicEditorialRepository {
             djMixes = resolvedDjMixes.filter { isValidItem(it) },
             comingSoon = comingSoon.filter { isValidItem(it) },
             trendingSongs = resolvedTrending.filter { isValidSong(it) },
-            momentSongs = momentSongs.filter { isValidSong(it) },
+            momentSongs = resolvedMoment.filter { isValidSong(it) },
             decadeHits = resolvedDecade.filter { isValidItem(it) },
             roadTrip = resolvedRoadTrip.filter { isValidItem(it) },
             everyoneIsListening = resolvedEveryone.filter { isValidItem(it) },
+            topSongs = resolvedTopSongs.filter { isValidSong(it) },
+            topAlbums = resolvedTopAlbums.filter { isValidItem(it) },
+            topVideos = resolvedTopVideos.filter { isValidItem(it) },
         )
     }
 
@@ -2167,5 +2345,180 @@ object AppleMusicEditorialRepository {
             )
         }
         return items
+    }
+
+    /**
+     * Curated official top charting albums seed as guaranteed fallback for cold boot or regions without local album charts.
+     */
+    fun getCuratedTopAlbumsSeed(storefront: String = defaultStorefront()): List<AppleMusicEditorialItem> {
+        val isSpanish = Locale.getDefault().language == "es"
+        val badge = if (isSpanish) "ÁLBUM" else "ALBUM"
+        return listOf(
+            AppleMusicEditorialItem(
+                id = "1711190538",
+                title = "nadie sabe lo que va a pasar mañana",
+                subtitle = "Bad Bunny",
+                thumbnailUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/bf/f4/bc/bff4bc77-d6b3-6c84-95a7-d8689be32c74/197189912781.jpg/600x600bb.jpg",
+                kind = EditorialItemKind.ALBUM,
+                badge = badge,
+                storefront = storefront,
+                isExplicit = true,
+            ),
+            AppleMusicEditorialItem(
+                id = "1672322303",
+                title = "MAÑANA SERÁ BONITO",
+                subtitle = "KAROL G",
+                thumbnailUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/7c/4f/95/7c4f958f-29d9-bb55-f2b7-8ce698bfec7f/23UMGIM13936.rgb.jpg/600x600bb.jpg",
+                kind = EditorialItemKind.ALBUM,
+                badge = badge,
+                storefront = storefront,
+                isExplicit = true,
+            ),
+            AppleMusicEditorialItem(
+                id = "1736440291",
+                title = "THE TORTURED POETS DEPARTMENT",
+                subtitle = "Taylor Swift",
+                thumbnailUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/e5/22/a3/e522a36b-67a6-cd86-a51b-1f8d4615307b/24UMGIM26792.rgb.jpg/600x600bb.jpg",
+                kind = EditorialItemKind.ALBUM,
+                badge = badge,
+                storefront = storefront,
+                isExplicit = true,
+            ),
+            AppleMusicEditorialItem(
+                id = "1739659134",
+                title = "HIT ME HARD AND SOFT",
+                subtitle = "Billie Eilish",
+                thumbnailUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/a5/d8/49/a5d84950-ecaa-6fec-1d96-c678a1bc7e16/24UMGIM41400.rgb.jpg/600x600bb.jpg",
+                kind = EditorialItemKind.ALBUM,
+                badge = badge,
+                storefront = storefront,
+                isExplicit = true,
+            ),
+            AppleMusicEditorialItem(
+                id = "1750307020",
+                title = "Short n' Sweet",
+                subtitle = "Sabrina Carpenter",
+                thumbnailUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/c6/3e/16/c63e16eb-fa6c-2f9d-161b-9be1c4e7da4c/24UMGIM67676.rgb.jpg/600x600bb.jpg",
+                kind = EditorialItemKind.ALBUM,
+                badge = badge,
+                storefront = storefront,
+                isExplicit = true,
+            ),
+            AppleMusicEditorialItem(
+                id = "1753177699",
+                title = "Pero No Te Enamores",
+                subtitle = "Fuerza Regida",
+                thumbnailUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/bf/fa/6d/bffa6d50-6a97-3932-ea2b-c8c3664dcf28/198391745426.jpg/600x600bb.jpg",
+                kind = EditorialItemKind.ALBUM,
+                badge = badge,
+                storefront = storefront,
+                isExplicit = true,
+            ),
+            AppleMusicEditorialItem(
+                id = "1747806509",
+                title = "ÉXODO",
+                subtitle = "Peso Pluma",
+                thumbnailUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/1e/85/69/1e8569c7-5058-2ae9-d4bc-5c210459da7f/5063501062024_cover.jpg/600x600bb.jpg",
+                kind = EditorialItemKind.ALBUM,
+                badge = badge,
+                storefront = storefront,
+                isExplicit = true,
+            ),
+            AppleMusicEditorialItem(
+                id = "1706689626",
+                title = "MOR, No Le Temas a la Oscuridad",
+                subtitle = "Feid",
+                thumbnailUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/df/e8/1a/dfe81ab5-cf30-a9fe-a517-5eeb5bc99d94/23UMGIM99222.rgb.jpg/600x600bb.jpg",
+                kind = EditorialItemKind.ALBUM,
+                badge = badge,
+                storefront = storefront,
+                isExplicit = true,
+            ),
+            AppleMusicEditorialItem(
+                id = "1778949821",
+                title = "COSA NUESTRA",
+                subtitle = "Rauw Alejandro",
+                thumbnailUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/80/e7/7b/80e77be5-0955-46fb-0ec1-19d20c5d5d8d/196872583857.jpg/600x600bb.jpg",
+                kind = EditorialItemKind.ALBUM,
+                badge = badge,
+                storefront = storefront,
+                isExplicit = true,
+            ),
+            AppleMusicEditorialItem(
+                id = "1618738615",
+                title = "Un Verano Sin Ti",
+                subtitle = "Bad Bunny",
+                thumbnailUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/4a/60/a6/4a60a69a-66dd-ea5f-bc14-9b9aa3f7d235/196626945062.jpg/600x600bb.jpg",
+                kind = EditorialItemKind.ALBUM,
+                badge = badge,
+                storefront = storefront,
+                isExplicit = true,
+            ),
+            AppleMusicEditorialItem(
+                id = "1499378108",
+                title = "After Hours",
+                subtitle = "The Weeknd",
+                thumbnailUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/28/04/09/280409a2-4a0b-8d76-5a4e-1288b0a94463/20UMGIM15563.rgb.jpg/600x600bb.jpg",
+                kind = EditorialItemKind.ALBUM,
+                badge = badge,
+                storefront = storefront,
+                isExplicit = true,
+            ),
+            AppleMusicEditorialItem(
+                id = "1699712635",
+                title = "UTOPIA",
+                subtitle = "Travis Scott",
+                thumbnailUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/58/b0/0c/58b00cd5-915f-c966-d183-b09a473ee2d8/196871344275.jpg/600x600bb.jpg",
+                kind = EditorialItemKind.ALBUM,
+                badge = badge,
+                storefront = storefront,
+                isExplicit = true,
+            )
+        )
+    }
+
+    /**
+     * Deduplicates albums with clean & explicit versions, prioritizing the explicit version.
+     */
+    fun deduplicateAlbumsKeepExplicit(albums: List<AppleMusicEditorialItem>): List<AppleMusicEditorialItem> {
+        fun normalizeTitle(title: String): String {
+            return title.lowercase()
+                .replace(Regex("\\s*\\(clean\\)", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("\\s*\\[clean\\]", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("\\s*\\(explicit\\)", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("\\s*\\[explicit\\]", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("\\s*\\(deluxe\\)", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("\\s*\\[deluxe\\]", RegexOption.IGNORE_CASE), "")
+                .trim()
+        }
+
+        fun normalizeArtist(artist: String): String {
+            return artist.lowercase()
+                .replace("álbum ·", "")
+                .replace("album ·", "")
+                .replace("álbum •", "")
+                .replace("album •", "")
+                .trim()
+        }
+
+        val result = mutableListOf<AppleMusicEditorialItem>()
+        val seenKeys = mutableSetOf<String>()
+
+        for (album in albums) {
+            val key = "${normalizeTitle(album.title)}:${normalizeArtist(album.subtitle)}"
+            if (key in seenKeys) continue
+            seenKeys.add(key)
+
+            // Prefer the explicit version of this album if available anywhere in the candidate list
+            val explicitVersion = albums.firstOrNull { other ->
+                other.isExplicit && "${normalizeTitle(other.title)}:${normalizeArtist(other.subtitle)}" == key
+            }
+            val chosen = explicitVersion ?: album
+            val cleanedSubtitle = chosen.subtitle
+                .replace(Regex("^(álbum|album)\\s*[·•-]\\s*", RegexOption.IGNORE_CASE), "")
+                .trim()
+            result.add(if (cleanedSubtitle != chosen.subtitle) chosen.copy(subtitle = cleanedSubtitle) else chosen)
+        }
+        return result
     }
 }
