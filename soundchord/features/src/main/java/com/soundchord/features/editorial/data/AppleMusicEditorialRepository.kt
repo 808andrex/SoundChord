@@ -8,7 +8,13 @@ import com.music.bitchord.data.canvas.AppleMusicTokenProvider
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.ShelfLayout
+import com.music.bitchord.data.model.TopPick
+import com.music.bitchord.data.model.TopPickKind
+import com.soundchord.features.playlists.data.PlaylistsForYouRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -57,6 +63,7 @@ object AppleMusicEditorialRepository {
             cacheDir = context.applicationContext.cacheDir
         }
         AlbumRelatedDatabaseCache.init(context)
+        EditorialDatabaseCache.init(context)
     }
 
     fun defaultStorefront(): String {
@@ -347,6 +354,15 @@ object AppleMusicEditorialRepository {
         return runCatching {
             json.decodeFromString<AppleMusicHomeDiscoveryFeed>(file.readText())
         }.getOrNull()
+    }
+
+    /**
+     * Synchronous access to cached discovery playlists (Essentials, Chill, Feel Good, Focus, Party).
+     */
+    fun getCachedDiscoveryPlaylists(): List<AppleMusicEditorialItem> {
+        val feed = inMemoryHomeDiscoveryCache ?: readHomeDiscoveryDiskCache() ?: return emptyList()
+        return (feed.essentialsPlaylists + feed.chillPlaylists + feed.feelGoodPlaylists + feed.focusPlaylists + feed.partyPlaylists)
+            .filter { isValidItem(it) && !isFitnessItem(it) && !isHolidayItem(it) }
     }
 
     private fun writeHomeDiscoveryDiskCache(feed: AppleMusicHomeDiscoveryFeed) {
@@ -809,7 +825,8 @@ object AppleMusicEditorialRepository {
         )
 
         val batchUrl = "$API_BASE/$activeStorefront/playlists?ids=${curatedPlaylistIds.joinToString(",")}&extend=editorialArtwork,editorialVideo"
-        val batchJson = executeGet(batchUrl, bearer)
+        val (batchJson, activeBearer) = executeGetWithRetry(batchUrl, bearer)
+        if (activeBearer != null) bearer = activeBearer
         val batchPlaylists = mutableMapOf<String, AppleMusicEditorialItem>()
         if (batchJson != null) {
             val batchRoot = runCatching { json.parseToJsonElement(batchJson).jsonObject }.getOrNull()
@@ -817,6 +834,28 @@ object AppleMusicEditorialRepository {
             for (elem in dataArray) {
                 parseEditorialItem(elem.jsonObject, activeStorefront, defaultKind = EditorialItemKind.PLAYLIST)
                     ?.let { batchPlaylists[it.id] = it }
+            }
+        }
+
+        // Dynamically resolve key curated playlists (e.g. R&B Now, Éxitos de hoy, New Music Daily)
+        // against active storefront if missing or unresolvable by ID in current storefront
+        val keyEditorialQueries = listOf(
+            "R&B Now",
+            "Éxitos de hoy",
+            "New Music Daily",
+            "Today's Hits",
+            "Dale Play",
+            "A-List Pop",
+            "Viva Latino",
+        )
+        val resolvedTitles = batchPlaylists.values.map { it.title.lowercase(Locale.ROOT) }
+        for (q in keyEditorialQueries) {
+            val qLower = q.lowercase(Locale.ROOT)
+            if (resolvedTitles.none { it.contains(qLower) || qLower.contains(it) }) {
+                val resolved = resolveEditorialPlaylist(q, storefront = activeStorefront)
+                if (resolved != null && isValidItem(resolved) && (resolved.trackCount == null || resolved.trackCount > 0)) {
+                    batchPlaylists[resolved.id] = resolved
+                }
             }
         }
 
@@ -856,7 +895,14 @@ object AppleMusicEditorialRepository {
         // Build Apple Music Hero Pool (alternating up to 8 top albums and updated playlists)
         val appleHeroItems = mutableListOf<AppleMusicEditorialItem>()
         val albumsPool = albumList.toMutableList()
-        val playlistsPool = (batchPlaylists.values.toList() + chartPlaylistList).distinctBy { it.id }.toMutableList()
+        val playlistsPool = (batchPlaylists.values.toList() + chartPlaylistList)
+            .filter { isValidItem(it) && (it.trackCount == null || it.trackCount > 0) }
+            .distinctBy { it.id }
+            .toMutableList()
+
+        playlistsPool.forEachIndexed { idx, item ->
+            EditorialDatabaseCache.putEditorialItem("hero_pool_$idx", item)
+        }
 
         for (i in 0 until 4) {
             if (albumsPool.isNotEmpty()) {
@@ -1305,6 +1351,8 @@ object AppleMusicEditorialRepository {
         val artist = attributes["artistName"]?.jsonPrimitive?.contentOrNull?.trim()
         val curator = attributes["curatorName"]?.jsonPrimitive?.contentOrNull?.trim()
         val subtitle = artist ?: curator ?: ""
+        val trackCount = attributes["trackCount"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+            ?: obj["relationships"]?.jsonObject?.get("tracks")?.jsonObject?.get("data")?.jsonArray?.size
 
         val editorialNotes = attributes["editorialNotes"]?.jsonObject
         val rawDescription = editorialNotes?.let { notes ->
@@ -1384,6 +1432,7 @@ object AppleMusicEditorialRepository {
             kind = kind,
             isExplicit = isExplicit,
             storefront = storefront,
+            trackCount = trackCount,
         )
     }
 
@@ -1428,6 +1477,347 @@ object AppleMusicEditorialRepository {
             }.getOrNull()
         }
     }
+
+    private suspend fun executeGetWithRetry(
+        url: String,
+        initialBearer: String? = null,
+    ): Pair<String?, String?> = apiSemaphore.withPermit {
+        withContext(Dispatchers.IO) {
+            var bearer = initialBearer ?: AppleMusicTokenProvider.token()
+            if (bearer == null) {
+                return@withContext null to null
+            }
+
+            fun doCall(b: String): Pair<Int, String?> {
+                return runCatching {
+                    val request = Request.Builder()
+                        .url(url)
+                        .header("Authorization", "Bearer $b")
+                        .header("Origin", "https://music.apple.com")
+                        .header("Referer", "https://music.apple.com/")
+                        .header("User-Agent", USER_AGENT)
+                        .build()
+                    Http.client.newCall(request).execute().use { resp ->
+                        val code = resp.code
+                        val body = if (resp.isSuccessful) resp.body?.string() else null
+                        code to body
+                    }
+                }.getOrElse { 0 to null }
+            }
+
+            var (code, body) = doCall(bearer)
+            // If failed (401 Unauthorized, 403 Forbidden, or network error), invalidate token and retry once
+            if (body == null || code == 401 || code == 403) {
+                AppleMusicTokenProvider.invalidateToken(bearer)
+                val refreshed = AppleMusicTokenProvider.token()
+                if (refreshed != null && refreshed != bearer) {
+                    bearer = refreshed
+                    val secondTry = doCall(refreshed)
+                    code = secondTry.first
+                    body = secondTry.second
+                }
+            }
+
+            body to bearer
+        }
+    }
+
+    private fun parsePlaylistDetailResult(
+        jsonStr: String,
+        storefront: String,
+    ): AppleMusicEditorialItem? {
+        val root = runCatching { json.parseToJsonElement(jsonStr).jsonObject }.getOrNull() ?: return null
+        val dataArray = root["data"]?.jsonArray ?: return null
+        val playlistObj = dataArray.firstOrNull()?.jsonObject ?: return null
+        return parseEditorialItem(playlistObj, storefront, defaultKind = EditorialItemKind.PLAYLIST)
+    }
+
+    data class HeroPlaylistDescriptor(
+        val query: String,
+        val titleEs: String,
+        val titleEn: String,
+        val fallbackId: String? = null,
+        val genreAffinity: String = "general", // "urbano", "rnb", "pop", "hiphop", "chill", "dance", "general"
+        val timeVibe: String = "any", // "morning", "afternoon", "evening", "night", "any"
+    )
+
+    val HeroEditorialPool = listOf(
+        // Urbano / Latino
+        HeroPlaylistDescriptor("La Fórmula", "La Fórmula", "La Formula", "pl.075f88440e6c40e5b7222aa894458f33", genreAffinity = "urbano", timeVibe = "afternoon"),
+        HeroPlaylistDescriptor("¡Dale Play!", "¡Dale Play!", "Dale Play", "pl.075f88440e6c40e5b7222aa894458f33", genreAffinity = "urbano", timeVibe = "afternoon"),
+        HeroPlaylistDescriptor("¡Viva Latino!", "¡Viva Latino!", "Viva Latino", "pl.74cf97ae33394c868038abebc73299c8", genreAffinity = "urbano", timeVibe = "evening"),
+        HeroPlaylistDescriptor("Pop Latino", "Pop Latino", "Latin Pop", null, genreAffinity = "urbano", timeVibe = "morning"),
+        HeroPlaylistDescriptor("Fuego", "Fuego", "Fuego", null, genreAffinity = "urbano", timeVibe = "evening"),
+
+        // R&B / Soul
+        HeroPlaylistDescriptor("R&B Now", "R&B Now", "R&B Now", null, genreAffinity = "rnb", timeVibe = "evening"),
+        HeroPlaylistDescriptor("After Hours", "After Hours", "After Hours", null, genreAffinity = "rnb", timeVibe = "night"),
+        HeroPlaylistDescriptor("Slow Jams", "Slow Jams", "Slow Jams", null, genreAffinity = "rnb", timeVibe = "night"),
+
+        // Pop / Hits
+        HeroPlaylistDescriptor("Éxitos de hoy", "Éxitos de hoy", "Today's Hits", "pl.8e05c879331846b48a04870f7cfcb257", genreAffinity = "pop", timeVibe = "morning"),
+        HeroPlaylistDescriptor("Today's Hits", "Today's Hits", "Today's Hits", "pl.f4d106fed2bd41149aaacabb233eb5eb", genreAffinity = "pop", timeVibe = "morning"),
+        HeroPlaylistDescriptor("A-List Pop", "A-List Pop", "A-List Pop", null, genreAffinity = "pop", timeVibe = "afternoon"),
+        HeroPlaylistDescriptor("New Music Daily", "New Music Daily", "New Music Daily", "pl.2b0e6e332fdf4b7a91164da3162127b5", genreAffinity = "general", timeVibe = "morning"),
+
+        // Hip-Hop / Rap
+        HeroPlaylistDescriptor("Rap Life", "Rap Life", "Rap Life", "pl.abe8ba42642d481e9e544d64f7dad32d", genreAffinity = "hiphop", timeVibe = "evening"),
+        HeroPlaylistDescriptor("The A-List: Hip-Hop", "The A-List: Hip-Hop", "The A-List: Hip-Hop", null, genreAffinity = "hiphop", timeVibe = "afternoon"),
+
+        // Chill / Acoustic
+        HeroPlaylistDescriptor("Pure Chill", "Para relajarte", "Pure Chill", null, genreAffinity = "chill", timeVibe = "night"),
+        HeroPlaylistDescriptor("Acoustic Chill", "Acústico", "Acoustic Chill", null, genreAffinity = "chill", timeVibe = "morning"),
+
+        // Dance / Electronic
+        HeroPlaylistDescriptor("danceXL", "danceXL", "danceXL", null, genreAffinity = "dance", timeVibe = "evening"),
+        HeroPlaylistDescriptor("Dance Party", "De fiesta", "Dance Party", "pl.c624d776495d4ea79eb5380ea7eb6375", genreAffinity = "dance", timeVibe = "night"),
+    )
+
+    fun selectTailoredHeroCandidates(
+        now: java.time.LocalDateTime,
+        userGenres: List<String> = emptyList(),
+    ): List<HeroPlaylistDescriptor> {
+        val userGenresLower = userGenres.map { it.lowercase(Locale.ROOT) }
+        val hasUrbano = userGenresLower.any { it.contains("urban") || it.contains("reggaet") || it.contains("latin") }
+        val hasRnb = userGenresLower.any { it.contains("r&b") || it.contains("rnb") || it.contains("soul") }
+        val hasHipHop = userGenresLower.any { it.contains("hip") || it.contains("rap") || it.contains("trap") }
+        val hasPop = userGenresLower.any { it.contains("pop") }
+        val hasDance = userGenresLower.any { it.contains("dance") || it.contains("electronic") || it.contains("edm") }
+
+        val currentHour = now.hour
+        val activeVibe = when (currentHour) {
+            in 6..11 -> "morning"
+            in 12..17 -> "afternoon"
+            in 18..22 -> "evening"
+            else -> "night"
+        }
+
+        return HeroEditorialPool.sortedByDescending { desc ->
+            var score = 0
+            if (desc.timeVibe == activeVibe) score += 3
+            if (desc.timeVibe == "any") score += 1
+
+            when (desc.genreAffinity) {
+                "urbano" -> if (hasUrbano) score += 4
+                "rnb" -> if (hasRnb) score += 4
+                "hiphop" -> if (hasHipHop) score += 4
+                "pop" -> if (hasPop) score += 3
+                "dance" -> if (hasDance) score += 3
+                "chill" -> if (activeVibe == "night" || activeVibe == "morning") score += 2
+                "general" -> score += 1
+            }
+            score
+        }
+    }
+
+    suspend fun resolveEditorialPlaylist(
+        nameOrQuery: String,
+        fallbackId: String? = null,
+        storefront: String = defaultStorefront(),
+        slotKey: String = "",
+    ): AppleMusicEditorialItem? = withContext(Dispatchers.IO) {
+        val cleanQuery = nameOrQuery.trim()
+        val activeStorefront = storefront.ifBlank { defaultStorefront() }
+        val effectiveSlotKey = slotKey.ifBlank { "editorial_${activeStorefront}_${cleanQuery.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "_")}" }
+
+        val candidateStorefronts = listOf(activeStorefront, "us", "es", "mx").distinct()
+        var resolvedItem: AppleMusicEditorialItem? = null
+
+        // 1. If fallbackId provided, attempt direct lookup first with retry
+        if (!fallbackId.isNullOrBlank()) {
+            for (sf in candidateStorefronts) {
+                val directUrl = "$API_BASE/$sf/playlists/$fallbackId?include=tracks&extend=editorialArtwork,editorialVideo"
+                val (directJson, _) = executeGetWithRetry(directUrl)
+                if (!directJson.isNullOrBlank()) {
+                    val parsed = parsePlaylistDetailResult(directJson, sf)
+                    if (parsed != null && isValidItem(parsed) && (parsed.trackCount == null || parsed.trackCount > 0)) {
+                        resolvedItem = parsed
+                        break
+                    }
+                }
+            }
+        }
+
+        // 2. Dynamic catalog search against active storefront (and fallbacks)
+        if (resolvedItem == null && cleanQuery.isNotEmpty()) {
+            val encodedQuery = runCatching { URLEncoder.encode(cleanQuery, "UTF-8") }.getOrNull() ?: cleanQuery
+            for (sf in candidateStorefronts) {
+                val searchUrl = "$API_BASE/$sf/search?term=$encodedQuery&types=playlists&limit=6&include=tracks&extend=editorialArtwork,editorialVideo"
+                val (searchJson, _) = executeGetWithRetry(searchUrl)
+                if (!searchJson.isNullOrBlank()) {
+                    val items = parsePlaylistSearchResults(searchJson, sf)
+                    val matching = items.firstOrNull { item ->
+                        isValidItem(item) &&
+                            (item.trackCount == null || item.trackCount > 0) &&
+                            (item.title.contains(cleanQuery, ignoreCase = true) ||
+                             cleanQuery.contains(item.title, ignoreCase = true) ||
+                             item.subtitle.contains("Apple Music", ignoreCase = true))
+                    } ?: items.firstOrNull { item ->
+                        isValidItem(item) && (item.trackCount == null || item.trackCount > 0)
+                    }
+
+                    if (matching != null) {
+                        resolvedItem = matching
+                        break
+                    }
+                }
+            }
+        }
+
+        // 3. Cache valid result in persistent Room/SQLite database
+        if (resolvedItem != null && isValidItem(resolvedItem) && (resolvedItem.trackCount == null || resolvedItem.trackCount > 0)) {
+            EditorialDatabaseCache.putEditorialItem(effectiveSlotKey, resolvedItem)
+            return@withContext resolvedItem
+        }
+
+        // 4. Resilient Room fallback matching the temporal slot key
+        val cached = EditorialDatabaseCache.getEditorialItem(effectiveSlotKey)
+        if (cached != null && isValidItem(cached) && (cached.trackCount == null || cached.trackCount > 0)) {
+            return@withContext cached
+        }
+
+        null
+    }
+
+    private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    suspend fun verifyAndFetchPlaylist(
+        storefront: String,
+        playlistId: String,
+        minTracks: Int = 5,
+    ): com.soundchord.features.playlistimport.data.AppleMusicPlaylist? = withContext(Dispatchers.IO) {
+        val playlist = runCatching {
+            com.soundchord.features.playlistimport.data.AppleMusicPlaylistClient.fetchPlaylist(storefront, playlistId)
+        }.getOrNull()
+        if (playlist != null && playlist.tracks.size >= minTracks && isValidArtworkUrl(playlist.coverUrl)) {
+            playlist
+        } else {
+            null
+        }
+    }
+
+    suspend fun resolveHeroTopPicks(
+        now: java.time.LocalDateTime,
+        userGenres: List<String> = emptyList(),
+        limit: Int = 2,
+    ): List<TopPick> = withContext(Dispatchers.IO) {
+        val candidates = selectTailoredHeroCandidates(now, userGenres)
+        val poolSize = candidates.size.coerceAtLeast(1)
+
+        val epochDay = now.toLocalDate().toEpochDay()
+        val franjaHorariaIndex = (now.hour / 2).toLong()
+        val combinedSeed = epochDay + franjaHorariaIndex
+
+        val activeStorefront = defaultStorefront()
+        val isSpanish = Locale.getDefault().language == "es"
+
+        val resolvedPicks = mutableListOf<TopPick>()
+        val missingSlots = mutableListOf<Int>()
+
+        // 1. Check exact temporal slot keys in Room first (ensuring at least 5 tracks and valid artwork)
+        for (offset in 0 until limit) {
+            val slotKey = "hero_editorial_seed_${combinedSeed}_slot_$offset"
+            val cached = EditorialDatabaseCache.getHeroTopPick(slotKey)
+            if (cached != null && isValidArtworkUrl(cached.images.firstOrNull())) {
+                resolvedPicks.add(cached)
+            } else {
+                missingSlots.add(offset)
+            }
+        }
+
+        // 2. If all required slots are cached and verified, return immediately
+        if (resolvedPicks.size >= limit) {
+            return@withContext resolvedPicks.take(limit)
+        }
+
+        // 3. Unify data source: feed missing slots directly from verified PlaylistsForYouRepository pipeline (Ticket #75)
+        val heroVerifiedFromForYou = PlaylistsForYouRepository.getVerifiedEditorialPlaylistsForHero(now, limit)
+        for (pick in heroVerifiedFromForYou) {
+            if (resolvedPicks.size >= limit) break
+            val art = pick.images.firstOrNull()
+            if (isValidArtworkUrl(art) && resolvedPicks.none { it.browseId == pick.browseId }) {
+                val offset = resolvedPicks.size
+                val slotKey = "hero_editorial_seed_${combinedSeed}_slot_$offset"
+                EditorialDatabaseCache.putHeroTopPick(slotKey, pick, activeStorefront)
+                resolvedPicks.add(pick)
+            }
+        }
+
+        if (resolvedPicks.size >= limit) {
+            return@withContext resolvedPicks.take(limit)
+        }
+
+        // 4. Background resolution with dynamic rotation (epochDay + franjaHorariaIndex)
+        // AND verify with fetchPlaylist >= 5 tracks and valid artwork before accepting into cache
+        if (missingSlots.isNotEmpty()) {
+            repositoryScope.launch {
+                var anySaved = false
+                val usedIds = mutableSetOf<String>()
+                resolvedPicks.forEach { pick ->
+                    val bid = pick.browseId.orEmpty()
+                    if (bid.contains(":")) usedIds.add(bid.substringAfterLast(":"))
+                }
+
+                for (offset in missingSlots) {
+                    val slotKey = "hero_editorial_seed_${combinedSeed}_slot_$offset"
+                    val baseIdx = (((combinedSeed + (offset * (poolSize / 2).coerceAtLeast(1))) % poolSize) + poolSize) % poolSize
+
+                    // Iterate candidates until we find one with >= 5 real tracks in the active storefront
+                    for (step in 0 until poolSize) {
+                        val candidate = candidates[((baseIdx + step) % poolSize).toInt()]
+                        val resolved = resolveEditorialPlaylist(
+                            nameOrQuery = candidate.query,
+                            fallbackId = candidate.fallbackId,
+                            storefront = activeStorefront,
+                            slotKey = slotKey,
+                        )
+
+                        if (resolved != null && isValidItem(resolved) && !resolved.thumbnailUrl.isNullOrBlank() && resolved.id !in usedIds) {
+                            // STRICT VERIFICATION: Verify that fetchPlaylist returns at least 5 tracks in active storefront
+                            val verified = verifyAndFetchPlaylist(activeStorefront, resolved.id, minTracks = 5)
+                            val cover = verified?.coverUrl ?: resolved.thumbnailUrl
+                            if (verified != null && verified.tracks.size >= 5 && isValidArtworkUrl(cover)) {
+                                val pick = TopPick(
+                                    kind = TopPickKind.EDITORIAL_PLAYLIST,
+                                    title = verified.name.ifBlank { if (isSpanish) candidate.titleEs else candidate.titleEn },
+                                    subtitle = verified.curator.ifBlank { "Apple Music" },
+                                    images = listOf(cover!!),
+                                    browseId = "apple:playlist:${verified.storefront.ifBlank { activeStorefront }}:${verified.id}",
+                                )
+                                EditorialDatabaseCache.putVerifiedHeroPlaylist(slotKey, verified)
+                                usedIds.add(verified.id)
+                                anySaved = true
+                                break
+                            }
+                        }
+                    }
+                }
+
+                if (anySaved) {
+                    com.music.bitchord.data.TopPicks.onEditorialHeroUpdated?.invoke()
+                }
+            }
+        }
+
+        // 5. Meanwhile, provide immediate resilient fallback from Room
+        val roomRecent = EditorialDatabaseCache.getRecentHeroTopPicks(limit * 3)
+        for (roomPick in roomRecent) {
+            if (resolvedPicks.size >= limit) break
+            if (roomPick.browseId?.startsWith("apple:playlist:") == true &&
+                isValidArtworkUrl(roomPick.images.firstOrNull()) &&
+                resolvedPicks.none { it.browseId == roomPick.browseId }
+            ) {
+                resolvedPicks.add(roomPick)
+            }
+        }
+
+        // 6. NEVER render fallback cards with dead mzstatic URLs or empty artwork.
+        // Return only genuinely verified items. If none yet, return emptyList().
+        resolvedPicks.filter { isValidArtworkUrl(it.images.firstOrNull()) }.take(limit)
+    }
+
+    suspend fun resolveHeroTopPick(now: java.time.LocalDateTime): TopPick? =
+        resolveHeroTopPicks(now, limit = 1).firstOrNull()
 
     /**
      * Reliable curated fallback dataset with high-resolution Apple Music CDN covers.

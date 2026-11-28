@@ -28,6 +28,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Request
+import java.net.URLEncoder
 import java.time.LocalDateTime
 import java.util.Locale
 import kotlin.random.Random
@@ -84,6 +85,12 @@ object TopPicks {
     var tasteProvider: (suspend () -> LocalTaste)? = null
 
     @Volatile
+    var editorialHeroResolver: (suspend (LocalDateTime, List<String>) -> List<TopPick>)? = null
+
+    @Volatile
+    var onEditorialHeroUpdated: (() -> Unit)? = null
+
+    @Volatile
     var currentTaste: LocalTaste? = null
 
     suspend fun build(
@@ -115,13 +122,16 @@ object TopPicks {
         Log.d(TAG, "topPicks: history=${history.size} artists=${artists.map { it.name }} mixes=${mixes.keys}")
 
         val lead = latestRelease(artists)
-        val editorialPlaylist = featuredEditorialPlaylist(homeShelves, now)
+        val applePlaylists = fetchAppleEditorialPlaylists(now, local, limit = 2)
+        val applePlaylist1 = applePlaylists.getOrNull(0)
+        val applePlaylist2 = applePlaylists.getOrNull(1)?.takeIf { it.browseId != applePlaylist1?.browseId }
 
         val favoritesCard = favoritesMix(mixes, history, local, artists)
         val newMusicCard = newMusicMix(mixes, artists, local, history)
         val personalCard = personalStation(mixes, history, local)
         val discoveryCard = discoveryStation(mixes, artists, history)
         val moodCard = moodPick(now, local)
+        val userPlaylistCard = userCreatedPlaylist(now)
 
         // Artist stations (should never be first in the carousel)
         val artistPicks = buildList {
@@ -139,7 +149,9 @@ object TopPicks {
                 personalCard?.let(::add)
                 add(favoritesCard)
                 add(moodCard)
-                editorialPlaylist?.let(::add)
+                applePlaylist1?.let(::add)
+                applePlaylist2?.let(::add)
+                userPlaylistCard?.let(::add)
                 discoveryCard?.let(::add)
             }.shuffled(Random(now.dayOfYear + now.hour))
 
@@ -152,19 +164,23 @@ object TopPicks {
             // 1 -> Personal Station (Estación de [Usuario])
             // 2 -> Latest Release / New Music Mix (Nuevo lanzamiento / Nueva música)
             // 3 -> Featured Artist ("Con [Artista]" / Artist and similar)
-            // 4 -> Featured Editorial Playlist (Playlist destacada)
+            // 4 -> Featured Editorial Playlist #1 (Playlist destacada Apple Music)
             // 5 -> Discovery Station (Estación por descubrir)
-            val slot2Hours = (now.dayOfYear * 12 + (now.hour / 2))
+            // 6 -> Featured Editorial Playlist #2 (Segunda playlist destacada de Apple Music)
+            val epochDay = now.toLocalDate().toEpochDay()
+            val franjaHorariaIndex = (now.hour / 2).toLong()
+            val combinedSeed = epochDay + franjaHorariaIndex
             val leadEligible = buildList {
                 add(favoritesCard) // Slot 0
-                personalCard?.let(::add) // Slot 1
-                (lead ?: newMusicCard).let(::add) // Slot 2
+                personalCard?.let(::add) // Slot 1: "Estación de Kevin"
+                (lead ?: newMusicCard).let(::add) // Slot 2: "Nueva música" / latest release
                 (artists.getOrNull(0)?.let { featured(it, photos) } ?: moodCard).let(::add) // Slot 3: "Con [Artista]"
-                editorialPlaylist?.let(::add) // Slot 4: Playlist destacada
+                applePlaylist1?.let(::add) // Slot 4: Playlist destacada #1 (Apple Music)
                 discoveryCard?.let(::add) // Slot 5: Estación por descubrir
+                applePlaylist2?.let(::add) // Slot 6: Playlist destacada #2 (Apple Music)
             }
 
-            val headIndex = (slot2Hours % leadEligible.size.coerceAtLeast(1))
+            val headIndex = (((combinedSeed % leadEligible.size) + leadEligible.size) % leadEligible.size).toInt()
             val head = leadEligible.getOrNull(headIndex) ?: leadEligible.first()
 
             val otherLeadItems = leadEligible.filter { it != head }
@@ -174,12 +190,14 @@ object TopPicks {
                 if (head != newMusicCard && newMusicCard !in otherLeadItems) add(newMusicCard)
                 if (personalCard != null && head != personalCard && personalCard !in otherLeadItems) add(personalCard)
                 if (discoveryCard != null && head != discoveryCard && discoveryCard !in otherLeadItems) add(discoveryCard)
-                if (editorialPlaylist != null && head != editorialPlaylist && editorialPlaylist !in otherLeadItems) add(editorialPlaylist)
+                if (applePlaylist1 != null && head != applePlaylist1 && applePlaylist1 !in otherLeadItems) add(applePlaylist1)
+                if (applePlaylist2 != null && head != applePlaylist2 && applePlaylist2 !in otherLeadItems) add(applePlaylist2)
+                userPlaylistCard?.let { if (head != it && it !in otherLeadItems) add(it) }
                 add(moodCard)
             }
 
             val remainingNonArtists = (otherLeadItems + otherCandidates).distinct()
-                .shuffled(Random(slot2Hours * 31))
+                .shuffled(Random((combinedSeed * 31).toInt()))
 
             listOf(head) + remainingNonArtists + artistPicks
         }
@@ -544,76 +562,162 @@ object TopPicks {
     )
 
     private val RotatingApplePlaylists = listOf(
+        AppleEditorialSeed("pl.f4d106fed2bd41149aaacabb233eb5eb", "Today's Hits", "Today's Hits", "us"),
         AppleEditorialSeed("pl.8e05c879331846b48a04870f7cfcb257", "Éxitos de hoy", "Today's Hits", "es"),
         AppleEditorialSeed("pl.2b0e6e332fdf4b7a91164da3162127b5", "New Music Daily", "New Music Daily", "us"),
-        AppleEditorialSeed("pl.b7ae3e0a28e84edd8e997a71e75ab620", "R&B Now", "R&B Now", "us"),
+        AppleEditorialSeed("pl.075f88440e6c40e5b7222aa894458f33", "La Fórmula", "La Formula", "es"),
+        AppleEditorialSeed("pl.abe8ba42642d481e9e544d64f7dad32d", "Rap Life", "Rap Life", "us"),
         AppleEditorialSeed("pl.075f88440e6c40e5b7222aa894458f33", "¡Dale Play!", "Dale Play", "es"),
-        AppleEditorialSeed("pl.f4d106fed2bd41149aaacabb233eb5eb", "Today's Hits", "Today's Hits", "us"),
-        AppleEditorialSeed("pl.5ee8333dbe944d9f9151e97d92d123bf", "A-List Pop", "A-List Pop", "us"),
         AppleEditorialSeed("pl.74cf97ae33394c868038abebc73299c8", "¡Viva Latino!", "Viva Latino", "us"),
+        AppleEditorialSeed("pl.c624d776495d4ea79eb5380ea7eb6375", "Dance Party", "Dance Party", "us"),
     )
 
-    private suspend fun fetchAppleEditorialPlaylist(now: LocalDateTime): TopPick? {
-        val slot2Hours = (now.dayOfYear * 12 + (now.hour / 2))
-        val seedIndex = slot2Hours % RotatingApplePlaylists.size
+    private fun isValidArtworkUrl(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        if (!url.startsWith("https://")) return false
+        if (url.contains("{") || url.contains("}")) return false
+        return true
+    }
+
+    private suspend fun fetchAppleEditorialPlaylist(now: LocalDateTime, userGenres: List<String> = emptyList()): TopPick? {
+        // 1. Delegate to editorialHeroResolver (backed by AppleMusicEditorialRepository & Room database cache)
+        editorialHeroResolver?.let { resolver ->
+            val resolved = runCatching { resolver(now, userGenres) }.getOrNull()?.firstOrNull()
+            if (resolved != null && !resolved.images.firstOrNull().isNullOrBlank()) {
+                return resolved
+            }
+        }
+
+        // 2. Direct resilient dynamic catalog resolution with automatic token retry and validation
+        val epochDay = now.toLocalDate().toEpochDay()
+        val franjaHorariaIndex = (now.hour / 2).toLong()
+        val combinedSeed = epochDay + franjaHorariaIndex
+        val seedIndex = (((combinedSeed % RotatingApplePlaylists.size) + RotatingApplePlaylists.size) % RotatingApplePlaylists.size).toInt()
         val seed = RotatingApplePlaylists[seedIndex]
 
         val isSpanish = Locale.getDefault().language == "es"
-        val name = if (isSpanish) seed.titleEs else seed.titleEn
-        val fallbackCover = "https://is1-ssl.mzstatic.com/image/thumb/Features/v4/7c/49/a7/7c49a712-4029-4554-18ef-936c57f7da4e/U01TMDEwMjkxNC1OZXctTXVzaWMtRGFpbHktMjAyNC5wbmc.png/600x600bb.jpg"
-
-        val token = AppleMusicTokenProvider.token()
-        if (token == null) {
-            return TopPick(
-                kind = TopPickKind.EDITORIAL_PLAYLIST,
-                title = name,
-                subtitle = "Apple Music",
-                images = listOf(fallbackCover),
-                browseId = "apple:playlist:${seed.storefront}:${seed.id}",
-            )
-        }
+        val queryName = if (isSpanish) seed.titleEs else seed.titleEn
+        val activeStorefront = Locale.getDefault().country.lowercase(Locale.ROOT).takeIf { it.length == 2 } ?: "us"
 
         return withContext(Dispatchers.IO) {
-            runCatching {
-                val url = "https://amp-api.music.apple.com/v1/catalog/${seed.storefront}/playlists/${seed.id}"
-                val req = Request.Builder()
-                    .url(url)
-                    .header("Authorization", "Bearer $token")
-                    .header("Origin", "https://music.apple.com")
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                    .build()
-                val resp = Http.client.newCall(req).execute()
-                if (!resp.isSuccessful) {
-                    return@runCatching TopPick(
+            var token = AppleMusicTokenProvider.token() ?: return@withContext null
+
+            suspend fun executeCall(url: String, bearer: String): String? {
+                return runCatching {
+                    val req = Request.Builder()
+                        .url(url)
+                        .header("Authorization", "Bearer $bearer")
+                        .header("Origin", "https://music.apple.com")
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                        .build()
+                    Http.client.newCall(req).execute().use { resp ->
+                        if (resp.isSuccessful) resp.body?.string() else null
+                    }
+                }.getOrNull()
+            }
+
+            val candidateStorefronts = listOf(activeStorefront, seed.storefront, "us").distinct()
+
+            // Try dynamic catalog search for the seed playlist in candidate storefronts
+            val encodedQuery = runCatching { URLEncoder.encode(queryName, "UTF-8") }.getOrNull() ?: queryName
+            for (sf in candidateStorefronts) {
+                val searchUrl = "https://amp-api.music.apple.com/v1/catalog/$sf/search?term=$encodedQuery&types=playlists&limit=5&include=tracks"
+                var body = executeCall(searchUrl, token)
+
+                // If request failed (e.g. 401 token expired or rate limited), invalidate and retry once
+                if (body == null) {
+                    AppleMusicTokenProvider.invalidateToken(token)
+                    token = AppleMusicTokenProvider.token() ?: break
+                    body = executeCall(searchUrl, token)
+                }
+
+                if (!body.isNullOrBlank()) {
+                    val root = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull()
+                    val playlistsData = root?.get("results")?.jsonObject?.get("playlists")?.jsonObject?.get("data")?.jsonArray
+                    if (playlistsData != null) {
+                        for (elem in playlistsData) {
+                            val pObj = elem.jsonObject
+                            val pId = pObj["id"]?.jsonPrimitive?.contentOrNull ?: continue
+                            val attrs = pObj["attributes"]?.jsonObject ?: continue
+                            val title = attrs["name"]?.jsonPrimitive?.contentOrNull?.trim() ?: continue
+                            val curator = attrs["curatorName"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+                            val trackCount = attrs["trackCount"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+                                ?: pObj["relationships"]?.jsonObject?.get("tracks")?.jsonObject?.get("data")?.jsonArray?.size
+                                ?: 1
+                            if (trackCount <= 0) continue
+
+                            val rawArt = attrs["artwork"]?.jsonObject?.get("url")?.jsonPrimitive?.contentOrNull ?: continue
+                            val formattedArt = rawArt.replace("{w}", "600").replace("{h}", "600").replace("{f}", "jpg").replace("{c}", "")
+                            if (!isValidArtworkUrl(formattedArt)) continue
+
+                            return@withContext TopPick(
+                                kind = TopPickKind.EDITORIAL_PLAYLIST,
+                                title = title,
+                                subtitle = curator.ifBlank { "Apple Music" },
+                                images = listOf(formattedArt),
+                                browseId = "apple:playlist:$sf:$pId",
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Fallback: try direct playlist ID lookup with token refresh
+            for (sf in candidateStorefronts) {
+                val directUrl = "https://amp-api.music.apple.com/v1/catalog/$sf/playlists/${seed.id}?include=tracks"
+                var body = executeCall(directUrl, token)
+                if (body == null) {
+                    AppleMusicTokenProvider.invalidateToken(token)
+                    token = AppleMusicTokenProvider.token() ?: break
+                    body = executeCall(directUrl, token)
+                }
+                if (!body.isNullOrBlank()) {
+                    val root = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull()
+                    val data = root?.get("data")?.jsonArray?.firstOrNull()?.jsonObject ?: continue
+                    val attrs = data["attributes"]?.jsonObject ?: continue
+                    val title = attrs["name"]?.jsonPrimitive?.contentOrNull ?: queryName
+                    val curator = attrs["curatorName"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                    val trackCount = attrs["trackCount"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+                        ?: data["relationships"]?.jsonObject?.get("tracks")?.jsonObject?.get("data")?.jsonArray?.size
+                        ?: 1
+                    if (trackCount <= 0) continue
+
+                    val rawArt = attrs["artwork"]?.jsonObject?.get("url")?.jsonPrimitive?.contentOrNull ?: continue
+                    val formattedArt = rawArt.replace("{w}", "600").replace("{h}", "600").replace("{f}", "jpg").replace("{c}", "")
+                    if (!isValidArtworkUrl(formattedArt)) continue
+
+                    return@withContext TopPick(
                         kind = TopPickKind.EDITORIAL_PLAYLIST,
-                        title = name,
-                        subtitle = "Apple Music",
-                        images = listOf(fallbackCover),
-                        browseId = "apple:playlist:${seed.storefront}:${seed.id}",
+                        title = title,
+                        subtitle = curator.ifBlank { "Apple Music" },
+                        images = listOf(formattedArt),
+                        browseId = "apple:playlist:$sf:${seed.id}",
                     )
                 }
-                val body = resp.body?.string() ?: return@runCatching null
-                val root = json.parseToJsonElement(body).jsonObject
-                val data = root["data"]?.jsonArray?.firstOrNull()?.jsonObject ?: return@runCatching null
-                val attrs = data["attributes"]?.jsonObject ?: return@runCatching null
-                val apiName = attrs["name"]?.jsonPrimitive?.contentOrNull ?: name
-                val rawArt = attrs["artwork"]?.jsonObject?.get("url")?.jsonPrimitive?.contentOrNull
-                val artworkUrl = rawArt?.replace("{w}", "600")?.replace("{h}", "600")?.replace("{f}", "jpg")?.replace("{c}", "") ?: fallbackCover
-                TopPick(
-                    kind = TopPickKind.EDITORIAL_PLAYLIST,
-                    title = apiName,
-                    subtitle = "Apple Music",
-                    images = listOf(artworkUrl),
-                    browseId = "apple:playlist:${seed.storefront}:${seed.id}",
-                )
-            }.getOrNull() ?: TopPick(
-                kind = TopPickKind.EDITORIAL_PLAYLIST,
-                title = name,
-                subtitle = "Apple Music",
-                images = listOf(fallbackCover),
-                browseId = "apple:playlist:${seed.storefront}:${seed.id}",
-            )
+            }
+
+            // Fallback: resolve from editorialHeroResolver if available
+            editorialHeroResolver?.let { resolver ->
+                runCatching { resolver(now, emptyList()) }.getOrNull()?.firstOrNull { isValidArtworkUrl(it.images.firstOrNull()) }
+            }
         }
+    }
+
+    private suspend fun fetchAppleEditorialPlaylists(
+        now: LocalDateTime,
+        local: LocalTaste,
+        limit: Int = 2,
+    ): List<TopPick> {
+        // Resolve strictly through editorialHeroResolver (backed by PlaylistsForYouRepository, AppleMusicEditorialRepository & SQLite)
+        val resolvedFromRepo = runCatching {
+            editorialHeroResolver?.invoke(now, local.genres)
+        }.getOrNull().orEmpty().filter {
+            !it.images.firstOrNull().isNullOrBlank() &&
+                isValidArtworkUrl(it.images.firstOrNull()) &&
+                it.browseId?.startsWith("apple:playlist:") == true
+        }
+
+        return resolvedFromRepo.distinctBy { it.browseId ?: it.title }.take(limit)
     }
 
     private suspend fun userCreatedPlaylist(now: LocalDateTime): TopPick? {
@@ -631,6 +735,19 @@ object TopPicks {
             images = listOf(art),
             browseId = chosen.browseId,
         )
+    }
+
+    private suspend fun featuredEditorialPlaylists(
+        homeShelves: List<HomeShelf>,
+        now: LocalDateTime,
+        local: LocalTaste,
+    ): List<TopPick> {
+        val applePicks = fetchAppleEditorialPlaylists(now, local, limit = 2)
+        val userPl = userCreatedPlaylist(now)
+        val ytPl = ytEditorialPlaylist(homeShelves)
+
+        // Ensure Apple Music editorial playlists come first and are never replaced by user playlists
+        return (applePicks + listOfNotNull(userPl, ytPl)).distinctBy { it.browseId }
     }
 
     private suspend fun featuredEditorialPlaylist(homeShelves: List<HomeShelf>, now: LocalDateTime): TopPick? {

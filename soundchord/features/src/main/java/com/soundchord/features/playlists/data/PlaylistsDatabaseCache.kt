@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.music.bitchord.data.model.TopPick
+import com.music.bitchord.data.model.TopPickKind
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.time.LocalDateTime
@@ -130,6 +131,50 @@ class PlaylistsDatabaseCache private constructor(context: Context) :
                 val db = dbHelper.writableDatabase
                 db.delete(TABLE_NAME, "$COL_SLOT != ?", arrayOf(currentSlot))
             }
+        }
+
+        /**
+         * Extracts all valid Apple Music editorial playlists cached across recent slots (Ticket #75).
+         * Used to supply Hero "Top selecciones para ti" with genuine verified Apple Music playlists.
+         */
+        fun getAllVerifiedPlaylists(): List<TopPick> {
+            val dbHelper = instance ?: return emptyList()
+            return runCatching {
+                val db = dbHelper.readableDatabase
+                val cursor = db.query(
+                    TABLE_NAME,
+                    arrayOf(COL_JSON_DATA),
+                    null,
+                    null,
+                    null,
+                    null,
+                    "$COL_TIMESTAMP DESC",
+                    "6",
+                )
+                val results = mutableListOf<TopPick>()
+                cursor.use { c ->
+                    while (c.moveToNext()) {
+                        val jsonData = c.getString(c.getColumnIndexOrThrow(COL_JSON_DATA))
+                        val payload = json.decodeFromString<CachedPlaylistsPayload>(jsonData)
+                        for (pick in payload.playlists) {
+                            if (pick.kind == TopPickKind.EDITORIAL_PLAYLIST) {
+                                val art = pick.images.firstOrNull()
+                                if (!art.isNullOrBlank() &&
+                                    art.startsWith("https://") &&
+                                    !art.contains("{") &&
+                                    !art.contains("}")
+                                ) {
+                                    val bId = pick.browseId.orEmpty()
+                                    if (bId.startsWith("apple:playlist:") || bId.startsWith("apple:") || bId.startsWith("am:") || bId.startsWith("pl.")) {
+                                        results.add(pick)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                results.distinctBy { it.browseId ?: it.title }
+            }.getOrDefault(emptyList())
         }
 
         fun delete(userKey: String, currentSlot: String = getSlotKey()) {

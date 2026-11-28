@@ -110,7 +110,13 @@ object AppleMusicPlaylistClient {
             }
 
             val finalBody = responseBody
-                ?: error("Failed to load Apple Music playlist (HTTP error or 404 in all candidate storefronts)")
+            if (finalBody == null) {
+                val cachedInDb = com.soundchord.features.editorial.data.EditorialDatabaseCache.getVerifiedPlaylist(playlistId)
+                if (cachedInDb != null && cachedInDb.tracks.size >= 5) {
+                    return@withContext cachedInDb
+                }
+                error("Failed to load Apple Music playlist (HTTP error or 404 in all candidate storefronts)")
+            }
 
             val root = runCatching { json.parseToJsonElement(finalBody).jsonObject }.getOrNull()
                 ?: error("Failed to parse Apple Music playlist response")

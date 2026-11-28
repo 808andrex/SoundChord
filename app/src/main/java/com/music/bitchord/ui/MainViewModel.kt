@@ -19,6 +19,7 @@ import com.music.bitchord.data.TopPicks
 import com.music.bitchord.data.AppleArtistPhotos
 import com.music.bitchord.data.model.ArtistRef
 import com.music.bitchord.data.model.TopPick
+import com.music.bitchord.data.model.TopPickKind
 import com.music.bitchord.data.stats.ListeningStats
 import com.music.bitchord.data.stats.ReplayPeriod
 import android.util.Log
@@ -2180,6 +2181,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     init {
         val appContext = getApplication<Application>()
         TopPicks.tasteProvider = { localTaste() }
+        TopPicks.editorialHeroResolver = { now, genres ->
+            if (AppSettings.hideHomeEditorial.value) {
+                emptyList()
+            } else {
+                AppleMusicEditorialRepository.resolveHeroTopPicks(now, genres)
+            }
+        }
+        TopPicks.onEditorialHeroUpdated = {
+            viewModelScope.launch {
+                loadTopPicks(listenerKey(), rebuild = true)
+            }
+        }
+        AppleMusicEditorialRepository.init(appContext)
         com.music.bitchord.data.PlaylistCovers.init(appContext)
         AlbumRelatedDatabaseCache.init(appContext)
         viewModelScope.launch {
@@ -2491,7 +2505,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } else if (!rebuild) {
                 _topPicks.value = null
             }
-            if (!rebuild && stored?.day == slot) {
+            val editorialActive = !AppSettings.hideHomeEditorial.value
+            val storedHasEditorial = stored?.picks?.any { it.kind == TopPickKind.EDITORIAL_PLAYLIST } == true
+            if (!rebuild && stored?.day == slot && (!editorialActive || storedHasEditorial)) {
                 _topPicksLoading.value = false
                 return@launch
             }
@@ -3380,7 +3396,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         /** Today's Top Picks row, kept so the next launch paints it before any request. */
-        private const val TOP_PICKS_FILE = "top_picks_v4.json"
+        private const val TOP_PICKS_FILE = "top_picks_v5.json"
 
         /** Per-addon budget for the Addons search tab; a slow addon is left out, not waited on. */
         private const val ADDON_SEARCH_TIMEOUT_MS = 12_000L

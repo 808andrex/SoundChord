@@ -156,10 +156,25 @@ internal fun TopPicksShelf(
     onClick: (TopPick, String) -> Unit,
     onLongPress: ((TopPick) -> Unit)?,
 ) {
+    // Ticket #75: Strict safety filter ensuring no EDITORIAL_PLAYLIST with missing or invalid artwork is ever rendered in the Hero
+    val safePicks = remember(picks) {
+        picks.filter { pick ->
+            if (pick.kind == TopPickKind.EDITORIAL_PLAYLIST) {
+                val art = pick.images.firstOrNull()
+                !art.isNullOrBlank() &&
+                    art.startsWith("https://") &&
+                    !art.contains("{") &&
+                    !art.contains("}")
+            } else {
+                true
+            }
+        }
+    }
+
     val rowState = rememberHomePersistentRowState("home_top_picks")
     // Which cards turned out to have a clip, by index, and which one plays.
-    val hasClip = remember(picks) { mutableStateMapOf<Int, Boolean>() }
-    var owner by remember(picks) { mutableIntStateOf(-1) }
+    val hasClip = remember(safePicks) { mutableStateMapOf<Int, Boolean>() }
+    var owner by remember(safePicks) { mutableIntStateOf(-1) }
     // Handed on only once a swipe has come to rest: passing it card to card
     // mid-swipe would start a decoder for every card the row slid past.
     LaunchedEffect(rowState, hasClip) {
@@ -176,7 +191,7 @@ internal fun TopPicksShelf(
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                     state = rowState,
                 ) {
-                    itemsIndexed(picks, key = { index, pick -> "$index:${pick.kind}:${pick.title}" }) { index, pick ->
+                    itemsIndexed(safePicks, key = { index, pick -> "$index:${pick.kind}:${pick.browseId ?: pick.title}" }) { index, pick ->
                         CompositionLocalProvider(
                             LocalClipSlot provides ClipSlot(
                                 mayPlay = index == owner,
@@ -437,8 +452,13 @@ private fun TopPickCard(
                 Color.White
             }
             TopPickKind.EDITORIAL_PLAYLIST -> {
+                val editorialArt = if (artworkUrl != null && "mzstatic.com/image/thumb/" in artworkUrl) {
+                    artworkUrl
+                } else {
+                    artworkUrl.croppedAt(HEADER_ART_PX)
+                }
                 AsyncImage(
-                    model = artworkUrl.croppedAt(HEADER_ART_PX).whenArtworkReady(),
+                    model = editorialArt.whenArtworkReady(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
@@ -1821,12 +1841,13 @@ private val GOOGLE_SIZE_SUFFIX = Regex("""=w\d+-h\d+[^/?]*$""")
  */
 internal fun String?.croppedAt(width: Int, height: Int = width): String? {
     if (this == null) return null
-    // Apple Music's photos: the last path segment is the size. Their artist
-    // portraits are square, and asking for a portrait crop gets the square
-    // back anyway, so the square is asked for and the card crops it.
+    // Apple Music's photos: only artist photos (Features/AMCArtistImages) use /sizeXsizecc.jpg.
+    // Editorial playlist and album covers use /sizexsizebb.jpg or already formatted dimensions.
     if ("mzstatic.com/image/thumb/" in this) {
         val side = maxOf(width, height)
-        return substringBeforeLast('/') + "/${side}x${side}cc.jpg"
+        val isArtistBucket = contains("Features") || contains("AMCArtistImages")
+        val suffix = if (isArtistBucket) "cc.jpg" else "bb.jpg"
+        return substringBeforeLast('/') + "/${side}x${side}$suffix"
     }
     return if (GOOGLE_SIZE_SUFFIX.containsMatchIn(this)) {
         replace(GOOGLE_SIZE_SUFFIX, "=w$width-h$height-p-l90-rj")

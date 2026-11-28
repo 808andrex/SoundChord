@@ -37,6 +37,7 @@ import com.soundchord.features.daypart.data.DaypartRepository
 import com.soundchord.features.daypart.data.DaypartDatabaseCache
 import com.soundchord.features.stations.data.StationsForYouRepository
 import com.soundchord.features.playlists.data.PlaylistsForYouRepository
+import com.music.bitchord.data.TopPicks
 import com.music.bitchord.ui.screens.NativeHomeShelvesHolder
 import com.music.bitchord.data.model.ArtistRef
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -696,6 +697,13 @@ internal fun AppNavigationHost(
         DaypartRepository.init(context)
         StationsForYouRepository.init(context)
         PlaylistsForYouRepository.init(context)
+        TopPicks.editorialHeroResolver = { now, genres ->
+            if (AppSettings.hideHomeEditorial.value) {
+                emptyList()
+            } else {
+                com.soundchord.features.editorial.data.AppleMusicEditorialRepository.resolveHeroTopPicks(now, genres)
+            }
+        }
         homeEditorialShelves = com.soundchord.features.editorial.data.AppleMusicEditorialRepository.getHomeDiscoveryShelves()
         val cachedStations = StationsForYouRepository.getCachedStations(identity = states.account?.name)
         if (!cachedStations.isNullOrEmpty()) {

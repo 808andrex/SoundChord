@@ -119,6 +119,70 @@ object PlaylistsForYouRepository {
         return if (dynamicValid) cached else null
     }
 
+    /**
+     * Resolves verified Apple Music editorial playlists for Hero "Top selecciones para ti" (Ticket #75).
+     * Sourced directly from the verified Playlists for You SQLite cache and Apple Music editorial discovery feed,
+     * rotated deterministically by day and 2-hour slot (epochDay + franjaHorariaIndex).
+     * Guaranteed to have valid HTTPS artwork and resolvable Apple Music IDs.
+     */
+    fun getVerifiedEditorialPlaylistsForHero(
+        now: LocalDateTime = LocalDateTime.now(),
+        limit: Int = 2,
+    ): List<TopPick> {
+        val verifiedPool = mutableListOf<TopPick>()
+
+        // 1. Gather all verified Apple Music editorial playlists from PlaylistsDatabaseCache
+        val cachedFromDb = PlaylistsDatabaseCache.getAllVerifiedPlaylists()
+        for (pick in cachedFromDb) {
+            val art = pick.images.firstOrNull()
+            if (!art.isNullOrBlank() &&
+                art.startsWith("https://") &&
+                !art.contains("{") &&
+                !art.contains("}") &&
+                isStrictlyValidAppleMusicPlaylist(pick.title, pick.subtitle, pick.browseId, art, emptyList(), pick.subtitle)
+            ) {
+                verifiedPool.add(pick)
+            }
+        }
+
+        // 2. Supplement from pre-cached editorial discovery feed if pool is small
+        if (verifiedPool.size < limit * 3) {
+            val discoveryItems = AppleMusicEditorialRepository.getCachedDiscoveryPlaylists()
+            val sf = AppleMusicEditorialRepository.defaultStorefront()
+            for (item in discoveryItems) {
+                val art = item.thumbnailUrl
+                if (!art.isNullOrBlank() &&
+                    art.startsWith("https://") &&
+                    !art.contains("{") &&
+                    !art.contains("}") &&
+                    isStrictlyValidAppleMusicPlaylist(item.title, item.subtitle, item.id, art, emptyList(), item.subtitle)
+                ) {
+                    val itemSf = item.storefront.ifBlank { sf }
+                    val fullId = if (item.id.contains(":")) item.id else "$itemSf:${item.id}"
+                    verifiedPool.add(
+                        TopPick(
+                            kind = TopPickKind.EDITORIAL_PLAYLIST,
+                            title = item.title,
+                            subtitle = item.subtitle.ifBlank { "Apple Music" },
+                            images = listOf(art),
+                            browseId = "$APPLE_MUSIC_PAGE_PREFIX$fullId",
+                        ),
+                    )
+                }
+            }
+        }
+
+        val cleanPool = verifiedPool.distinctBy { it.browseId ?: it.title }
+        if (cleanPool.isEmpty()) return emptyList()
+
+        val epochDay = now.toLocalDate().toEpochDay()
+        val franjaHorariaIndex = (now.hour / 2).toLong()
+        val combinedSeed = epochDay + franjaHorariaIndex
+
+        val rotated = rotatePool(cleanPool, combinedSeed.toInt())
+        return rotated.take(limit)
+    }
+
     suspend fun getPlaylistsForYou(
         homeShelves: List<HomeShelf>,
         editorialShelves: List<HomeShelf> = emptyList(),
@@ -359,13 +423,15 @@ object PlaylistsForYouRepository {
         // Process Group 2: Featured Playlists
         featuredResults.forEach { item ->
             if (isStrictlyValidAppleMusicPlaylist(item.title, item.subtitle, item.id, item.thumbnailUrl, userRealArtists, curatorName = item.subtitle)) {
+                val itemSf = item.storefront.ifBlank { storefront }
+                val fullId = if (item.id.contains(":")) item.id else "$itemSf:${item.id}"
                 featuredPlaylists.add(
                     TopPick(
                         kind = TopPickKind.EDITORIAL_PLAYLIST,
                         title = item.title,
                         subtitle = featuredBadge,
                         images = listOfNotNull(item.thumbnailUrl),
-                        browseId = "$APPLE_MUSIC_PAGE_PREFIX${item.id}",
+                        browseId = "$APPLE_MUSIC_PAGE_PREFIX$fullId",
                     ),
                 )
             }
@@ -398,13 +464,15 @@ object PlaylistsForYouRepository {
                 item.title.contains(real, ignoreCase = true) || item.subtitle.contains(real, ignoreCase = true)
             }
             if (matchesRealArtist && isStrictlyValidAppleMusicPlaylist(item.title, item.subtitle, item.id, item.thumbnailUrl, userRealArtists, curatorName = item.subtitle)) {
+                val itemSf = item.storefront.ifBlank { storefront }
+                val fullId = if (item.id.contains(":")) item.id else "$itemSf:${item.id}"
                 userTastePlaylists.add(
                     TopPick(
                         kind = TopPickKind.EDITORIAL_PLAYLIST,
                         title = item.title,
                         subtitle = item.subtitle.ifBlank { "Apple Music" },
                         images = listOfNotNull(item.thumbnailUrl),
-                        browseId = "$APPLE_MUSIC_PAGE_PREFIX${item.id}",
+                        browseId = "$APPLE_MUSIC_PAGE_PREFIX$fullId",
                     ),
                 )
             }
@@ -413,13 +481,15 @@ object PlaylistsForYouRepository {
         // Process Group 1: User's Real Genres
         genreResults.forEach { item ->
             if (isStrictlyValidAppleMusicPlaylist(item.title, item.subtitle, item.id, item.thumbnailUrl, userRealArtists, curatorName = item.subtitle)) {
+                val itemSf = item.storefront.ifBlank { storefront }
+                val fullId = if (item.id.contains(":")) item.id else "$itemSf:${item.id}"
                 userTastePlaylists.add(
                     TopPick(
                         kind = TopPickKind.EDITORIAL_PLAYLIST,
                         title = item.title,
                         subtitle = item.subtitle.ifBlank { "Apple Music" },
                         images = listOfNotNull(item.thumbnailUrl),
-                        browseId = "$APPLE_MUSIC_PAGE_PREFIX${item.id}",
+                        browseId = "$APPLE_MUSIC_PAGE_PREFIX$fullId",
                     ),
                 )
             }
